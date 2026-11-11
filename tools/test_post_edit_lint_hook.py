@@ -13,6 +13,11 @@ nothing here reads or writes the real checkout. A stub `ruff` on PATH records
 its arguments, which shows whether the hook ran at all. The last test runs the
 real ruff when one is on PATH, as the hook does.
 
+Git calls here and the hook itself run without inherited GIT_* variables.
+InheritedGitEnvTest re-runs every test with the GIT_DIR and GIT_INDEX_FILE a
+pre-commit hook gets during a commit from a linked worktree, aimed at a decoy
+repository that must stay unchanged.
+
 Run: python3 -m unittest tools/test_post_edit_lint_hook.py
 """
 
@@ -25,6 +30,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 HOOK = REPO / ".claude" / "hooks" / "post-edit-lint.sh"
@@ -35,13 +41,30 @@ printf '%s\\n' "$*" >>"$RUFF_LOG"
 """
 
 
-def git(cwd: Path, *args: str) -> None:
-    subprocess.run(
+def clean_env() -> dict[str, str]:
+    """The environment without GIT_* variables.
+
+    A pre-commit hook run from a linked worktree inherits GIT_DIR and an
+    absolute GIT_INDEX_FILE. Passed on, they send every git call here, and the
+    hook's own, to the repository being committed: `git init` set core.bare
+    in it, and the worktree test committed into it.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def git(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
         ["git", "-C", str(cwd), *args],
         check=True,
         capture_output=True,
-        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+        text=True,
+        env={
+            **clean_env(),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        },
     )
+    return result.stdout
 
 
 def init_repo(path: Path) -> Path:
@@ -70,11 +93,18 @@ class PostEditLintHookTest(unittest.TestCase):
         stub.chmod(0o755)
         self.log = self.tmp / "ruff.log"
 
-    def run_hook(self, file_path: Path, *, stub_ruff: bool = True) -> None:
+    def run_hook(
+        self,
+        file_path: Path,
+        *,
+        stub_ruff: bool = True,
+        extra_env: dict[str, str] | None = None,
+    ) -> None:
         env = {
-            **os.environ,
+            **clean_env(),
             "CLAUDE_PROJECT_DIR": str(self.project),
             "RUFF_LOG": str(self.log),
+            **(extra_env or {}),
         }
         if stub_ruff:
             env["PATH"] = f"{self.bin}{os.pathsep}{env['PATH']}"
@@ -127,7 +157,7 @@ class PostEditLintHookTest(unittest.TestCase):
         self.assertEqual(self.ruff_calls(), [])
 
     def test_foreign_clone_inside_project_is_left_alone(self) -> None:
-        """A clone under the project's git-ignored tmp/ is still someone else's code."""
+        """A clone under the project's tmp/ is still someone else's code."""
         other = init_repo(self.project / "tmp" / "upstream")
         path = self.write_py(other / "module.py")
         self.run_hook(path)
@@ -145,6 +175,24 @@ class PostEditLintHookTest(unittest.TestCase):
         src.write_text("int main(void){return 0;}\n")
         self.run_hook(src)
         self.assertFalse(marker.exists())
+
+    def test_git_dir_in_hook_env_does_not_widen_scope(self) -> None:
+        """GIT_DIR set in the hook's own environment must not adopt foreign files.
+
+        With GIT_DIR pointing at the project, every path would resolve to the
+        project's git directory and the scope check would pass for a file in
+        another repository.
+        """
+        other = init_repo(self.tmp / "scratchpad" / "other-project")
+        path = self.write_py(other / "module.py")
+        self.run_hook(
+            path,
+            extra_env={
+                "GIT_DIR": str(self.project / ".git"),
+                "GIT_WORK_TREE": str(self.project),
+            },
+        )
+        self.assertEqual(self.ruff_calls(), [])
 
     def test_worktree_of_project_is_formatted(self) -> None:
         """Agents edit in worktrees under .claude/worktrees/; those are this repo."""
@@ -194,6 +242,57 @@ class PostEditLintHookTest(unittest.TestCase):
         self.assertIn("import io\n", after)
         self.assertIn("import types\n", after)
         self.assertIn("# noqa: E501", after)
+
+
+class InheritedGitEnvTest(PostEditLintHookTest):
+    """Every test above, under the git environment of a commit from a worktree.
+
+    pre-commit runs this suite as a hook. During a `git commit` from a linked
+    worktree it inherits GIT_DIR=<common>/worktrees/<name> and an absolute
+    GIT_INDEX_FILE. Here both point at a decoy repository, which must come out
+    of each test unchanged.
+    """
+
+    def setUp(self) -> None:
+        decoy_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(decoy_tmp.cleanup)
+        root = Path(decoy_tmp.name).resolve()
+        self.decoy = init_repo(root / "decoy")
+        (self.decoy / "real.txt").write_text("real\n")
+        git(self.decoy, "add", "real.txt")
+        git(
+            self.decoy,
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "real",
+        )
+        self.decoy_wt = root / "decoy-wt"
+        git(self.decoy, "worktree", "add", "-q", "--detach", str(self.decoy_wt))
+        self.decoy_before = self.decoy_state()
+
+        wt_git = self.decoy / ".git" / "worktrees" / self.decoy_wt.name
+        patcher = mock.patch.dict(
+            os.environ,
+            {"GIT_DIR": str(wt_git), "GIT_INDEX_FILE": str(wt_git / "index")},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        super().setUp()
+
+    def decoy_state(self) -> dict[str, str]:
+        return {
+            "core.bare": git(self.decoy, "config", "--get", "core.bare").strip(),
+            "HEAD": git(self.decoy_wt, "rev-parse", "HEAD").strip(),
+            "status": git(self.decoy_wt, "status", "--porcelain"),
+        }
+
+    def tearDown(self) -> None:
+        self.assertEqual(self.decoy_state(), self.decoy_before)
 
 
 if __name__ == "__main__":

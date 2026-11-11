@@ -34,6 +34,11 @@ case "$file_path" in
     *) exit 0 ;;
 esac
 
+# Find each path's repository from the path alone. An inherited GIT_DIR or
+# GIT_WORK_TREE would resolve every path to that one repository and let the
+# scope check below pass for a file in another one.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+
 # The repository's shared git directory: the same for the main checkout and
 # every worktree of it, and different for any other clone.
 git_common_dir() {
