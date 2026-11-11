@@ -263,7 +263,7 @@ def main() -> int:
 
     try:
         audio = record(args.duration, args.device)
-    except Exception as exc:  # noqa: BLE001 — surface any audio-stack error plainly
+    except Exception as exc:
         print(f"Recording failed: {exc}", file=sys.stderr)
         print(
             "On macOS, grant terminal mic access in "

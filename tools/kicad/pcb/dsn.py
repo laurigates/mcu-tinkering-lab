@@ -40,7 +40,7 @@ class DsnError(Exception):
 def via_name(via_um):
     """`[1000, 500]` -> KiCad's padstack name `Via[0-1]_1000:500_um`."""
     diameter, drill = via_um
-    return "Via[0-1]_%d:%d_um" % (diameter, drill)
+    return f"Via[0-1]_{int(diameter)}:{int(drill)}_um"
 
 
 def class_block(name, nets, width, clearance, via):
@@ -162,8 +162,8 @@ def track_keepouts(text, tracks, origin, margin_um):
                 (ax - run_a * dx + nx, ay - run_a * dy + ny),
             ]
             corners.append(corners[0])
-            coords = "  ".join("%d %d" % (round(x), -round(y)) for x, y in corners)
-            lines.append('    (keepout "" (polygon %s 0  %s))' % (tr["layer"], coords))
+            coords = "  ".join(f"{round(x)} {-round(y)}" for x, y in corners)
+            lines.append(f'    (keepout "" (polygon {tr["layer"]} 0  {coords}))')
     return text[: anchor + 1] + "\n".join(lines) + text[anchor:]
 
 
@@ -189,8 +189,8 @@ def rect_keepouts(text, keepouts, origin):
             (oy + k["rect"][3]) * 1000,
         )
         corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
-        coords = "  ".join("%d %d" % (round(x), -round(y)) for x, y in corners)
-        lines.append('    (keepout "" (polygon %s 0  %s))' % (k["layer"], coords))
+        coords = "  ".join(f"{round(x)} {-round(y)}" for x, y in corners)
+        lines.append(f'    (keepout "" (polygon {k["layer"]} 0  {coords}))')
     return text[: anchor + 1] + "\n".join(lines) + text[anchor:]
 
 
@@ -217,15 +217,15 @@ def drop_pins(text, pins):
     a pad the track's keepouts box in can stop it finishing the net at all.
     """
     for net, pin in pins:
-        found = re.search(r'\(net ("?)%s\1\n\s*\(pins ([^)]*)\)' % re.escape(net), text)
+        found = re.search(rf'\(net ("?){re.escape(net)}\1\n\s*\(pins ([^)]*)\)', text)
         if found is None:
             raise DsnError(f"DSN has no net {net!r}")
         listed = found.group(2)
         # " PIN" after another pin, else "PIN" and what follows it at the start
         name = re.escape(pin)
-        kept, n = re.subn(r" %s(?=\s|$)" % name, "", listed)
+        kept, n = re.subn(rf" {name}(?=\s|$)", "", listed)
         if n == 0:
-            kept, n = re.subn(r"^%s(?:\s+|$)" % name, "", listed)
+            kept, n = re.subn(rf"^{name}(?:\s+|$)", "", listed)
         if n != 1:
             raise DsnError(f"{pin} is not a pin of net {net!r}")
         text = text[: found.start(2)] + kept + text[found.end(2) :]

@@ -1,5 +1,4 @@
 import pytest
-
 from robocar_twin.timeparse import TimeParseError, format_ms, parse_ms
 
 

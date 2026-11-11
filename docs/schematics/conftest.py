@@ -24,8 +24,8 @@ import pytest
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 
-from metrics import CircuitMetrics, measure_drawing  # noqa: E402
-from render import circuit_files, draw_circuit, load_circuit  # noqa: E402
+from metrics import CircuitMetrics, measure_drawing
+from render import circuit_files, draw_circuit, load_circuit
 
 
 @dataclass(frozen=True)

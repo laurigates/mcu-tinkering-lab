@@ -533,6 +533,14 @@ int main(void)
 #else
     printf("credentials.h fixture: broker credentials compiled in\n");
 #endif
+    /* The loader's last Gemini key source is the environment, and a developer
+     * may export GEMINI_API_KEY for other tools. Every case here expects it
+     * unset except environment_key_is_the_last_source, which sets it in its
+     * own boot child (issue #1088; ctest also runs this with it set). */
+    if (unsetenv("GEMINI_API_KEY") != 0) {
+        perror("unsetenv GEMINI_API_KEY");
+        return EXIT_FAILURE;
+    }
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         nvs_shim_reset();
         int before = s_failures;

@@ -181,7 +181,8 @@ def _xy(block: str, keyword: str) -> Point:
 
 def _closed(corners: list[Point]) -> list[Segment]:
     return [
-        (a[0], a[1], b[0], b[1]) for a, b in zip(corners, corners[1:] + corners[:1])
+        (a[0], a[1], b[0], b[1])
+        for a, b in zip(corners, corners[1:] + corners[:1], strict=True)
     ]
 
 
@@ -200,7 +201,8 @@ def _maps_onto(m: Matrix, pts: list[Point]) -> bool:
     want = sorted(_key(p) for p in pts)
     got = sorted(_key(_apply(m, p)) for p in pts)
     return all(
-        abs(a[0] - b[0]) <= 1 and abs(a[1] - b[1]) <= 1 for a, b in zip(want, got)
+        abs(a[0] - b[0]) <= 1 and abs(a[1] - b[1]) <= 1
+        for a, b in zip(want, got, strict=True)
     )
 
 
@@ -272,7 +274,7 @@ def _orthogonal(m: Matrix) -> bool:
 
 
 def _same(m: Matrix, n: Matrix) -> bool:
-    return all(abs(x - y) < 1e-6 for x, y in zip(m, n))
+    return all(abs(x - y) < 1e-6 for x, y in zip(m, n, strict=True))
 
 
 def _det(m: Matrix) -> float:
@@ -338,7 +340,7 @@ def _box_invariant(m: Matrix, box: Box, centre: Point) -> bool:
         max(c[0] for c in corners) + cx,
         max(c[1] for c in corners) + cy,
     )
-    return all(abs(a - b) < TOL for a, b in zip(moved, box))
+    return all(abs(a - b) < TOL for a, b in zip(moved, box, strict=True))
 
 
 def _pad_key(n: str) -> tuple[int, int | str]:
@@ -496,7 +498,9 @@ def _segment_on(seg: Segment, lines: list[Segment]) -> bool:
     for line in lines:
         p, q = line[:2], line[2:]
         for u, v in ((p, q), (q, p)):
-            if all(abs(s - t) <= BOARD_TOL for s, t in zip((*a, *b), (*u, *v))):
+            if all(
+                abs(s - t) <= BOARD_TOL for s, t in zip((*a, *b), (*u, *v), strict=True)
+            ):
                 return True
     return False
 

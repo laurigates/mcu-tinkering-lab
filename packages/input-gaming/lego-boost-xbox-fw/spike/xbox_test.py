@@ -26,5 +26,5 @@ while True:
     lx, ly = controller.joystick_left()
     rx, ry = controller.joystick_right()
     pressed = controller.buttons.pressed()
-    print("L=({:.2f},{:.2f}) R=({:.2f},{:.2f}) btn={}".format(lx, ly, rx, ry, pressed))
+    print(f"L=({lx:.2f},{ly:.2f}) R=({rx:.2f},{ry:.2f}) btn={pressed}")
     wait(100)

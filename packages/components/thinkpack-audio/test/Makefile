@@ -1,8 +1,9 @@
 # Makefile for thinkpack-audio host-based unit tests.
 #
 # Compiles thinkpack_audio.c on Linux/macOS with gcc and runs the
-# Unity-compat host tests.  Reuses the shared stubs and unity_compat.h
-# from packages/components/thinkpack-behaviors/test.
+# Unity-compat host tests.  unity_compat.h and the ESP-IDF stubs come
+# from packages/components/host-test.  `just components::test` runs
+# every component suite.
 #
 # Usage:
 #   make test
@@ -11,8 +12,7 @@
 CC     = gcc
 CFLAGS = -std=c11 -Wall -Wextra \
          -I../include \
-         -I../../thinkpack-behaviors/test \
-         -I../../thinkpack-behaviors/test/stubs
+         -I../../host-test
 
 SRCS   = test_audio.c \
          ../thinkpack_audio.c

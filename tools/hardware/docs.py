@@ -67,7 +67,7 @@ _MARKERISH = re.compile(r"^<!--\s*(BEGIN|END)\s+GENERATED\b")
 _DASH = "—"
 
 
-def BEGIN(name: str) -> str:  # noqa: N802 — reads as the marker it builds
+def BEGIN(name: str) -> str:
     return f"<!-- BEGIN GENERATED: {name} -->"
 
 

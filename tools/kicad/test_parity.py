@@ -57,8 +57,8 @@ class CompareTests(unittest.TestCase):
     def test_swapped_step_and_dir(self):
         """STEP_L and DIR_L swapped at the XIAO."""
         root = export()
-        step = [n for n in net(root, "STEP_L") if n.get("ref") == "U1"][0]
-        dirn = [n for n in net(root, "DIR_L") if n.get("ref") == "U1"][0]
+        step = next(n for n in net(root, "STEP_L") if n.get("ref") == "U1")
+        dirn = next(n for n in net(root, "DIR_L") if n.get("ref") == "U1")
         a, b = step.get("pin"), dirn.get("pin")
         step.set("pin", b)
         dirn.set("pin", a)

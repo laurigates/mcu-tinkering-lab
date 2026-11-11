@@ -20,6 +20,7 @@ import tomllib
 import unittest
 import uuid
 from pathlib import Path
+from typing import ClassVar
 
 from kicad import boardcheck, library, netlist, paths, schematic, testfixture
 from kicad.errors import KicadError
@@ -714,7 +715,7 @@ class ConfigTests(unittest.TestCase):
         self.fails(lambda d: d.pop("signal"), "[signal] is required")
 
     # Tables the frozen fixture's board.toml lacks, for the shape tests.
-    EXTRA = {
+    EXTRA: ClassVar[dict] = {
         "fanout": {"nets": ["GND"], "via_um": [1000, 500]},
         "fab": {"provenance_at": [10.0, 10.0]},
         "tracks": [

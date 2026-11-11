@@ -390,7 +390,7 @@ def clip_silk(fp, board):
                 for p in pads
             ]
 
-            def blocked(a, b):
+            def blocked(a, b, shapes=shapes):
                 seg = pcbnew.SEG(pcbnew.VECTOR2I(*a), pcbnew.VECTOR2I(*b))
                 return any(shape.Collide(seg, gap) for shape, gap in shapes)
 

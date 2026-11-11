@@ -28,6 +28,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -373,9 +374,11 @@ class LookupTests(unittest.TestCase):
         # lookup that dies must not read as "no otadata row".
         stub = self.dir / "stub-predicate.sh"
         stub.write_text('resolve_partition_table() { echo "$1/partitions.csv"; }\n')
-        with mock.patch.object(cfr, "OTADATA_PREDICATE", stub):
-            with self.assertRaises(RuntimeError):
-                cfr.flash_layout(self.dir)
+        with (
+            mock.patch.object(cfr, "OTADATA_PREDICATE", stub),
+            self.assertRaises(RuntimeError),
+        ):
+            cfr.flash_layout(self.dir)
 
     def test_a_blank_offset_otadata_row_is_a_row_without_an_offset(self):
         # #689: not "no row" — the build still writes ota_data_initial.bin.
@@ -398,9 +401,11 @@ class LookupTests(unittest.TestCase):
     def test_a_predicate_that_cannot_run_raises_rather_than_reading_none(self):
         # Reading a broken predicate as "no otadata row" would fail the check open.
         missing = self.dir / "no-such-predicate.sh"
-        with mock.patch.object(cfr, "OTADATA_PREDICATE", missing):
-            with self.assertRaises(RuntimeError):
-                cfr.flash_layout(self.dir)
+        with (
+            mock.patch.object(cfr, "OTADATA_PREDICATE", missing),
+            self.assertRaises(RuntimeError),
+        ):
+            cfr.flash_layout(self.dir)
 
     def test_the_bootloader_offset_follows_the_justfile_target(self):
         # components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH.
@@ -572,6 +577,41 @@ class LookupTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "partitions.csv"):
             cfr.flash_layout(self.dir)
 
+    def test_size_suffixed_offsets_are_read_as_gen_esp32part_reads_them(self):
+        # #1090: gen_esp32part.py's parse_int takes "52K" as 52 * 1024 = 0xd000.
+        self.custom(
+            "nvs,data,nvs,36K,16K,\notadata,data,ota,52K,8K,\nfactory,app,factory,64K,1M,\n"
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertEqual((layout.otadata, layout.app), (0xD000, 0x10000))
+
+    def test_the_partition_table_offset_is_kconfig_hex_with_or_without_0x(self):
+        # A Kconfig hex option: kconfiglib reads "9000" as 0x9000, not 9000.
+        for raw in ("0x9000", "9000"):
+            with self.subTest(raw=raw):
+                self.custom(
+                    "nvs,data,nvs,0xa000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
+                    sdkconfig=f"CONFIG_PARTITION_TABLE_OFFSET={raw}\n",
+                )
+                self.assertEqual(cfr.flash_layout(self.dir).partition_table, 0x9000)
+
+    def test_a_partition_table_offset_that_is_not_hex_cannot_be_checked(self):
+        # kconfiglib ignores it with a warning and builds 0x8000; a warning is
+        # easy to miss, so the check reports it instead of guessing.
+        self.custom(
+            "nvs,data,nvs,0xa000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
+            sdkconfig="CONFIG_PARTITION_TABLE_OFFSET=52K\n",
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertIsNone(layout.partition_table)
+        self.assertIn("52K", layout.why["partition_table"])
+
+    def test_the_layout_names_the_table_it_read(self):
+        self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_TWO_OTA=y\n")
+        self.assertEqual(
+            cfr.flash_layout(self.dir).table.name, "partitions_two_ota.csv"
+        )
+
     def test_the_cmake_project_name_names_the_app_file(self):
         self.write(
             "CMakeLists.txt",
@@ -664,6 +704,163 @@ class PredicateTests(unittest.TestCase):
         )
         self.assertTrue(table.is_file())
 
+    def test_a_missing_custom_table_stops_the_release_assembly(self):
+        # build-firmware.yml's "Assemble firmware directory" step runs under
+        # `bash -e` and asks `if has_otadata_partition "$partition_table"`,
+        # which reads exit 2 (no such table) as false: without the guard in
+        # resolve_partition_table the release would assemble the project with
+        # no otadata requirement. The guard has to stop it at the assignment.
+        (self.dir / "sdkconfig.defaults").write_text(
+            "CONFIG_PARTITION_TABLE_CUSTOM=y\n"
+        )
+        proc = self.sh(
+            'set -e; partition_table=$(resolve_partition_table "$1"); '
+            'if has_otadata_partition "$partition_table"; then echo has; else echo none; fi',
+            str(self.dir),
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("partitions.csv", proc.stderr)
+
+    def test_integers_are_read_as_gen_esp32part_reads_them(self):
+        # parse_int: int(x, 0) after K/M suffixes, each a factor of 1024.
+        for field, value in (
+            ("0x10000", 65536),
+            ("0XD000", 53248),
+            ("65536", 65536),
+            ("0", 0),
+            ("64K", 65536),
+            ("64k", 65536),
+            ("1M", 1048576),
+            ("0x10K", 16384),
+            ("1KK", 1048576),
+            (" 0xd000 ", 53248),
+        ):
+            with self.subTest(field=field):
+                proc = self.sh('partition_int "$1"', field)
+                self.assertEqual((proc.returncode, proc.stdout), (0, f"{value}\n"))
+
+    def test_a_blank_or_unreadable_integer_fails_closed(self):
+        # "0100": int(x, 0) rejects a leading zero, and bash would read octal.
+        for field in ("", "  ", "0100", "52Q", "0x", "K", "1.5M", "banana"):
+            with self.subTest(field=field):
+                proc = self.sh('partition_int "$1"', field)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertEqual(proc.stdout, "")
+                self.assertIn("ERROR", proc.stderr)
+
+    def test_a_size_suffixed_otadata_offset_prints_in_decimal(self):
+        csv = self.table("nvs,data,nvs,36K,16K,\notadata,data,ota,52K,8K,\n")
+        self.assertEqual(self.sh('parse_otadata_offset "$1"', csv).stdout, "53248\n")
+
+    def test_an_unreadable_otadata_offset_fails_closed_but_is_still_a_row(self):
+        # The release assembly must still require ota_data_initial.bin; the
+        # manifest generator, which needs the number, must stop.
+        csv = self.table("otadata,data,ota,banana,0x2000,\n")
+        proc = self.sh('parse_otadata_offset "$1"', csv)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("banana", proc.stderr)
+        self.assertEqual(self.sh('has_otadata_partition "$1"', csv).returncode, 0)
+
+    def test_an_indented_comment_is_not_a_row(self):
+        # gen_esp32part.py strips each line before testing for "#".
+        csv = self.table(
+            "  # otadata,data,ota,0xd000,0x2000,\nnvs,data,nvs,0x9000,0x6000,\n"
+        )
+        self.assertEqual(self.sh('has_otadata_partition "$1"', csv).returncode, 1)
+
+    def test_the_app_goes_where_idf_py_flash_writes_it(self):
+        # parttool.py's --partition-boot-default: factory, else the lowest ota_N.
+        for table, name, offset in (
+            (
+                "ota_0,app,ota_0,0x10000,1M,\nfactory,app,factory,0x110000,1M,\n",
+                "factory",
+                0x110000,
+            ),
+            (
+                "ota_1,app,ota_1,0x10000,1M,\nota_0,app,ota_0,0x110000,1M,\n",
+                "ota_0",
+                0x110000,
+            ),
+            ("factory,app,factory,64K,1M,\n", "factory", 0x10000),
+        ):
+            with self.subTest(table=table):
+                csv = self.table("nvs,data,nvs,0x9000,0x6000,\n" + table)
+                proc = self.sh('boot_app_partition "$1"', csv)
+                self.assertEqual(proc.stdout, f"{offset} {name}\n", proc.stderr)
+                proc = self.sh('boot_app_offset "$1"', csv)
+                self.assertEqual(proc.stdout, f"{offset}\n", proc.stderr)
+
+    def test_an_app_offset_that_cannot_be_named_fails_closed(self):
+        # #1090: a blank offset used to become 0x10000 in the manifests.
+        for table, reason in (
+            ("factory,app,factory,,1M,\n", "factory"),
+            ("factory,app,factory,banana,1M,\n", "banana"),
+            ("nvs,data,nvs,0x9000,0x6000,\n", "no factory or ota_N"),
+        ):
+            with self.subTest(table=table):
+                proc = self.sh('boot_app_offset "$1"', self.table(table))
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertEqual(proc.stdout, "")
+                self.assertIn(reason, proc.stderr)
+
+    def test_the_bootloader_offset_of_each_target(self):
+        # components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH.
+        for target, offset in (
+            ("esp32", 0x1000),
+            ("esp32s2", 0x1000),
+            ("esp32s3", 0x0),
+            ("esp32c2", 0x0),
+            ("esp32c3", 0x0),
+            ("esp32c6", 0x0),
+            ("esp32c61", 0x0),
+            ("esp32h2", 0x0),
+            ("esp32c5", 0x2000),
+            ("esp32p4", 0x2000),
+        ):
+            with self.subTest(target=target):
+                proc = self.sh('bootloader_offset "$1"', target)
+                self.assertEqual(proc.stdout, f"{offset}\n", proc.stderr)
+        for target in ("", "esp8266", "ESP32"):
+            with self.subTest(target=target):
+                proc = self.sh('bootloader_offset "$1"', target)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertEqual(proc.stdout, "")
+
+    def test_the_partition_table_offset(self):
+        for lines, offset in (
+            (None, 0x8000),
+            ("", 0x8000),
+            ("CONFIG_PARTITION_TABLE_OFFSET=0x9000\n", 0x9000),
+            # Kconfig hex: kconfiglib reads it with int(value, 16).
+            ("CONFIG_PARTITION_TABLE_OFFSET=9000\n", 0x9000),
+            ('CONFIG_PARTITION_TABLE_OFFSET="0xA000"\n', 0xA000),
+            (
+                "CONFIG_PARTITION_TABLE_OFFSET=0x9000\nCONFIG_PARTITION_TABLE_OFFSET=0xa000\n",
+                0xA000,
+            ),
+        ):
+            with self.subTest(lines=lines):
+                defaults = self.dir / "sdkconfig.defaults"
+                if lines is None:
+                    defaults.unlink(missing_ok=True)
+                else:
+                    defaults.write_text(lines)
+                proc = self.sh('partition_table_offset "$1"', str(self.dir))
+                self.assertEqual(proc.stdout, f"{offset}\n", proc.stderr)
+
+    def test_a_partition_table_offset_that_is_not_hex_fails_closed(self):
+        for raw in ("52K", "0x", "banana"):
+            with self.subTest(raw=raw):
+                (self.dir / "sdkconfig.defaults").write_text(
+                    f"CONFIG_PARTITION_TABLE_OFFSET={raw}\n"
+                )
+                proc = self.sh('partition_table_offset "$1"', str(self.dir))
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertEqual(proc.stdout, "")
+                self.assertIn(raw, proc.stderr)
+
 
 class BuiltInTableTripwireTests(unittest.TestCase):
     """The resolved built-in tables are ESP-IDF's for the version the builds use.
@@ -713,11 +910,23 @@ class BuiltInTableTripwireTests(unittest.TestCase):
                     "regenerate.sh did not write this table for IDF_VERSION",
                 )
 
+    def test_the_bootloader_offsets_are_for_that_version_too(self):
+        # bootloader_offset copies BOOTLOADER_OFFSET_IN_FLASH by hand; an
+        # upgrade can add a target or move one, so re-check it and update the
+        # version it names.
+        version = (self.TABLES / "IDF_VERSION").read_text().strip()
+        self.assertIn(
+            f"ESP-IDF {version} components/bootloader/Kconfig.projbuild",
+            PREDICATE.read_text(),
+            "re-check bootloader_offset in tools/lib/otadata-predicate.sh against "
+            "this ESP-IDF version's BOOTLOADER_OFFSET_IN_FLASH",
+        )
+
 
 class ManifestGeneratorTests(unittest.TestCase):
     """tools/generate-flasher-manifests.sh's otadata part, run on a throwaway tree."""
 
-    FLASHER = {
+    FLASHER: ClassVar[dict] = {
         "name": "Thing",
         "description": "d",
         "chipFamily": "ESP32",
@@ -786,6 +995,147 @@ class ManifestGeneratorTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(self.parts()["ota_data_initial.bin"], 0xD000)
         self.assertEqual(self.parts()["thing.bin"], 0x10000)
+
+    # The other offsets come from the same predicate (#1090).
+
+    def flasher(self, **fields: str) -> None:
+        (self.project / "flasher.json").write_text(
+            json.dumps({**self.FLASHER, **fields})
+        )
+
+    def assert_release_stopped(self, proc, reason: str) -> None:
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn(reason, proc.stderr)
+        self.assertFalse((self.root / "firmware/thing/manifest.json").exists())
+
+    def test_the_app_part_is_the_partition_idf_py_flash_writes(self):
+        # Not the first app row: factory if there is one, else the lowest ota_N.
+        proc = self.generate(
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+            "ota_0,app,ota_0,0x10000,1M,\nfactory,app,factory,0x110000,1M,\n"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.parts()["thing.bin"], 0x110000)
+
+    def test_a_blank_app_offset_fails_the_release(self):
+        # It used to become 0x10000, the app-side twin of #689.
+        proc = self.generate("nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,,1M,\n")
+        self.assert_release_stopped(proc, "factory")
+
+    def test_a_table_without_an_app_partition_fails_the_release(self):
+        proc = self.generate("nvs,data,nvs,0x9000,0x6000,\n")
+        self.assert_release_stopped(proc, "no factory or ota_N")
+
+    def test_size_suffixed_offsets_are_read_as_gen_esp32part_reads_them(self):
+        proc = self.generate(
+            "nvs,data,nvs,36K,16K,\notadata,data,ota,52K,8K,\nfactory,app,factory,64K,1M,\n"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.parts()["ota_data_initial.bin"], 0xD000)
+        self.assertEqual(self.parts()["thing.bin"], 0x10000)
+
+    def test_the_partition_table_part_follows_its_configured_offset(self):
+        (self.project / "sdkconfig.defaults").write_text(
+            "CONFIG_PARTITION_TABLE_CUSTOM=y\nCONFIG_PARTITION_TABLE_OFFSET=0x9000\n"
+        )
+        proc = self.generate(
+            "nvs,data,nvs,0xa000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.parts()["partition-table.bin"], 0x9000)
+
+    def test_an_unreadable_partition_table_offset_fails_the_release(self):
+        (self.project / "sdkconfig.defaults").write_text(
+            "CONFIG_PARTITION_TABLE_CUSTOM=y\nCONFIG_PARTITION_TABLE_OFFSET=52K\n"
+        )
+        proc = self.generate(
+            "nvs,data,nvs,0xa000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+        )
+        self.assert_release_stopped(proc, "52K")
+
+    def test_the_bootloader_part_follows_the_chip_family(self):
+        table = "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+        for chip, offset in (
+            ("ESP32", 0x1000),
+            ("ESP32-S2", 0x1000),
+            ("ESP32-S3", 0x0),
+            ("ESP32-C3", 0x0),
+            ("ESP32-C5", 0x2000),
+            ("ESP32-P4", 0x2000),
+        ):
+            with self.subTest(chip=chip):
+                self.flasher(chipFamily=chip)
+                proc = self.generate(table)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(self.parts()["bootloader.bin"], offset)
+
+    def test_a_chip_family_with_no_known_bootloader_offset_fails_the_release(self):
+        self.flasher(chipFamily="ESP8266")
+        proc = self.generate(
+            "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+        )
+        self.assert_release_stopped(proc, "ESP8266")
+
+
+class SdkconfigOverlayTripwireTests(unittest.TestCase):
+    """The predicate reads only sdkconfig.defaults (#1090).
+
+    ESP-IDF also layers sdkconfig.defaults.<target> over it, and the
+    xbox-switch-bridge and facedancer-espdancer-fw justfiles layer
+    sdkconfig.<variant> files through SDKCONFIG_DEFAULTS. None of them sets a
+    partition-table or core-dump option, so the predicate's answer is the
+    build's. This fails when one does: then resolve_partition_table and
+    partition_table_offset have to read the overlays too, or the option moves
+    into sdkconfig.defaults.
+    """
+
+    REPO = Path(__file__).resolve().parent.parent
+    OPTION_RE = re.compile(
+        r"^[ \t]*(?:#[ \t]*)?(CONFIG_\w*(?:PARTITION|COREDUMP)\w*)", re.MULTILINE
+    )
+
+    def overlays(self) -> list[Path]:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--", "packages"],
+            cwd=self.REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split("\0")
+        return [
+            self.REPO / rel
+            for rel in listed
+            if Path(rel).name.startswith("sdkconfig.")
+            and Path(rel).name != "sdkconfig.defaults"
+        ]
+
+    def test_the_scan_finds_the_overlays(self):
+        # Control: an empty scan would pass the tripwire below on nothing. If
+        # the repo really has no overlays left, delete this class.
+        self.assertTrue(self.overlays(), "no sdkconfig overlay found under packages/")
+
+    def test_no_overlay_sets_a_partition_or_core_dump_option(self):
+        for path in self.overlays():
+            with self.subTest(overlay=path.relative_to(self.REPO).as_posix()):
+                match = self.OPTION_RE.search(path.read_text())
+                self.assertIsNone(
+                    match,
+                    f"{match and match.group(1)} is set in an overlay, which "
+                    "tools/lib/otadata-predicate.sh does not read; teach "
+                    "resolve_partition_table and partition_table_offset the "
+                    "overlay, or move the option into sdkconfig.defaults",
+                )
+
+    def test_the_tripwire_sees_an_option_in_an_overlay(self):
+        # Meta-test: the pattern catches both spellings of an assignment.
+        for text in (
+            "CONFIG_PARTITION_TABLE_TWO_OTA=y\n",
+            "# CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH is not set\n",
+            "CONFIG_FOO=y\n  CONFIG_PARTITION_TABLE_OFFSET=0x9000\n",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNotNone(self.OPTION_RE.search(text))
+        self.assertIsNone(self.OPTION_RE.search("CONFIG_BT_ENABLED=y\n"))
 
 
 # ---------------------------------------------------------------------------

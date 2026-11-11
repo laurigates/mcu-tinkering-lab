@@ -1,7 +1,8 @@
 # Makefile for thinkpack-nfc host-based unit tests.
 #
-# Compiles thinkpack_nfc.c on the host with gcc.  Reuses the shared stubs
-# and unity_compat.h from packages/components/thinkpack-behaviors/test.
+# Compiles thinkpack_nfc.c on the host with gcc.  unity_compat.h and the
+# ESP-IDF stubs come from packages/components/host-test.  `just
+# components::test` runs every component suite.
 #
 # Usage:
 #   make test
@@ -10,8 +11,7 @@
 CC     = gcc
 CFLAGS = -std=c11 -Wall -Wextra \
          -I../include \
-         -I../../thinkpack-behaviors/test \
-         -I../../thinkpack-behaviors/test/stubs
+         -I../../host-test
 
 SRCS   = test_nfc.c \
          ../thinkpack_nfc.c

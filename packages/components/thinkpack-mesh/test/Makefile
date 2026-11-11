@@ -1,19 +1,21 @@
 # Makefile for thinkpack-mesh fragment reassembler host-based unit tests
 #
 # Compiles fragment_reassembler.c + thinkpack_protocol.c under plain gcc
-# (no ESP-IDF, no hardware). Stubs supply any missing headers.
+# (no ESP-IDF, no hardware). unity_compat.h and the ESP-IDF stubs come
+# from packages/components/host-test. `just components::test` runs
+# every component suite.
 #
 # Usage:
 #   make test     — build and run tests (default)
 #   make clean    — remove build artefacts
 
 CC     = gcc
+HOST_TEST = ../../host-test
 CFLAGS = -std=c11 -Wall -Wextra \
          -Wno-unused-function \
          -I../include \
          -I../../thinkpack-protocol/include \
-         -Istubs \
-         -I.
+         -I$(HOST_TEST)
 
 SRCS   = test_fragment_reassembler.c \
          ../fragment_reassembler.c \
@@ -28,7 +30,7 @@ all: test
 test: $(TARGET)
 	./$(TARGET)
 
-$(TARGET): $(SRCS) unity_compat.h stubs/esp_log.h
+$(TARGET): $(SRCS) $(HOST_TEST)/unity_compat.h $(HOST_TEST)/esp_log.h
 	$(CC) $(CFLAGS) -o $@ $(SRCS)
 
 clean:

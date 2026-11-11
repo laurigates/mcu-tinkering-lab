@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-10-13
+reviewed: 2026-11-11
 paths:
   - '**/docs/**/*.typ'
   - '**/docs/auto/**'
@@ -162,8 +162,17 @@ untracked files. `pinout.py` also deletes an SVG no board produces any more.
 `schematics-check.yml` reads its SVGs the same way, and a full
 `docs/schematics/render.py` run deletes the SVG and PNG of a removed circuit
 (#721). Any gate that regenerates files in place and then asks git whether
-they changed needs `git status --porcelain`, under `set -e` so a failing git
-command cannot read as clean. A `--check` mode that compares against the
+they changed needs `git status --porcelain`, with its output assigned to a
+variable before it is tested, under `set -e`:
+`drift=$(git status --porcelain -- …)`, then `[ -z "$drift" ]`. `set -e`
+alone is not enough. It does not fire for a command substitution inside
+`[ ]` or `test`, so `[ -z "$(git status …)" ]` with a failing git reads as
+clean, and it does not see the exit status of a `< <(git …)` process
+substitution, so a failing document discovery reads as no documents. Both
+shapes were in this guard until #1091. `tools/test_workflows.py` rejects
+them, and `git diff --quiet`, in any workflow, and runs the guard's step
+with a failing `git status` and a failing `git ls-files`.
+A `--check` mode that compares against the
 checkout, as `tools/kicad` and `tools/hardware` use, does not have the blind
 spot: a file never committed is absent from CI's checkout and reads as missing.
 
@@ -174,9 +183,10 @@ never an SVG: the next regeneration overwrites a hand edit.
 
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
-Nothing else exercises this workflow — same gap as the flash recipes in
-`containerized-builds.md` — so a change to its `run:` block is unverified until
-you run it. **Extract the shipped text; never retype the logic into a harness**
+Nothing else compiles a guide the way this workflow does — same gap as the
+flash recipes in `containerized-builds.md` — so a change to its `run:` block is
+unverified until you run it. (`tools/test_workflows.py` runs the step with stub
+`typst` and `git` to hold its git-failure paths; it compiles nothing.) **Extract the shipped text; never retype the logic into a harness**
 (`~/.claude/rules/never-fabricate-test-identifiers.md`): a retyped copy that
 misbehaves is indistinguishable from a real finding.
 

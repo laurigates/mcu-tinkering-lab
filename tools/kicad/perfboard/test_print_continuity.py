@@ -16,7 +16,7 @@ import re
 import tomllib
 import unittest
 import xml.etree.ElementTree as ET
-from itertools import combinations
+from itertools import combinations, pairwise
 from pathlib import Path
 
 from kicad import library, netlist, registry, testfixture
@@ -82,7 +82,7 @@ class PrintTests(unittest.TestCase):
             ys = sorted({round(self.centre(h)[1], 6) for h in holes})
             self.assertEqual((len(xs), len(ys)), (CFG.cols, CFG.rows))
             for axis in (xs, ys):
-                for a, b in zip(axis, axis[1:]):
+                for a, b in pairwise(axis):
                     self.assertAlmostEqual(b - a, PITCH, delta=EPS)
 
     def test_pads_land_on_their_holes_and_the_solder_side_mirrors(self):

@@ -11,7 +11,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from guide_deps import (
     changed_images,
     embedded_images,

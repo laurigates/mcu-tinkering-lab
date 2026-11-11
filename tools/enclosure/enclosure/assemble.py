@@ -138,8 +138,8 @@ def voxelize(mesh: trimesh.Trimesh, pitch: float = PITCH) -> Grid:
             continue
         i, j = ci[s], cj[s]
         for z0, z1 in zip(zs[0::2], zs[1::2], strict=True):
-            k0 = int(math.ceil((z0 - origin[2]) / pitch - 0.5))
-            k1 = int(math.floor((z1 - origin[2]) / pitch - 0.5))
+            k0 = math.ceil((z0 - origin[2]) / pitch - 0.5)
+            k1 = math.floor((z1 - origin[2]) / pitch - 0.5)
             if k1 >= k0:
                 occ[i, j, k0 : k1 + 1] = True
     return Grid(origin, pitch, occ)
@@ -215,7 +215,7 @@ class Collider:
         full = voxelize(self.fixed)
         # Within this margin of the fixed bodies, the search defers to the
         # fine check: coarse samples alone miss a shallow graze.
-        self.fixed_near = dilate(full, int(math.ceil(self.coarse / 2 / PITCH)))
+        self.fixed_near = dilate(full, math.ceil(self.coarse / 2 / PITCH))
         # Both grids lose their outer cell: a touch within TOUCH is contact,
         # not a clash. A cell centre decides a cell, so without this a 0.25 mm
         # gap (a lid boss 0.5 mm over the board, the board lifted 0.25 off its
@@ -294,7 +294,7 @@ def _interpolate(a, b, step_mm: float, reach: float):
     da = max(abs(b[i] - a[i]) for i in range(3)) / step_mm
     dr = max(abs(b[i] - a[i]) for i in (3, 4))
     dr = math.radians(dr) * reach / step_mm
-    n = max(1, int(math.ceil(max(da, dr))))
+    n = max(1, math.ceil(max(da, dr)))
     for s in range(1, n + 1):
         t = s / n
         yield tuple(a[i] + t * (b[i] - a[i]) for i in range(5))
@@ -386,7 +386,7 @@ def plan(
         # Re-check every hop: no point moves more than the fine spacing between
         # checks, which is under any printed feature's thickness.
         bad = None
-        for u, v in zip(lattice, lattice[1:], strict=False):
+        for u, v in itertools.pairwise(lattice):
             for q in _interpolate(pose(u), pose(v), col.fine, reach):
                 if col.collides(q, "fine"):
                     bad = (u, v, q, col.clashing(q, "fine"))
