@@ -40,7 +40,7 @@
       "enabled": false
     },
     {
-      "description": "Do not bump the espressif/idf base image in the Dockerfile. CI builds firmware with IDF_VERSION v5.4 (.github/workflows/_ci-build-esp32.yml, a plain env value Renovate does not manage), so the dev container has to move together with it as a deliberate ESP-IDF upgrade. docker-compose.yml's mcu-tinkering-lab/esp-idf:v5.4 is a locally built tag and also stays manual.",
+      "description": "Do not bump the espressif/idf base image in the Dockerfile. CI builds firmware with the IDF_VERSION env value in _ci-build-esp32.yml, build-firmware.yml and refresh-idf-locks.yml (plain values Renovate does not manage), and the Kconfig symbol list and resolved partition tables are regenerated per version, so the dev container moves with them as a deliberate ESP-IDF upgrade (#734). docker-compose.yml's mcu-tinkering-lab/esp-idf image tag and versioned esp-idf-tools volume are local names and also stay manual; test_kconfig_symbols.py fails when any of these disagree.",
       "matchFileNames": ["Dockerfile"],
       "matchDepNames": ["espressif/idf"],
       "enabled": false

@@ -9,10 +9,12 @@ reviewed: 2026-03-12
 
 ## ESP-IDF Version
 
-Pin to a specific ESP-IDF version in `sdkconfig.defaults` and `docker-compose.yml`. The current project uses ESP-IDF v5.4.
+The ESP-IDF version is pinned repo-wide, not per project: the root `Dockerfile`
+sets it, and `.claude/rules/containerized-builds.md` § "Changing the ESP-IDF
+version" lists every other place that must match. This project sets only its
+target:
 
 ```
-docker image: espressif/idf:v5.4
 CONFIG_IDF_TARGET=esp32s3
 ```
 

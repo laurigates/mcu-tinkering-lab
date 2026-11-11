@@ -19,7 +19,24 @@ paths:
 
 ## Architecture
 
-All ESP-IDF projects build inside Docker containers using the shared `espressif/idf:v5.4` image. No local ESP-IDF installation is required.
+All ESP-IDF projects build inside Docker containers using the shared `espressif/idf:v5.5.6` image. No local ESP-IDF installation is required.
+
+### Changing the ESP-IDF version
+
+The version is set in six places: the `Dockerfile`'s `FROM` line, the
+`docker-compose.yml` image tag and `esp-idf-tools` volume name, and
+`IDF_VERSION` in `_ci-build-esp32.yml`, `build-firmware.yml` and
+`refresh-idf-locks.yml`. The compose volume is mounted over `/opt/esp`, and
+Docker fills a named volume from the image only when it creates the volume, so
+its name carries the version; reusing the old name keeps local builds on the old
+IDF. `tools/kconfig_symbols/test_kconfig_symbols.py` fails when any of the six
+disagree. Then regenerate what is pinned to the version, each behind its own
+tripwire: `just kconfig-symbols::idf` (delete the old `idf-v*.txt`) and
+`tools/lib/idf-partition-tables/regenerate.sh` after setting its `IDF_VERSION`.
+Refresh the tracked locks with `just refresh-idf-locks`
+(`esp-idf-dependency-locks.md`), and build every matrix project in the new
+image. A green build does not prove a board boots
+(`esp-idf-i2c-driver-generation-conflict.md`).
 
 - **Build/clean/menuconfig/shell** run inside the container via `docker compose run`
 - **Flash/monitor** run natively on the host (USB passthrough on macOS is unreliable)
@@ -278,7 +295,7 @@ component manager git-fetches dependencies, so git needs the CA as well
 (`GIT_SSL_CAINFO`):
 
 ```sh
-docker run --rm --network host -e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY -e https_proxy -e http_proxy -e no_proxy -e SSL_CERT_FILE=/ccr-ca.crt -e REQUESTS_CA_BUNDLE=/ccr-ca.crt -e CURL_CA_BUNDLE=/ccr-ca.crt -e GIT_SSL_CAINFO=/ccr-ca.crt -v /root/.ccr/ca-bundle.crt:/ccr-ca.crt:ro -v "$PWD":/workspace -w /workspace/packages/<domain>/<project> espressif/idf:v5.4 bash -c 'git config --global --add safe.directory "*" && idf.py build'
+docker run --rm --network host -e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY -e https_proxy -e http_proxy -e no_proxy -e SSL_CERT_FILE=/ccr-ca.crt -e REQUESTS_CA_BUNDLE=/ccr-ca.crt -e CURL_CA_BUNDLE=/ccr-ca.crt -e GIT_SSL_CAINFO=/ccr-ca.crt -v /root/.ccr/ca-bundle.crt:/ccr-ca.crt:ro -v "$PWD":/workspace -w /workspace/packages/<domain>/<project> espressif/idf:v5.5.6 bash -c 'git config --global --add safe.directory "*" && idf.py build'
 ```
 
 Start `dockerd` by hand first (`docker info` fails without it); a worker

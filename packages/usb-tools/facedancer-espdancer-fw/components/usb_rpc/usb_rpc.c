@@ -140,13 +140,16 @@ static void dispatch(uint8_t msg_id, const uint8_t *payload, uint16_t len)
             break;
         }
         case USB_RPC_GET_VERSION: {
-            char v[32] = {0};
+            /* 48, not 32: the 33-character stub string below was cut to 31 on
+             * the wire, which ESP-IDF v5.5's GCC 14 rejects as
+             * -Werror=stringop-truncation. VERSION_REPLY is an unbounded char[]. */
+            char v[48] = {0};
 #if CONFIG_HAS_RAW_USB
             raw_usb_get_version(v, sizeof(v));
 #else
             strncpy(v, "espdancer-fw 0.1.0 (raw_usb stub)", sizeof(v) - 1);
 #endif
-            send_frame(USB_RPC_VERSION_REPLY, (uint8_t *)v, (uint16_t)strnlen(v, 31));
+            send_frame(USB_RPC_VERSION_REPLY, (uint8_t *)v, (uint16_t)strnlen(v, sizeof(v) - 1));
             break;
         }
         case USB_RPC_CONNECT:

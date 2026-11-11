@@ -60,7 +60,7 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 
 ## Build & flash
 
-Containerized ESP-IDF v5.4 via `just robocar-unified::*`. XIAO uses native USB-Serial-JTAG — `just` auto-detects VID `0x303a`. If flashing fails, hold BOOT and tap RESET to enter download mode.
+Containerized ESP-IDF (the version the root `Dockerfile` pins) via `just robocar-unified::*`. XIAO uses native USB-Serial-JTAG — `just` auto-detects VID `0x303a`. If flashing fails, hold BOOT and tap RESET to enter download mode.
 
 ```bash
 just robocar-unified::build

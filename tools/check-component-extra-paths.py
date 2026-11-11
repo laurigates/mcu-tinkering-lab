@@ -89,12 +89,6 @@ NOT_IN_MATRIX: dict[str, str] = {
         "that `just boost-fw::setup` fetches into a git-ignored external/; no "
         "ESP-IDF, ESPHome or Pico build applies"
     ),
-    "sensors/presence-detector": (
-        "does not build with the ESPHome CI uses: it pins esp-idf 5.2.2 / "
-        "platform 6.7.0, which ESPHome 2026.10.2 cannot download (404 from "
-        "esphome-libs/esp-idf). Without the pin it builds on esp-idf 5.5.6, an "
-        "IDF move that waits for the v5.5 migration (#734) and a bench check"
-    ),
 }
 
 _MOD_LINE = re.compile(

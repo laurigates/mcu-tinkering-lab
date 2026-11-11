@@ -6,7 +6,7 @@ reviewed: 2026-03-11
 
 ## Build System
 
-- All firmware compilation runs in Docker (`espressif/idf:v5.4`) via `just build`
+- All firmware compilation runs in Docker (the repo's shared ESP-IDF image, version pinned in the root `Dockerfile`) via `just build`
 - Flash and monitor run natively on the host (macOS USB passthrough is unreliable in containers)
 - Use `just` recipes as the primary interface; run `just --list` to see all available recipes
 

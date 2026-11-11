@@ -171,13 +171,14 @@ repos:
       # ESP-IDF ignores an sdkconfig.defaults line whose symbol no Kconfig file
       # defines, with only a build-log warning (issue #707). The test suite
       # checks every tracked sdkconfig.defaults against the symbol lists in
-      # tools/kconfig_symbols, and fails when the ESP-IDF list and the
-      # Dockerfile / CI IDF_VERSION disagree. No build or container needed.
+      # tools/kconfig_symbols, and fails when the ESP-IDF list and any place
+      # that sets the ESP-IDF version (Dockerfile, docker-compose.yml, the
+      # three workflows' IDF_VERSION) disagree. No build or container needed.
       - id: kconfig-symbols
         name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
         entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
         language: system
-        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^\.github/workflows/_ci-build-esp32\.yml)$'
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/(_ci-build-esp32|build-firmware|refresh-idf-locks)\.yml)$'
         pass_filenames: false
 
       # No run: script expands inputs.* or github.event.* through ${{ }}

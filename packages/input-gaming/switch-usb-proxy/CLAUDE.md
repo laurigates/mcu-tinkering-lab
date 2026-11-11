@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-Builds run in Docker (`espressif/idf:v5.4`); flash runs natively.
+Builds run in Docker (the repo's shared ESP-IDF image, version pinned in the root `Dockerfile`); flash runs natively.
 
 ```bash
 just build              # Build firmware (containerized)
