@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.21](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.20...robocar-unified-v0.2.21) (2026-11-10)
+
+
+### Bug Fixes
+
+* **improv-wifi:** speak the Improv Serial protocol ESP Web Tools speaks ([#1075](https://github.com/laurigates/mcu-tinkering-lab/issues/1075)) ([4f97647](https://github.com/laurigates/mcu-tinkering-lab/commit/4f97647b0ab240d253f9cd1ff541c2f59427c3f3))
+
 ## [0.2.20](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.19...robocar-unified-v0.2.20) (2026-11-09)
 
 
