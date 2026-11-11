@@ -55,6 +55,23 @@ esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *le
 bool motor_is_initialized(void);
 
 /**
+ * @brief Hold the TB6612FNG in standby (STBY low) or enable it (STBY high).
+ *
+ * A bench control for issue #944. In standby the driver's outputs are high
+ * impedance and no motor current flows, while every PCA9685 write goes out
+ * unchanged. Running the same drive sequence in both states separates I2C
+ * traffic from motor current as the cause of a fault that appears only while
+ * driving. Not persisted: motor_controller_init() enables the driver.
+ *
+ * @return ESP_ERR_INVALID_STATE before motor_controller_init() has configured
+ *         the STBY pin.
+ */
+esp_err_t motor_set_standby(bool standby);
+
+/** @brief Whether motor_set_standby(true) is in effect. */
+bool motor_in_standby(void);
+
+/**
  * @brief How long a cached PCA9685 motor state is trusted before it is written
  *        again even though nothing changed.
  *

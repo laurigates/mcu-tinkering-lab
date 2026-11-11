@@ -53,6 +53,7 @@ lines keep a bench session readable:
 | `mic` / `mic dump <n>` | Microphone state and the VAD speech trigger's scores (best since the last `mic`); dump PCM frames — tells a dead mic from a quiet room |
 | `idle …` | The executor's idle behaviour (ADR-029). `idle` alone prints whether the gaze is on, the head mode and whether the head has settled (whether a frame captured now gets a dwell pose); `idle gaze on\|off` switches the idle gaze (on at boot, not persisted). See [head-aiming.md](head-aiming.md#idle-gaze-looking-around-when-nothing-directs-the-head) |
 | `cliff` / `cliff on\|off` | `cliff` alone prints whether the cliff reflex is on, whether the floor sensors are present, what each sees, whether the reflex is acting and its trip count; `cliff on\|off` switches the reflex (boot value `CLIFF_REFLEX_AT_BOOT`, not persisted). See [cliff-sensors.md](cliff-sensors.md) |
+| `motors` / `motors standby on\|off` / `motors exercise` | `motors` alone prints whether the motor controller initialised and whether the TB6612FNG is enabled or in standby; `motors standby on\|off` holds STBY (GPIO1) low or high while the executor keeps writing the PCA9685 (enabled at boot, not persisted); `motors exercise` repeats the boot wheel exercise. Running the exercise in both states gives the same I2C writes with and without motor current (issue #944); compare the bus counters with `trace` |
 | `ota` / `ota check` / `ota postpone` | `ota` alone prints the running version and build, and where an update is (idle, waiting for a quiet moment, announcing, postpone window open, parking, installing); `ota check` checks the manifest now, as the MQTT nudge does; `ota postpone` defers an announced update to the next check, accepted only in the minute after the robot says it is going. See [wifi-and-ota.md](wifi-and-ota.md#before-the-install-announce-postpone-park) |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
@@ -85,7 +86,8 @@ and classifies the payload before anything acts on it:
   one second of motion, so continuous remote driving means republishing at
   ~1 Hz, and a dropped connection stops the robot within a second.
 - **Everything else** in the console table above (`plan`, `voice`, `trace`,
-  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`, `idle`, `cliff`) — forwarded
+  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`, `idle`, `cliff`,
+  `motors`) — forwarded
   verbatim to `execute_console_line()`, the exact function the serial console
   calls, so the two entry points can never disagree about what a command
   does.

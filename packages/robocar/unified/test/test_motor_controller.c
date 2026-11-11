@@ -475,9 +475,51 @@ static void test_a_failed_write_restarts_the_ramp(void)
     park();
 }
 
+/* `motors standby on` (issue #944): STBY low puts the TB6612FNG's outputs in
+ * high impedance, and the PCA9685 writes go out exactly as before, so a bench
+ * run keeps the bus traffic and loses only the motor current. */
+static void test_standby_lowers_stby_and_keeps_the_bus_writes(void)
+{
+    CHECK(!motor_in_standby(), "init leaves the driver enabled");
+
+    /* Both runs start from the same parked state, a full refresh interval old. */
+    motor_stop();
+    advance_ms(MOTOR_REFRESH_INTERVAL_MS);
+
+    CHECK(motor_set_standby(true) == ESP_OK, "standby on should succeed");
+    CHECK(s_stby_level == 0, "standby must drive STBY low, got %d", s_stby_level);
+    CHECK(motor_in_standby(), "standby should be reported");
+
+    reset_bus();
+    DRIVE_FOR_TICKS(SETTLE_TICKS, motor_move_forward(200));
+    const int writes_in_standby = s_write_count;
+    CHECK(last_write()[MOTOR_LEFT_PWM_CHANNEL - MOTOR_FIRST_CHANNEL] == speed_pwm(200),
+          "standby must not change what is written, got %u",
+          (unsigned)last_write()[MOTOR_LEFT_PWM_CHANNEL - MOTOR_FIRST_CHANNEL]);
+    CHECK(s_stby_level == 0, "driving must not leave standby, got %d", s_stby_level);
+    motor_stop();
+    advance_ms(MOTOR_REFRESH_INTERVAL_MS);
+
+    CHECK(motor_set_standby(false) == ESP_OK, "standby off should succeed");
+    CHECK(s_stby_level == 1, "standby off must drive STBY high, got %d", s_stby_level);
+    CHECK(!motor_in_standby(), "standby should be cleared");
+
+    reset_bus();
+    DRIVE_FOR_TICKS(SETTLE_TICKS, motor_move_forward(200));
+    CHECK(s_write_count == writes_in_standby,
+          "the same drive must issue the same number of writes: %d in standby, %d enabled",
+          writes_in_standby, s_write_count);
+    motor_stop();
+    advance_ms(MOTOR_REFRESH_INTERVAL_MS);
+}
+
 int main(void)
 {
     printf("test_motor_controller\n");
+
+    /* Before init the STBY pin is not configured as an output. */
+    CHECK(motor_set_standby(true) == ESP_ERR_INVALID_STATE, "standby before init must be refused");
+    CHECK(s_stby_level == -1, "a refused standby must not touch STBY, got %d", s_stby_level);
 
     test_init_writes_the_first_stop();
     test_repeated_stop_does_not_touch_the_bus();
@@ -493,6 +535,7 @@ int main(void)
     test_a_reversal_ramps_from_zero();
     test_rotate_from_rest_ramps_both_wheels();
     test_a_failed_write_restarts_the_ramp();
+    test_standby_lowers_stby_and_keeps_the_bus_writes();
 
     if (s_failures != 0) {
         printf("FAILED (%d)\n", s_failures);
