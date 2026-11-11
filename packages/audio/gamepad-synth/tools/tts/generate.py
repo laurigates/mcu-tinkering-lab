@@ -140,7 +140,7 @@ def synthesize(
                     speech_config=speech_config,
                 ),
             )
-        except Exception as err:  # noqa: BLE001 - SDK raises several unrelated types
+        except Exception as err:
             # A rate-limit or transient server error used to propagate and kill
             # the whole run. That costs every remaining entry, and on a 30-entry
             # sweep the failure lands after twenty-odd successful calls have

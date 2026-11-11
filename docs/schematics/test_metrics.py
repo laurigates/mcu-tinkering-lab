@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 
-from metrics import (  # noqa: E402
+from metrics import (
     Box,
     CircuitMetrics,
     Label,

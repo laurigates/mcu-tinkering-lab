@@ -2,7 +2,6 @@ import hashlib
 import json
 
 import pytest
-
 from robocar_twin.ports import (
     InlinePort,
     ModelPortError,

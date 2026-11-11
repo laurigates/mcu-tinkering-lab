@@ -435,19 +435,22 @@ def audit_dry_run(
     for project_dir, rels in written.items():
         # Only a FULL flash owes otadata. An app-only recipe leaving the OTA
         # state alone is the point of an app-only recipe.
-        if PARTITION_TABLE_OUTPUT in rels and OTADATA_OUTPUT not in rels:
-            if layout(project_dir).has_otadata_row:
-                findings.append(
-                    Finding(
-                        recipe,
-                        "OTADATA_UNWRITTEN",
-                        f"{_display(project_dir)}'s partition table has an otadata "
-                        f"row but this full flash never writes build/{OTADATA_OUTPUT}, "
-                        "which `idf.py flash` writes for this table; on an "
-                        "ota_0/ota_1 table the stale OTA state left behind decides "
-                        "which slot boots",
-                    )
+        if (
+            PARTITION_TABLE_OUTPUT in rels
+            and OTADATA_OUTPUT not in rels
+            and layout(project_dir).has_otadata_row
+        ):
+            findings.append(
+                Finding(
+                    recipe,
+                    "OTADATA_UNWRITTEN",
+                    f"{_display(project_dir)}'s partition table has an otadata "
+                    f"row but this full flash never writes build/{OTADATA_OUTPUT}, "
+                    "which `idf.py flash` writes for this table; on an "
+                    "ota_0/ota_1 table the stale OTA state left behind decides "
+                    "which slot boots",
                 )
+            )
     return "checked", findings
 
 
@@ -576,7 +579,7 @@ def predicate_layout(project_dir: Path, target: str) -> dict[str, tuple[bool, st
     )
     fields: dict[str, tuple[bool, str]] = {}
     for line in proc.stdout.splitlines():
-        name, status, value = (line.split("\t", 2) + ["", ""])[:3]
+        name, status, value = [*line.split("\t", 2), "", ""][:3]
         fields[name] = (status == "ok", value)
     if (
         proc.returncode != 0
@@ -693,6 +696,7 @@ def check_flash_recipe_outputs(just: str) -> tuple[dict[str, str], list[Finding]
             zip(
                 [r for r, _ in recipes],
                 pool.map(lambda r: dry_run(just, r[0]), recipes),
+                strict=True,
             )
         )
 
@@ -848,7 +852,7 @@ def main() -> int:
                 f"  {proj.name}: {proj.recipe} -> {proj.shared} "
                 f"target={proj.target} size={proj.flash_size or '(default)'} "
                 f"table={proj.partition_source} "
-                f"app={'0x%x' % proj.app_offset if proj.app_offset is not None else '-'} "
+                f"app={hex(proj.app_offset) if proj.app_offset is not None else '-'} "
                 f"otadata={'yes' if proj.has_otadata else 'no'}"
             )
     print(f"CONSUMERS={len(projects)}")

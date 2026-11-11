@@ -1,6 +1,5 @@
 import pytest
 import yaml
-
 from robocar_twin.assertions import evaluate
 from robocar_twin.scenario import ScenarioError, load_scenario
 

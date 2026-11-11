@@ -68,7 +68,7 @@ def test_a_pin_moved_to_another_rail_moves_its_tag_label(model, circuit):
 def test_a_rail_load_with_no_tag_fails_the_render(model, circuit):
     # The amplifier is drawn, and has no tag on GAIN.
     extra = _move_rail(model, Endpoint("amp", "GAIN"), "3V3")
-    with pytest.raises(HardwareError, match="amp.GAIN"):
+    with pytest.raises(HardwareError, match=r"amp\.GAIN"):
         circuit.draw(extra)
 
 

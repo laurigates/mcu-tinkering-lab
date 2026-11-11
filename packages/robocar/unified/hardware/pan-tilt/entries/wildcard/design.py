@@ -565,7 +565,7 @@ def hood_part() -> Part:
         close=True,
     )
     sector = Pos(0, 0, top - 1) * extrude(Face(tri), h1 - top + 2)
-    assert sector.bounding_box().min.Z >= top - 1.01  # extruded upward
+    assert top - 1.01 <= sector.bounding_box().min.Z  # extruded upward
     skirt -= sector
     # Each end gets a straight 3 mm block along the skirt's tangent. A curved
     # wall measured square off its end face reads as a sliver near the outer

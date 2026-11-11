@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 SCRIPT = Path(__file__).with_name("jlc-blog.py")
 SPEC = importlib.util.spec_from_file_location("jlc_blog", SCRIPT)
@@ -144,7 +145,7 @@ class Index(unittest.TestCase):
 
 
 class Search(unittest.TestCase):
-    ROWS = [
+    ROWS: ClassVar[list] = [
         {
             "slug": "dfm-analysis",
             "title": "DFM Analysis",

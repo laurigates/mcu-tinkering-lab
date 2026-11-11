@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kicad import libtables, library, netlist, schematic
+from kicad import library, libtables, netlist, schematic
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 

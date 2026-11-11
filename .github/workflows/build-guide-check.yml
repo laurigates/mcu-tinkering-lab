@@ -118,11 +118,18 @@ jobs:
       # every run. Under `:(glob)`, `*` stops at a path separator and `**`
       # spans directories, which is the intent. Verify a change here with
       # `git ls-files ':(glob)**/docs/*.typ'` and confirm `auto/` is absent.
+      #
+      # Each git output that decides the verdict is assigned to a variable
+      # before it is used. set -e does not fire for a command substitution
+      # inside [ ] or for a `< <(...)` process substitution, so a failing git
+      # there read as "no documents" or "up to date" and the step passed
+      # (#1091). tools/test_workflows.py runs this step with a failing git.
       - name: Recompile every Typst document and check for drift
         run: |
           set -euo pipefail
           typst --version
           status=0
+          docs=$(git ls-files ':(glob)**/docs/*.typ')
           while IFS= read -r typ; do
             [ -n "$typ" ] || continue
             pdf="${typ%.typ}.pdf"
@@ -181,16 +188,17 @@ jobs:
             fi
 
             typst compile --creation-timestamp 0 --ignore-system-fonts --root "$PWD" "$typ" "$pdf"
-            if [ -z "$(git status --porcelain -- "${drift_paths[@]}")" ]; then
+            drift=$(git status --porcelain -- "${drift_paths[@]}")
+            if [ -z "$drift" ]; then
               echo "up to date: ${drift_paths[*]}"
             else
-              git status --short -- "${drift_paths[@]}"
+              printf '%s\n' "$drift"
               git --no-pager diff --stat -- "${drift_paths[@]}"
               echo "::error file=$pdf::Committed Typst output is stale relative to $typ, its generated pin definitions, or the shared template / embedded assets."
               status=1
             fi
             echo "::endgroup::"
-          done < <(git ls-files ':(glob)**/docs/*.typ')
+          done <<<"$docs"
           if [ "$status" -ne 0 ]; then
             echo "::error::One or more Typst documents are out of date. Regenerate with the project's own recipe, which pins the same CLI version and flags used here:"
             echo "::error::  just <project>::build-guide     # e.g. just robocar-unified::build-guide"

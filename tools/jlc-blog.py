@@ -235,7 +235,7 @@ def category_paths(tree: dict) -> dict[int, list[str]]:
 
     def walk(nodes: Iterable[dict], prefix: list[str]) -> None:
         for node in nodes:
-            path = prefix + [node["categoryName"]]
+            path = [*prefix, node["categoryName"]]
             paths[int(node["cmsCategoryKeyId"])] = path
             walk(node.get("children") or [], path)
 

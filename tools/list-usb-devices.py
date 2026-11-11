@@ -29,14 +29,14 @@ KNOWN_VENDORS = {
 
 def get_usb_serial_ports():
     """Get all USB serial ports from IOSerialBSDClient registry."""
-    try:
-        raw = subprocess.check_output(
-            ["ioreg", "-r", "-c", "IOSerialBSDClient", "-a"],
-            stderr=subprocess.DEVNULL,
-        )
-        data = plistlib.loads(raw)
-    except Exception:
-        return {}
+    raw = subprocess.check_output(
+        ["ioreg", "-r", "-c", "IOSerialBSDClient", "-a"],
+        stderr=subprocess.DEVNULL,
+    )
+    # ioreg prints nothing (not even an empty plist) when no serial port
+    # exists. That was the one failure the old `except Exception: return {}`
+    # was for; it also turned every other error into "no ports" (BLE001, #736).
+    data = plistlib.loads(raw) if raw.strip() else []
 
     ports = {}
     for node in data:

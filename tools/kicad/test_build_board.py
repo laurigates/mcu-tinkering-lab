@@ -27,6 +27,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 from kicad import boardinput, testfixture
 
@@ -138,7 +139,7 @@ class KeepoutTests(unittest.TestCase):
     irrelevant.
     """
 
-    BAND = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
+    BAND: ClassVar[dict] = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
 
     @classmethod
     def setUpClass(cls):

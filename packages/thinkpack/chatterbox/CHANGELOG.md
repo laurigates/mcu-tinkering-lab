@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.3...thinkpack-chatterbox-v1.1.4) (2026-11-10)
+
+
+### Miscellaneous
+
+* **sdkconfig:** drop unknown Kconfig symbols and gate them in pre-commit ([#1072](https://github.com/laurigates/mcu-tinkering-lab/issues/1072)) ([82f621f](https://github.com/laurigates/mcu-tinkering-lab/commit/82f621fe70f5623eea98f7dad84f322730185651))
+
 ## [1.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.2...thinkpack-chatterbox-v1.1.3) (2026-09-13)
 
 

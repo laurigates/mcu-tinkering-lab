@@ -194,6 +194,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .blocks import load_sidecar
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
 from .header import (
@@ -202,7 +203,6 @@ from .header import (
     parse_defines,
     roles_from_defines,
 )
-from .blocks import load_sidecar
 from .layout import parse_layout
 
 SIDECAR = "hardware.toml"

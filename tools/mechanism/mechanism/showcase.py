@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import pyvista as pv
+
 from mechanism.check import DEFAULT_POSES, load, rest
 
 PALETTE = ["#d9822b", "#3a7ca5", "#7a9e3d", "#b54a68", "#8a6bbf", "#c9b037", "#4aa89a"]
@@ -110,7 +111,9 @@ def explode(bodies, meshes) -> list[pv.PolyData]:
         d = np.array(m.center) - centre
         n = np.linalg.norm(d)
         push = d / n * EXPLODE_MM if n > 1e-6 else np.zeros(3)
-        out.append(m.translate(push + (0, 0, rank[b.group] * lift), inplace=False))
+        out.append(
+            m.translate(push + np.array((0, 0, rank[b.group] * lift)), inplace=False)
+        )
     return out
 
 
