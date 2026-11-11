@@ -90,7 +90,25 @@ Record the settings that worked in the table below.
 
 | Sticker stock | depth | pressure | speed | Result |
 |---|---|---|---|---|
-| (not yet cut) | | | | |
+| A4 sticker sheet of the 2026-11 inventory run | 1 | 0 (preset: 20) | 0 (preset: 10) | Clean kiss cut, liner unmarked, indicator on 1 (one sticker, 2026-11-11) |
+
+### Where the mark search starts
+
+The driver starts the mark search at the machine's origin and makes no
+allowance for the mat's border. On the Portrait 2 the search then gave up
+before the sheet had fed in to the square (reply `1`, "Couldn't find
+registration marks"). `cut.sh` starts it 20 mm further in, which found the
+marks, and the test cut landed on the sticker (2026-11-11, one sheet).
+`LABEL_MARK_TOP` and `LABEL_MARK_LEFT` (mm) move the start along and across
+the feed if a sheet sits elsewhere on the mat; they do not move the cut.
+
+A reply of `-1` means the search started too far in. The driver's default
+ends a job by feeding to the bottom of the cut and making that the new
+origin, so each job left the mat further in and the second or third job on a
+sheet failed, until the mat was fed again. `cut.sh` passes
+`--endposition=start`, which returns the mat to where the job began; a search
+straight after a cut then found the marks. If `-1` appears anyway, unload and
+load the mat.
 
 ## Bluetooth
 
@@ -127,9 +145,18 @@ search included (#1068).
 3. **A plain driver dry run never reaches the cut.** With `--dry_run=True` the
    driver reads nothing back, and a job with marks waits for the sensor's
    "found" reply. `cut.sh` dry runs go through `dry_cut.py`, which answers that
-   one reply. The AutoBlade depth (`TF`) command is absent from a dry-run
-   transcript: the driver sets depth only after the real cutter reports an
-   AutoBlade in holder 1.
+   one reply.
+   **The driver never sends the blade depth to a Portrait 2.** It sends the
+   AutoBlade depth command (`TF`) only to the Cameo 3 and Cameo 4 lines, so
+   `--depth` was dropped and the blade stayed at whatever depth it was last
+   set to: the first test cut went through the liner. `autoblade.py` sends
+   it, live and in a dry run, as `J1` (tool select) then `TF<depth>,1`. The
+   `J1` matters: `TF1,1` on its own moved the blade but left the indicator
+   on 9, then 6, while `J1 TF<d>,1` put it on 1, 5 and 8 when asked for
+   each. A transcript without `J1` and `TF<depth>,1` before the mark commands
+   means the depth is not being set. The cutter takes about 10 s to adjust
+   the blade, and the number in the AutoBlade's window shows where it
+   landed: read it after a test cut.
 4. **inkex from PyPI drags in PyGObject**, which needs cairo and
    gobject-introspection to build and which the driver never imports.
    `setup-cutter.sh` installs inkex with `--no-deps` and lists its real
