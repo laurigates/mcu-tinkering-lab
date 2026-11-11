@@ -93,7 +93,9 @@ repos:
         name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py)$'
+        # main/*.c: a project starting the thinkpack-ota receiver needs an OTA
+        # table, so adding the call reruns the OTA_TABLE check (issue #1076).
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|/main/.+\.c|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py)$'
         pass_filenames: false
 
       - id: check-flash-recipes-tests

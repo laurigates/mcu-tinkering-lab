@@ -1,0 +1,20 @@
+# OTA partition table for the ThinkPack boxes that start the thinkpack-ota
+# receiver: boombox, chatterbox, finderbox and glowbug (issue #1076). Each
+# selects it from its sdkconfig.defaults with
+#   CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../components/thinkpack-ota/partitions.csv"
+# It lives in this component's directory because every receiver's CI entry
+# already lists components/thinkpack-ota in extra_paths, so a change here
+# rebuilds all of them.
+#
+# Sized for the smallest board among them, the 4 MB ESP32-S3 SuperMini.
+# nvs and phy_init keep the offsets and sizes of ESP-IDF's built-in single-app
+# table, which the boxes used before, so finderbox's NVS tag registry survives
+# the switch. otadata takes the old factory app's first 8 KB, and app
+# partitions must start on a 64 KB boundary, so ota_0 starts at 0x20000.
+#
+# Name,    Type, SubType, Offset,   Size,     Flags
+nvs,       data, nvs,     0x9000,   0x6000,
+phy_init,  data, phy,     0xf000,   0x1000,
+otadata,   data, ota,     0x10000,  0x2000,
+ota_0,     app,  ota_0,   0x20000,  0x1F0000,
+ota_1,     app,  ota_1,   0x210000, 0x1F0000,

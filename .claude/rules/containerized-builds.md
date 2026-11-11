@@ -54,6 +54,7 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 | `_idf-build-checked bin` | Private — validated build: filters output to warnings/errors/size and fails fast if `build/{{bin}}.bin` is missing. Pass the app basename. |
 | `_esp32-flash bin` | Private — native ESP32 flash (bootloader @0x1000, flash-size detect). Pass the app basename. |
 | `_s3-flash bin` | Private — native ESP32-S3 flash (bootloader @0x0, 4MB @80MHz). Pass the app basename. |
+| `_s3-argfile-flash` | Private — native ESP32-S3 flash of everything the build's `build/flash_args` lists (otadata included), at its offsets and flash size. For tables `_s3-flash` does not fit; the four ThinkPack OTA receivers use it (#1076). |
 | `_s3-reset` / `_s3-monitor` | Private — ESP32-S3 USB-Serial-JTAG reset / CDC-reset monitor (wrap the `tools/esp32s3-*.sh` scripts). |
 | `build` | Public — delegates to `_idf-build` (override to add pre-build steps) |
 | `clean` | Public — delegates to `_idf-clean` |
@@ -188,8 +189,10 @@ writes `flash: (_s3-flash bin_name)` and inherits all four silently.
 | 3 | Neither writes `ota_data_initial.bin` | the table has an `otadata` segment | Stale OTA state survives: a board that OTA'd to `ota_1` keeps booting `ota_1` while you flash `ota_0`. Flashes clean, runs the old image — **silent** |
 | 4 | App at 0x10000 | the table puts the app elsewhere | App written to the wrong offset — **silent** |
 
-Fail any one and keep the flash recipe **inline** with explicit offsets;
-`packages/robocar/unified/justfile` is the worked example.
+Fail any one and, on an ESP32-S3, compose `flash: _s3-argfile-flash`, which
+hands esptool the build's own `flash_args` and so follows any table; or keep the
+flash recipe **inline** with explicit offsets, as
+`packages/robocar/unified/justfile` does.
 
 **Do not judge this by eye.** The previous wording here asked whether the layout
 looked "exotic" and listed offsets and argfiles as the tell — flash *size* was
@@ -261,6 +264,17 @@ A wrong offset is the silent case: esptool writes the file wherever it is told,
 over whatever partition sits there. `llm-telegram`'s otadata at 0xe000 (not the
 usual 0xd000, because its nvs is 0x5000) was copied from `partitions.csv` by hand
 in #648; moving it to 0xd000 now fails the check.
+
+**A project that writes OTA images needs a table that can take one.** The same
+script fails (`OTA_TABLE`) when a project's `main/` sources call
+`thinkpack_ota_receiver_init` or `thinkpack_ota_apply` and its resolved table
+lacks an otadata row or two `ota_N` app slots: `esp_ota_get_next_update_partition()`
+then returns NULL and every apply fails at runtime, with a green build and a
+clean flash. The four ThinkPack receivers sat in that state until #1076; they
+now share `packages/components/thinkpack-ota/partitions.csv`, selected by
+`CONFIG_PARTITION_TABLE_CUSTOM_FILENAME`. The table lives in that component's
+directory because each receiver's `extra_paths` already names it, so a table
+change rebuilds all four in CI.
 
 ### Monitor Recipe
 
