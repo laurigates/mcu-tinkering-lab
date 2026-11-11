@@ -19,6 +19,7 @@ import sys
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import ClassVar
 
 SCRIPT = Path(__file__).with_name("foil-test-board.py")
 SPEC = importlib.util.spec_from_file_location("foil_test_board", SCRIPT)
@@ -47,7 +48,7 @@ def centre(box):
 
 
 class FoilTestBoardTests(unittest.TestCase):
-    shapes = {s.name: s for s in FTB.shapes()}
+    shapes: ClassVar[dict] = {s.name: s for s in FTB.shapes()}
 
     def test_committed_files_are_current(self):
         r = subprocess.run(
@@ -123,7 +124,7 @@ class FoilTestBoardTests(unittest.TestCase):
             )
             for g in FTB.GAPS
         ]
-        for (_, a), (b, _) in zip(pairs, pairs[1:]):
+        for (_, a), (b, _) in itertools.pairwise(pairs):
             self.assertGreater(gap(a.bbox, b.bbox), max(FTB.GAPS))
 
     def test_width_ladder_necks(self):
@@ -137,7 +138,7 @@ class FoilTestBoardTests(unittest.TestCase):
     def test_socket_pads_follow_the_footprint(self):
         centres = [centre(self.shapes[f"socket pin {n}"].bbox) for n in range(1, 9)]
         axis = sum(y for _, y in centres) / len(centres)
-        for (xa, _), (xb, _) in zip(centres, centres[1:]):
+        for (xa, _), (xb, _) in itertools.pairwise(centres):
             self.assertAlmostEqual(xb - xa, FTB.SOCKET_PITCH, delta=EPS)
         for n, (_, y) in enumerate(centres, 1):
             # odd pins (pin 1 first) on the top row, as the guide labels them

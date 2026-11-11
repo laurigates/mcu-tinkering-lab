@@ -59,7 +59,7 @@ class Naming(unittest.TestCase):
         self.assertEqual(len(dirty), provenance.SILK_LEN)
         self.assertEqual(provenance.SILK_LEN, 16)
         self.assertEqual(
-            [i for i, (a, b) in enumerate(zip(clean, dirty)) if a != b],
+            [i for i, (a, b) in enumerate(zip(clean, dirty, strict=True)) if a != b],
             [provenance.SHA_LEN],
         )
 
@@ -146,7 +146,7 @@ class Spec(unittest.TestCase):
             if not c.has_board:
                 continue
             with self.subTest(project=project.name):
-                at, size = provenance.spec(c)
+                _at, _size = provenance.spec(c)
                 errors = provenance.validate(
                     str(c.path), c.data, c.data["outline"]["size"], 0.8
                 )

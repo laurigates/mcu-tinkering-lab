@@ -7,9 +7,12 @@ reviewed: 2026-10-31
 The repo's ruff is the one pre-commit pins (`ruff-pre-commit` rev in
 `.pre-commit-config.yaml`, with `ruff.toml`). A `ruff` on PATH can be another
 version with other defaults: on the pan-tilt PR, ruff 0.16.9 passed files that
-pre-commit's v0.15.6 failed on E402 and E731, and its `--unsafe-fixes` removed
-`# noqa: E402` comments the pinned version needs. CI then failed on the
-formatting of a file that had passed locally.
+pre-commit's then-pinned v0.15.6 failed on E402 and E731, and its
+`--unsafe-fixes` removed `# noqa: E402` comments the pinned version needs. CI
+then failed on the formatting of a file that had passed locally. Until #761,
+`ruff.toml`'s `select` sat inside `[lint.per-file-ignores]`, so every version
+ran its own default rule set; `tools/test_ruff_config.py` now holds the keys
+in `[lint]`.
 
 ```sh
 pre-commit run --files <changed files>   # what CI runs; repeat until clean

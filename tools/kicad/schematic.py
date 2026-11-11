@@ -32,7 +32,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import libtables, library, netlist, paths, symbols
+from . import library, libtables, netlist, paths, symbols
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -143,7 +143,7 @@ class _Writer:
 
     def symbol(self, item: _Item, at: tuple[float, float]) -> str:
         x, y = at
-        x0, y0, x1, y1 = item.extent
+        x0, y0, _x1, y1 = item.extent
         flag = item.ref.startswith("#")
         flags = symbols.flags(item.block)
         yn = {True: "yes", False: "no"}

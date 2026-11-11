@@ -50,7 +50,8 @@ def run(parts, nets, b=B5, buses=None, conductors=3, steps=None):
 
 def bends(path):
     return sum(
-        (a[0] == p[0]) != (p[0] == b[0]) for a, p, b in zip(path, path[1:], path[2:])
+        (a[0] == p[0]) != (p[0] == b[0])
+        for a, p, b in zip(path, path[1:], path[2:], strict=False)
     )
 
 

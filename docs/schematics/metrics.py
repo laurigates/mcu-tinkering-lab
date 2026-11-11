@@ -101,6 +101,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import itertools
 import json
 import sys
 from collections import Counter
@@ -150,7 +151,7 @@ class _Seg:
 
 def _segments(wire: Wire) -> list[_Seg]:
     segs = []
-    for (ax, ay), (bx, by) in zip(wire, wire[1:]):
+    for (ax, ay), (bx, by) in itertools.pairwise(wire):
         if abs(ay - by) <= _EPS and abs(ax - bx) <= _EPS:
             continue  # zero-length: contributes nothing to any metric
         if abs(ay - by) <= _EPS:
@@ -538,7 +539,7 @@ def format_table(results: list[CircuitMetrics]) -> str:
     lines = []
     for r in rows:
         cells = [r[0].ljust(widths[0])]
-        cells += [c.rjust(w) for c, w in zip(r[1:], widths[1:])]
+        cells += [c.rjust(w) for c, w in zip(r[1:], widths[1:], strict=True)]
         lines.append("  ".join(cells).rstrip())
     return "\n".join(lines)
 

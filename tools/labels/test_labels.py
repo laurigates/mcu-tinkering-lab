@@ -227,10 +227,10 @@ class CutFiles(unittest.TestCase):
             root = ET.parse(self.out / f"cut-p{n}.svg").getroot()
             self.assertEqual(root.get("width"), "210mm")
             self.assertEqual(root.get("viewBox"), "0 0 210 297")
-            cut = [g for g in root.iter(f"{SVG}g") if g.get(f"{INK}label") == "Cut"][0]
+            cut = next(g for g in root.iter(f"{SVG}g") if g.get(f"{INK}label") == "Cut")
             paths = cut.findall(f"{SVG}path")
             self.assertEqual(len(paths), len(page))
-            for path, p in zip(paths, page):
+            for path, p in zip(paths, page, strict=True):
                 d = path.get("d")
                 self.assertTrue(d.endswith("Z"), "cut paths are closed")
                 x, y = (float(v) for v in d.split()[1].split(","))
@@ -239,9 +239,9 @@ class CutFiles(unittest.TestCase):
 
     def test_regmark_layer_matches_driver(self):
         root = ET.parse(self.out / "cut-p1.svg").getroot()
-        layer = [g for g in root.iter(f"{SVG}g") if g.get(f"{INK}label") == "Regmarks"][
-            0
-        ]
+        layer = next(
+            g for g in root.iter(f"{SVG}g") if g.get(f"{INK}label") == "Regmarks"
+        )
         ids = {e.get("id") for e in layer}
         self.assertTrue({"regmark-tl", "regmark-tr", "regmark-bl"} <= ids)
         notes = "".join(layer.find(f"{SVG}text").itertext())
@@ -256,7 +256,7 @@ class CutFiles(unittest.TestCase):
     def test_plan_and_cut_share_positions(self):
         plan = json.loads((self.out / "plan.json").read_text())
         self.assertEqual(len(plan["pages"]), len(self.pages))
-        for page_plan, page in zip(plan["pages"], self.pages):
+        for page_plan, page in zip(plan["pages"], self.pages, strict=True):
             self.assertEqual(
                 [(s["x"], s["y"], s["w"], s["h"]) for s in page_plan],
                 [(p.x, p.y, p.w, p.h) for p in page],

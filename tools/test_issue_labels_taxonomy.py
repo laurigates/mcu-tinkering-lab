@@ -47,6 +47,7 @@ import re
 import subprocess
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY = REPO_ROOT / ".github" / "issue-labels.json"
@@ -294,7 +295,11 @@ class CoreMerge(unittest.TestCase):
 class Schema(unittest.TestCase):
     """Each rule of the script's check_taxonomy rejects a taxonomy breaking it."""
 
-    GOOD = {"description": "Robot", "color": "1d76db", "paths": ["robot/**"]}
+    GOOD: ClassVar[dict] = {
+        "description": "Robot",
+        "color": "1d76db",
+        "paths": ["robot/**"],
+    }
 
     def rejects(self, tax: object, fragment: str) -> None:
         problems = schema_problems(tax)

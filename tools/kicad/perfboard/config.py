@@ -336,7 +336,7 @@ def _buses(path: Path, buses: Any) -> dict:
             )
         except KicadError as e:
             raise KicadError(f"{where}: {e}") from None
-        if a[0] != b[0] and a[1] != b[1] or a == b:
+        if (a[0] != b[0] and a[1] != b[1]) or a == b:
             raise KicadError(
                 f"{where}: from and to must be two holes of one row or column"
             )

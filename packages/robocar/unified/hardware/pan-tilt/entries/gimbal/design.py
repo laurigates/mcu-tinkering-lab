@@ -340,7 +340,10 @@ def _swept_poly(xz: np.ndarray, a_max: float, m: float, bin_deg: float = 2.0):
     centres = np.radians(-180.0 + (np.arange(nb) + 0.5) * bin_deg)
     ring = np.isfinite(rmax_n)
     if ring.all():  # wraps the axis: star polygon on the outer radius
-        return [(rr * math.cos(c), rr * math.sin(c)) for rr, c in zip(rmax_n, centres)]
+        return [
+            (rr * math.cos(c), rr * math.sin(c))
+            for rr, c in zip(rmax_n, centres, strict=True)
+        ]
     # an arc: rotate the bin order so the gap is at the ends, fill inner gaps
     start = int(np.nonzero(~ring)[0][0])
     order = [(start + i) % nb for i in range(nb)]
@@ -653,7 +656,7 @@ def build_tower() -> Part:
     boot_x0 = s.shaft_from_end - s.length - 6.0 - 1.0
     t = t - _box(boot_x0 - 5, tab_x0 + 0.5, -3.0, 3.0, -1, ZS - s.height + 10.0)
     # tab holes, tapped M2 from below
-    for x, _, z in fx.servo_tab_holes(s):
+    for x, _, _z in fx.servo_tab_holes(s):
         t = t - _cyl_z(
             PILOT / 2, tab_top - 0.01, min(tab_top + 6.5, Z_CHAMBER + 0.5), x=x
         )
@@ -679,7 +682,7 @@ def build_tower() -> Part:
 def tilt_servo_bodies() -> list[Part]:
     sv = TILT_SERVO_LOC * fx.servo(SERVO)
     screws = []
-    for xs, ys, zs in fx.servo_tab_holes(SERVO):
+    for xs, _ys, _zs in fx.servo_tab_holes(SERVO):
         # shank through tab + upright (+2.5 tip), head on the tab
         screws.append(
             _cyl_y(
@@ -694,7 +697,7 @@ def tilt_servo_bodies() -> list[Part]:
                 z=xs,
             )
         )
-    return [sv] + screws
+    return [sv, *screws]
 
 
 def tilt_horn_bodies() -> list[Part]:
@@ -705,7 +708,7 @@ def tilt_horn_bodies() -> list[Part]:
     for d in HORN_SCREW_D:
         screws.append(_cyl_y(SCREW_CORE / 2, CHEEK_IN + 0.6, y_floor + 1.6, x=-d))
         screws.append(_cyl_y(1.6, y_floor + 1.6, y_floor + 1.6 + 1.2, x=-d))
-    return [h] + screws
+    return [h, *screws]
 
 
 def tilt_bearing() -> Part:
@@ -731,7 +734,7 @@ def pan_servo_world() -> list[Part]:
     for x, _, z in fx.servo_tab_holes(SERVO):
         screws.append(_cyl_z(SCREW_CORE / 2, tab_top, tab_top + 5.0, x=x))
         screws.append(_cyl_z(1.9, ZS + z - 1.5, ZS + z, x=x))
-    return [sv] + screws
+    return [sv, *screws]
 
 
 def pan_horn_world() -> list[Part]:

@@ -347,7 +347,7 @@ def main() -> int:
     head = min(1.0, 0.99 / max(peaks)) if max(peaks) > 0.99 else 1.0
 
     print(f"{'chain':<14}{'rms gain':>10}{'peak':>8}{'final rms':>11}")
-    for (name, y, mgain), peak in zip(matched, peaks):
+    for (name, y, mgain), peak in zip(matched, peaks, strict=True):
         y = [s * head for s in y]
         write_wav(out_dir / f"{name}.wav", y)
         print(f"{name:<14}{mgain:10.3f}{peak:8.3f}{rms(y):11.4f}")
