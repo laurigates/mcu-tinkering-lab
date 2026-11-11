@@ -16,6 +16,7 @@ from pathlib import Path
 
 import autoblade
 import labels
+import probe
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data" / "drawers-2026-10.toml"
@@ -402,6 +403,41 @@ class AutobladeDepth(unittest.TestCase):
         self.assertEqual([c for c in sent if c.startswith("TF")], ["TF10,1", "TF0,1"])
 
 
+class CutterProbe(unittest.TestCase):
+    """probe.py's commands and connection choice; the driver itself is not imported."""
+
+    def test_mark_search_command_matches_what_a_job_sends(self):
+        # A job built with the default search start sends TB123,5540,3800,400,0.
+        self.assertEqual(
+            probe.mark_search_command(labels.DEFAULT_REG, probe.DEFAULT_TOP_MM, 0),
+            "TB123,5540,3800,400,0",
+        )
+        self.assertEqual(
+            probe.mark_search_command(labels.DEFAULT_REG, 0, 2.5),
+            "TB123,5540,3800,0,50",
+        )
+
+    def test_depth_selects_the_tool_first(self):
+        self.assertEqual(probe.depth_commands(1), ["J1", "TF1,1"])
+        with self.assertRaisesRegex(ValueError, "0-10"):
+            probe.depth_commands(11)
+
+    def test_connection_follows_the_cut_environment(self):
+        self.assertEqual(probe.connection({}), {})
+        self.assertEqual(
+            probe.connection({"LABEL_CUTTER": "ble"}),
+            {"bluetooth_le": True, "bluetooth_name": "PORTRAIT2"},
+        )
+        self.assertEqual(
+            probe.connection({"LABEL_CUTTER": "ble", "LABEL_CUTTER_ID": "ABCD"}),
+            {"bluetooth_le": True, "bluetooth_identifier": "ABCD"},
+        )
+        with self.assertRaisesRegex(ValueError, "LABEL_CUTTER_ADDR"):
+            probe.connection({"LABEL_CUTTER": "bluetooth"})
+        with self.assertRaisesRegex(ValueError, "usb, ble or bluetooth"):
+            probe.connection({"LABEL_CUTTER": "wifi"})
+
+
 class CutConnection(unittest.TestCase):
     """cut.sh's connection flags, read from a stub driver that prints its arguments."""
 
@@ -502,6 +538,11 @@ class CutConnection(unittest.TestCase):
         self.assertIn(f"--regoriginy={reg['y'] + 15}", args)
         self.assertIn("--x_off=2.5", args)
         self.assertIn("--y_off=15.0", args)
+
+    def test_pressure_defaults_below_the_sticker_preset(self):
+        # The preset's 20 cut part-way into the liner; 0 still selects the preset.
+        self.assertIn("--pressure=10", self.args())
+        self.assertIn("--pressure=0", self.args(PRESSURE="0"))
 
     def test_a_job_returns_the_mat_to_where_it_started(self):
         # With the driver's default the next job on the sheet starts further in.
