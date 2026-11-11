@@ -946,6 +946,25 @@ class ConfigTests(unittest.TestCase):
                     [f"[silk] cut_lines: {line!r} must be [x0, y0, x1, y1]"],
                 )
 
+    def test_mousebite_panel_with_a_zero_length_cut_line(self):
+        """A cut line with no length reached panel.build, whose _line divides
+        by the length: ZeroDivisionError instead of the error list."""
+        line = [41.5, 1.0, 41.5, 1.0]
+
+        def edit(d):
+            # the pour stops short of the cut band, as in test_cut_lines
+            del d["pour"]["net"]
+            d["pour"]["regions"] = [
+                {"net": "GND", "rect": [0, 0, 40.5, 62]},
+                {"net": "GND", "rect": [42.5, 0, 90, 62]},
+            ]
+            d["panel"] = {"mode": "mousebites"}
+            d["silk"]["cut_lines"] = [line]
+
+        self.assertEqual(
+            self.errors(edit), [f"[silk] cut_lines: {line!r} has no length"]
+        )
+
     def test_file_is_toml(self):
         self.assertEqual(
             tomllib.loads(self.cfg.path.read_text(encoding="utf-8")), self.cfg.data

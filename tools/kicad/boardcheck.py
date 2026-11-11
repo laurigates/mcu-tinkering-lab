@@ -936,7 +936,9 @@ def validate_config(
     for rect in silk.get("rects", []):
         if not _numbers(rect, 4):
             errors.append(f"{where}: [silk] rects: {rect!r} must be [x0, y0, x1, y1]")
-    cut_lines_ok = all(_numbers(line, 4) for line in silk.get("cut_lines", []))
+    cut_lines_ok = all(
+        _numbers(line, 4) and line[:2] != line[2:] for line in silk.get("cut_lines", [])
+    )
     for line in silk.get("cut_lines", []):
         if not _numbers(line, 4):
             errors.append(
@@ -982,7 +984,8 @@ def validate_config(
     errors += keepout_errors
     errors += _validate_route_keepouts(where, data, size)
     if not keepout_errors and cut_lines_ok:
-        # panel.build reads each keepout's rect and each cut line's four numbers
+        # panel.build reads each keepout's rect and each cut line's four numbers,
+        # and divides by each cut line's length
         errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)

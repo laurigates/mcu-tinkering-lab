@@ -274,8 +274,9 @@ def build(data: dict[str, Any]) -> Panel | None:
     every geometry problem.
 
     `data` must already pass `boardcheck.validate_config`, which runs `validate`
-    and checks the shapes read here (each [silk] cut line four numbers, each
-    keepout a rect); a malformed one raises KeyError, IndexError or TypeError.
+    and checks the shapes read here (each [silk] cut line four numbers with
+    non-zero length, each keepout a rect); a malformed one raises KeyError,
+    IndexError, TypeError or ZeroDivisionError.
     """
     s = settings(data)
     if s["mode"] != "mousebites":
