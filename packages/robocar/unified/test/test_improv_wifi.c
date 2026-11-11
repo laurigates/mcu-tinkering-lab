@@ -646,6 +646,31 @@ static void test_process_byte_claims_exactly_the_packet(void)
     TEST_ASSERT(!improv_wifi_process_byte('s'));
 }
 
+/* reset_parser() drops a half-read packet and nothing else (issue #1087): the
+ * next packet parses from its header, and the state RPC 0x02 reports survives. */
+static void test_reset_parser_drops_a_half_read_packet(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    improv_wifi_send_state(IMPROV_STATE_PROVISIONING);
+
+    static const uint8_t partial[] = {'I', 'M', 'P', 'R', 'O', 'V', 0x01, TYPE_RPC_COMMAND, 0x20};
+    for (size_t i = 0; i < sizeof(partial); i++) {
+        improv_wifi_process_byte(partial[i]);
+    }
+    improv_wifi_reset_parser();
+    TEST_ASSERT(!improv_wifi_process_byte('I')); /* text again, not data byte 1 of 32 */
+
+    improv_wifi_reset_parser();
+    memset(&s_custom, 0, sizeof(s_custom));
+    feed_rpc(0x02, NULL, 0); /* Request current state */
+
+    packet_t pkts[3];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 3) == 2);
+    TEST_ASSERT(pkts[1].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[1].data[0] == IMPROV_STATE_PROVISIONING);
+}
+
 int main(void)
 {
     printf("improv_wifi tests\n");
@@ -671,6 +696,7 @@ int main(void)
     RUN_TEST(test_announce_after_init_is_ready);
     RUN_TEST(test_fail_provisioning_returns_to_ready);
     RUN_TEST(test_process_byte_claims_exactly_the_packet);
+    RUN_TEST(test_reset_parser_drops_a_half_read_packet);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }

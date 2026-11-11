@@ -879,7 +879,8 @@ add_test(NAME improv_wifi COMMAND test_improv_wifi)
 # console_line.c and the improv-wifi parser, both unmodified, driven with the
 # bytes ESP Web Tools sends. command_task() logs every completed line (and the
 # log reaches the UART0 mirror and the GlitchTip breadcrumb ring), so a
-# credentials packet must never complete one.
+# credentials packet must never complete one, including across an Improv arm
+# or disarm in the middle of a packet (issue #1087).
 # -----------------------------------------------------------------------------
 add_executable(test_console_line
     "${MAIN_SRC_DIR}/console_line.c"

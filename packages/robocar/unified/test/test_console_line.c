@@ -9,7 +9,8 @@
  * password in plaintext, so before this module the whole packet became a
  * console line and the password reached all three sinks. These tests drive
  * the bytes ESP Web Tools sends through both pieces, compiled unmodified, and
- * assert that no packet byte ever reaches a completed line.
+ * assert that no packet byte ever reaches a completed line, including when
+ * Improv is armed or disarmed in the middle of a packet (issue #1087).
  */
 
 #include <assert.h>
@@ -71,6 +72,9 @@ static int s_line_count;
 static char s_pass[IMPROV_WIFI_MAX_PASS_LEN + 1];
 static int s_creds_calls;
 static console_line_t s_line;
+/* The firmware's s_improv_session: bumped by every arm and every disarm, odd
+ * while armed. */
+static uint32_t s_session;
 
 static void on_creds(const char *ssid, const char *password)
 {
@@ -85,17 +89,26 @@ static void reset(void)
     s_line_count = 0;
     memset(s_pass, 0, sizeof(s_pass));
     s_creds_calls = 0;
+    s_session = 0;
     console_line_init(&s_line);
     improv_wifi_set_writer(discard_writer);
     TEST_ASSERT(improv_wifi_init(on_creds) == 0);
 }
 
+/* The network supervisor arming or disarming Improv between two bytes. */
+static void set_armed(bool armed)
+{
+    if (console_line_improv_armed(s_session) != armed) {
+        s_session++;
+    }
+}
+
 /* command_task()'s byte path, with Improv armed or not. */
 static void feed(const uint8_t *bytes, size_t len, bool improv_armed)
 {
+    set_armed(improv_armed);
     for (size_t i = 0; i < len; i++) {
-        const bool owned = improv_armed && improv_wifi_process_byte(bytes[i]);
-        const char *line = console_line_feed(&s_line, (char)bytes[i], owned);
+        const char *line = console_line_feed(&s_line, (char)bytes[i], s_session);
         if (line != NULL) {
             TEST_ASSERT(s_line_count < 16);
             snprintf(s_lines[s_line_count++], CONSOLE_LINE_MAX, "%s", line);
@@ -231,6 +244,110 @@ static void test_unarmed_bytes_are_plain_input(void)
     TEST_ASSERT(strcmp(s_lines[0], "IMPROV") == 0);
 }
 
+/* Issue #1087, the stale parser: the link comes up in the middle of a packet,
+ * so Improv is disarmed with the parser still counting data bytes, and armed
+ * again later. Without a reset the parser spends that stale count on the next
+ * packet, takes one of its bytes as the checksum, fails, and hands the rest of
+ * it, password included, to the console line. */
+static void test_a_packet_cut_off_by_a_link_edge_does_not_leak_the_next_one(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    feed(pkt, 14, true); /* header through two SSID bytes */
+    set_armed(false);    /* link up: disarmed, no byte read in between */
+    set_armed(true);     /* link down again: re-armed */
+    feed(pkt, n, true);
+
+    TEST_ASSERT(s_creds_calls == 1);
+    TEST_ASSERT(strcmp(s_pass, "s3cr3tpass") == 0);
+    TEST_ASSERT(s_line_count == 0);
+    TEST_ASSERT(!any_line_contains("pass"));
+}
+
+/* The same edge seen from the other side: the rest of the packet arrives after
+ * the disarm. Its bytes cannot be told from text without the parser, and a
+ * 10-character password puts a 0x0A length byte in front of the password, so
+ * the parser keeps reading until the packet in flight ends and is reset then.
+ * Nothing of it becomes a line; the next command does. */
+static void test_a_packet_in_flight_at_disarm_is_finished_not_logged(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    feed(pkt, 14, true);
+    feed(pkt + 14, n - 14, false); /* the rest, password and newline, after the disarm */
+    feed((const uint8_t *)"status\n", 7, false);
+
+    TEST_ASSERT(s_creds_calls == 1); /* the packet the user sent still lands */
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+    TEST_ASSERT(!any_line_contains("pass"));
+}
+
+/* Once that packet has ended, the parser is not fed any more while disarmed:
+ * a header typed then is text. */
+static void test_disarm_takes_effect_when_the_packet_in_flight_ends(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    feed(pkt, 14, true);
+    feed(pkt + 14, n - 14, false);
+    feed((const uint8_t *)"IMPROV\n", 7, false);
+
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "IMPROV") == 0);
+}
+
+/* A packet whose RPC length byte is too small, the shape of the bug #1075
+ * fixed in the client direction: the parser takes a password byte as the
+ * checksum, rejects the packet and claims nothing after it. The rest of the
+ * password, up to the packet's newline, must not become a line; the next
+ * command still runs. */
+static void test_a_packet_with_a_short_length_byte_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+    pkt[8] = (uint8_t)(pkt[8] - 8); /* the packet length, eight short */
+    uint8_t sum = 0;
+    for (size_t i = 0; i < n - 2; i++) {
+        sum = (uint8_t)(sum + pkt[i]);
+    }
+    pkt[n - 2] = sum; /* a client checksums what it sends */
+
+    feed(pkt, n, true);
+    feed_text("status\n");
+
+    TEST_ASSERT(s_creds_calls == 0);
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+    TEST_ASSERT(!any_line_contains("tpass"));
+}
+
+/* Arming and disarming do not cost a half-typed command its first part. */
+static void test_a_link_edge_keeps_a_half_typed_command(void)
+{
+    feed((const uint8_t *)"sta", 3, false);
+    feed_text("tus\n");
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+}
+
+/* The session count's parity is the armed state, so one variable carries both
+ * the state and every edge between two reads of it. */
+static void test_odd_sessions_are_armed(void)
+{
+    TEST_ASSERT(!console_line_improv_armed(0));
+    TEST_ASSERT(console_line_improv_armed(1));
+    TEST_ASSERT(!console_line_improv_armed(2));
+    TEST_ASSERT(console_line_improv_armed(UINT32_MAX));
+}
+
 int main(void)
 {
     printf("console_line tests\n");
@@ -239,6 +356,12 @@ int main(void)
     RUN_TEST(test_a_checksum_byte_is_not_a_movement_command);
     RUN_TEST(test_commands_around_a_packet);
     RUN_TEST(test_unarmed_bytes_are_plain_input);
+    RUN_TEST(test_a_packet_cut_off_by_a_link_edge_does_not_leak_the_next_one);
+    RUN_TEST(test_a_packet_in_flight_at_disarm_is_finished_not_logged);
+    RUN_TEST(test_disarm_takes_effect_when_the_packet_in_flight_ends);
+    RUN_TEST(test_a_packet_with_a_short_length_byte_leaks_nothing);
+    RUN_TEST(test_a_link_edge_keeps_a_half_typed_command);
+    RUN_TEST(test_odd_sessions_are_armed);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }

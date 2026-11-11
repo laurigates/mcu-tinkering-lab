@@ -149,6 +149,19 @@ esp_err_t improv_wifi_init(improv_credentials_cb_t cb);
 bool improv_wifi_process_byte(uint8_t byte);
 
 /**
+ * @brief Drop any half-read packet and wait for a header again.
+ *
+ * For a caller that stops feeding bytes and later starts again, such as a
+ * console that arms Improv only while there is no WiFi link: without it the
+ * parser resumes mid-packet, spends its stale length on the next packet, fails
+ * that packet's checksum and returns false for the rest of it, so a console
+ * sharing the port takes those bytes, password included, as text. Keeps the
+ * remembered state, the provisioning result and the writer. Call it from the
+ * task that calls improv_wifi_process_byte().
+ */
+void improv_wifi_reset_parser(void);
+
+/**
  * @brief Send the current device state to the browser.
  *
  * Call after state transitions (e.g. PROVISIONING, PROVISIONED). The state is

@@ -264,6 +264,13 @@ esp_err_t improv_wifi_init(improv_credentials_cb_t cb)
     return ESP_OK;
 }
 
+void improv_wifi_reset_parser(void)
+{
+    g_ctx.state = S_HEADER;
+    g_ctx.header_pos = 0;
+    g_ctx.data_pos = 0;
+}
+
 bool improv_wifi_process_byte(uint8_t byte)
 {
     switch (g_ctx.state) {

@@ -129,8 +129,12 @@ typedef struct {
 // ========================================
 static QueueHandle_t s_motor_queue;
 static QueueHandle_t s_periph_queue;
-/* Written by the network supervisor task, read by command_task (issue #846). */
-static volatile bool s_improv_active;
+/* Written by the network supervisor task, read by command_task (issue #846).
+ * Bumped on every Improv arm and every disarm, so it is odd while armed
+ * (console_line_improv_armed()) and command_task sees each edge, even a
+ * disarm and re-arm between two console bytes, and resets the parser on it
+ * (issue #1087). One aligned 32-bit word: a single store and load. */
+static volatile uint32_t s_improv_session;
 
 /** Map a queued console command onto the executor's manual-override vocabulary. */
 static reactive_manual_cmd_t to_manual_cmd(motor_cmd_type_t type)
@@ -2014,7 +2018,7 @@ static void command_task(void *pvParameters)
          * discover the device on the port it just flashed. The announcement
          * repeats the remembered state, so during a connect attempt it keeps
          * saying Provisioning instead of overwriting it with Ready. */
-        if (s_improv_active) {
+        if (console_line_improv_armed(s_improv_session)) {
             int64_t now = esp_timer_get_time();
             if (now - last_improv_announce > 1000000LL) {
                 improv_wifi_announce();
@@ -2028,15 +2032,14 @@ static void command_task(void *pvParameters)
             continue;
         }
 
-        /* Feed every byte to the Improv parser first; it ignores anything
-         * that is not an Improv packet, so ASCII console commands still reach
-         * the switch below. The bytes of a packet it claims never become a
-         * console line (console_line.h): a Send Wi-Fi settings packet carries
-         * the password, and a line is logged below and mirrored to UART0 and
-         * the GlitchTip breadcrumb ring. */
-        const bool improv_owned = s_improv_active && improv_wifi_process_byte((uint8_t)ch);
-
-        const char *const buf = console_line_feed(&line, (char)ch, improv_owned);
+        /* While Improv is armed every byte goes to its parser first; it
+         * ignores anything that is not an Improv packet, so ASCII console
+         * commands still reach the switch below. No byte of a packet becomes
+         * a console line (console_line.h): a Send Wi-Fi settings packet
+         * carries the password, and a line is logged below and mirrored to
+         * UART0 and the GlitchTip breadcrumb ring. The parser is reset on
+         * each arm and disarm, here, on the task that runs it. */
+        const char *const buf = console_line_feed(&line, (char)ch, s_improv_session);
         if (buf != NULL) {
             /* Never echo a broker password into the serial log, which is
              * routinely captured to a file (`monitor | tee`). The redaction
@@ -2470,16 +2473,17 @@ static void net_supervisor_task(void *arg)
             mqtt_logger_pause();
 #endif
         }
-        if (act.arm_improv && s_improv_ready) {
+        const bool improv_armed = console_line_improv_armed(s_improv_session);
+        if (act.arm_improv && s_improv_ready && !improv_armed) {
             /* Ready again: the remembered state may still be PROVISIONED from
              * an earlier provisioning, and command_task's announcement repeats
              * whatever is remembered. */
             improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
-            s_improv_active = true;
+            s_improv_session = s_improv_session + 1u; /* odd: armed */
             ESP_LOGW(TAG, "No WiFi link — Improv provisioning armed (ESP Web Tools)");
         }
-        if (act.disarm_improv) {
-            s_improv_active = false;
+        if (act.disarm_improv && improv_armed) {
+            s_improv_session = s_improv_session + 1u; /* even: disarmed */
             ESP_LOGI(TAG, "WiFi link up — Improv provisioning disarmed");
         }
 
