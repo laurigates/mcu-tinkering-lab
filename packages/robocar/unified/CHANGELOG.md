@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.22](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.21...robocar-unified-v0.2.22) (2026-11-11)
+
+
+### Bug Fixes
+
+* **lint:** put ruff's select and fixable under [lint], and fix what they report ([3b40b1f](https://github.com/laurigates/mcu-tinkering-lab/commit/3b40b1f6c952143299b8a5ae077fee65ef70f5ae)), closes [#761](https://github.com/laurigates/mcu-tinkering-lab/issues/761)
+* **robocar-unified:** keep Improv packets out of console lines across link edges ([#1097](https://github.com/laurigates/mcu-tinkering-lab/issues/1097)) ([7d03674](https://github.com/laurigates/mcu-tinkering-lab/commit/7d03674e04f9ad16b2914b80f9ab074abb071b52))
+
+
+### Miscellaneous
+
+* **lint:** enforce E501 at 100 columns for strings and comments ([#1106](https://github.com/laurigates/mcu-tinkering-lab/issues/1106)) ([f4ab392](https://github.com/laurigates/mcu-tinkering-lab/commit/f4ab3926f5117c38945057e4d6c69e6e272059e1))
+
 ## [0.2.21](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.20...robocar-unified-v0.2.21) (2026-11-10)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.5...thinkpack-finderbox-v1.1.6) (2026-11-11)
+
+
+### Bug Fixes
+
+* **thinkpack:** give the OTA receivers a table with otadata and two app slots ([#1099](https://github.com/laurigates/mcu-tinkering-lab/issues/1099)) ([1ae6579](https://github.com/laurigates/mcu-tinkering-lab/commit/1ae65791d70fee868b0bcad32d116c466f98d42c))
+
 ## [1.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.4...thinkpack-finderbox-v1.1.5) (2026-11-10)
 
 
