@@ -271,6 +271,11 @@ void improv_wifi_reset_parser(void)
     g_ctx.data_pos = 0;
 }
 
+bool improv_wifi_parser_idle(void)
+{
+    return g_ctx.state == S_HEADER && g_ctx.header_pos == 0;
+}
+
 bool improv_wifi_process_byte(uint8_t byte)
 {
     switch (g_ctx.state) {

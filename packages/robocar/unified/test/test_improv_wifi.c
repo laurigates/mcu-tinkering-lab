@@ -671,6 +671,33 @@ static void test_reset_parser_drops_a_half_read_packet(void)
     TEST_ASSERT(pkts[1].data[0] == IMPROV_STATE_PROVISIONING);
 }
 
+/* parser_idle() is false from the first matched header byte through the
+ * checksum, though the header bytes themselves are not claimed. */
+static void test_parser_idle_covers_a_partial_header(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    TEST_ASSERT(improv_wifi_parser_idle());
+
+    TEST_ASSERT(!improv_wifi_process_byte('I'));
+    TEST_ASSERT(!improv_wifi_parser_idle()); /* one header byte matched */
+    TEST_ASSERT(!improv_wifi_process_byte('x'));
+    TEST_ASSERT(improv_wifi_parser_idle()); /* resynced: text */
+
+    static const uint8_t pkt[] = {'I',  'M',  'P', 'R', 'O', 'V', 0x01, TYPE_RPC_COMMAND,
+                                  0x02, 0x02, 0x00};
+    for (size_t i = 0; i < sizeof(pkt); i++) {
+        improv_wifi_process_byte(pkt[i]);
+        TEST_ASSERT(!improv_wifi_parser_idle()); /* header through data */
+    }
+    improv_wifi_process_byte(0x00); /* the checksum, right or wrong */
+    TEST_ASSERT(improv_wifi_parser_idle());
+
+    improv_wifi_process_byte('I');
+    improv_wifi_reset_parser();
+    TEST_ASSERT(improv_wifi_parser_idle());
+}
+
 int main(void)
 {
     printf("improv_wifi tests\n");
@@ -697,6 +724,7 @@ int main(void)
     RUN_TEST(test_fail_provisioning_returns_to_ready);
     RUN_TEST(test_process_byte_claims_exactly_the_packet);
     RUN_TEST(test_reset_parser_drops_a_half_read_packet);
+    RUN_TEST(test_parser_idle_covers_a_partial_header);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }

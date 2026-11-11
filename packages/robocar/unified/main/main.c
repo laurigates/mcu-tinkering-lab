@@ -132,8 +132,8 @@ static QueueHandle_t s_periph_queue;
 /* Written by the network supervisor task, read by command_task (issue #846).
  * Bumped on every Improv arm and every disarm, so it is odd while armed
  * (console_line_improv_armed()) and command_task sees each edge, even a
- * disarm and re-arm between two console bytes, and resets the parser on it
- * (issue #1087). One aligned 32-bit word: a single store and load. */
+ * disarm and re-arm between two console bytes, and finishes a packet in
+ * flight across it (issue #1087). One aligned 32-bit word: a single store and load. */
 static volatile uint32_t s_improv_session;
 
 /** Map a queued console command onto the executor's manual-override vocabulary. */
@@ -1999,6 +1999,12 @@ static void handle_gemini_cmd(const char *buf)
 // ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
+/* A packet split across two USB transfers can wait out one EOF sleep below
+ * between two of its bytes; a burst gap no longer than that would reset the
+ * parser inside a well-formed packet and drop it (console_line.h). */
+_Static_assert(CONSOLE_LINE_BURST_GAP_MS >= 2u * TASK_DELAY_SHORT_MS,
+               "CONSOLE_LINE_BURST_GAP_MS must outlast command_task's EOF sleep");
+
 static void command_task(void *pvParameters)
 {
     (void)pvParameters;
@@ -2037,9 +2043,11 @@ static void command_task(void *pvParameters)
          * commands still reach the switch below. No byte of a packet becomes
          * a console line (console_line.h): a Send Wi-Fi settings packet
          * carries the password, and a line is logged below and mirrored to
-         * UART0 and the GlitchTip breadcrumb ring. The parser is reset on
-         * each arm and disarm, here, on the task that runs it. */
-        const char *const buf = console_line_feed(&line, (char)ch, s_improv_session);
+         * UART0 and the GlitchTip breadcrumb ring. The read time lets it
+         * tell a packet still arriving after an arm or disarm from one cut
+         * off for good. */
+        const char *const buf = console_line_feed(&line, (char)ch, s_improv_session,
+                                                  (uint32_t)(esp_timer_get_time() / 1000));
         if (buf != NULL) {
             /* Never echo a broker password into the serial log, which is
              * routinely captured to a file (`monitor | tee`). The redaction

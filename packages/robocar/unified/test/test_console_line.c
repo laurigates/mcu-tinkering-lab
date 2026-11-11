@@ -10,7 +10,11 @@
  * console line and the password reached all three sinks. These tests drive
  * the bytes ESP Web Tools sends through both pieces, compiled unmodified, and
  * assert that no packet byte ever reaches a completed line, including when
- * Improv is armed or disarmed in the middle of a packet (issue #1087).
+ * Improv is armed or disarmed in the middle of a packet and when a packet is
+ * cut off or stalled (issue #1087).
+ *
+ * Bytes are read one millisecond apart, as a packet written in one go arrives;
+ * pause() stands for a quiet gap on the port.
  */
 
 #include <assert.h>
@@ -75,6 +79,15 @@ static console_line_t s_line;
 /* The firmware's s_improv_session: bumped by every arm and every disarm, odd
  * while armed. */
 static uint32_t s_session;
+/* command_task's read clock, in milliseconds. */
+static uint32_t s_now_ms;
+
+/* A disarm and a re-arm take two network supervisor steps, which run
+ * NET_SUPERVISOR_PERIOD_MS (500 ms) apart, so both can fall between two
+ * console bytes only when the second byte is read at least this much later. */
+#define EDGE_PAIR_GAP_MS 500u
+/* Long enough for anything: a person typing the next command. */
+#define LATER_MS 2000u
 
 static void on_creds(const char *ssid, const char *password)
 {
@@ -90,6 +103,7 @@ static void reset(void)
     memset(s_pass, 0, sizeof(s_pass));
     s_creds_calls = 0;
     s_session = 0;
+    s_now_ms = 0;
     console_line_init(&s_line);
     improv_wifi_set_writer(discard_writer);
     TEST_ASSERT(improv_wifi_init(on_creds) == 0);
@@ -103,12 +117,19 @@ static void set_armed(bool armed)
     }
 }
 
+/* Nothing on the port for @p ms. */
+static void pause(uint32_t ms)
+{
+    s_now_ms += ms;
+}
+
 /* command_task()'s byte path, with Improv armed or not. */
 static void feed(const uint8_t *bytes, size_t len, bool improv_armed)
 {
     set_armed(improv_armed);
     for (size_t i = 0; i < len; i++) {
-        const char *line = console_line_feed(&s_line, (char)bytes[i], s_session);
+        s_now_ms += 1;
+        const char *line = console_line_feed(&s_line, (char)bytes[i], s_session, s_now_ms);
         if (line != NULL) {
             TEST_ASSERT(s_line_count < 16);
             snprintf(s_lines[s_line_count++], CONSOLE_LINE_MAX, "%s", line);
@@ -229,6 +250,7 @@ static void test_commands_around_a_packet(void)
 
     feed_text("stat");
     feed(pkt, n, true);
+    pause(LATER_MS);
     feed_text("status\n");
 
     TEST_ASSERT(s_line_count == 1);
@@ -246,9 +268,10 @@ static void test_unarmed_bytes_are_plain_input(void)
 
 /* Issue #1087, the stale parser: the link comes up in the middle of a packet,
  * so Improv is disarmed with the parser still counting data bytes, and armed
- * again later. Without a reset the parser spends that stale count on the next
- * packet, takes one of its bytes as the checksum, fails, and hands the rest of
- * it, password included, to the console line. */
+ * again later. The rest of that packet never comes; the next packet does,
+ * after the gap the two edges take. Without a reset the parser spends that
+ * stale count on the next packet, takes one of its bytes as the checksum,
+ * fails, and hands the rest of it, password included, to the console line. */
 static void test_a_packet_cut_off_by_a_link_edge_does_not_leak_the_next_one(void)
 {
     uint8_t pkt[128];
@@ -258,6 +281,7 @@ static void test_a_packet_cut_off_by_a_link_edge_does_not_leak_the_next_one(void
     feed(pkt, 14, true); /* header through two SSID bytes */
     set_armed(false);    /* link up: disarmed, no byte read in between */
     set_armed(true);     /* link down again: re-armed */
+    pause(EDGE_PAIR_GAP_MS);
     feed(pkt, n, true);
 
     TEST_ASSERT(s_creds_calls == 1);
@@ -279,6 +303,7 @@ static void test_a_packet_in_flight_at_disarm_is_finished_not_logged(void)
 
     feed(pkt, 14, true);
     feed(pkt + 14, n - 14, false); /* the rest, password and newline, after the disarm */
+    pause(LATER_MS);
     feed((const uint8_t *)"status\n", 7, false);
 
     TEST_ASSERT(s_creds_calls == 1); /* the packet the user sent still lands */
@@ -297,6 +322,7 @@ static void test_disarm_takes_effect_when_the_packet_in_flight_ends(void)
 
     feed(pkt, 14, true);
     feed(pkt + 14, n - 14, false);
+    pause(LATER_MS);
     feed((const uint8_t *)"IMPROV\n", 7, false);
 
     TEST_ASSERT(s_line_count == 1);
@@ -321,12 +347,182 @@ static void test_a_packet_with_a_short_length_byte_leaks_nothing(void)
     pkt[n - 2] = sum; /* a client checksums what it sends */
 
     feed(pkt, n, true);
+    pause(LATER_MS);
     feed_text("status\n");
 
     TEST_ASSERT(s_creds_calls == 0);
     TEST_ASSERT(s_line_count == 1);
     TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
     TEST_ASSERT(!any_line_contains("tpass"));
+}
+
+/* A packet rejected after it lost framing ahead of a 0x0A: twelve short, the
+ * parser takes the SSID's 't' as the checksum, and the password's length byte
+ * (0x0A) follows. Dropping only up to that newline let the password through as
+ * the next line, the limit wifi-and-ota.md used to document; the whole burst
+ * is dropped now. */
+static void test_a_rejected_packet_with_a_newline_in_its_tail_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+    pkt[8] = (uint8_t)(pkt[8] - 12);
+    TEST_ASSERT(pkt[9 + pkt[8] + 1] == 0x0A); /* right after the byte taken as checksum */
+
+    feed(pkt, n, true);
+    pause(LATER_MS);
+    feed_text("status\n");
+
+    TEST_ASSERT(s_creds_calls == 0);
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+    TEST_ASSERT(!any_line_contains("tpass"));
+}
+
+/* Dropping the rest of a burst still lets a packet in it through: a client
+ * may send two in one write. */
+static void test_two_packets_in_one_burst_both_parse(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    feed(pkt, n, true);
+    feed(pkt, n, true);
+
+    TEST_ASSERT(s_creds_calls == 2);
+    TEST_ASSERT(s_line_count == 0);
+}
+
+/* The cut of the stale-parser test, with the next packet arriving inside the
+ * same burst, so it cannot be told from the cut packet's tail. The parser
+ * mis-frames and rejects it, and the rest of the burst is dropped: the
+ * credentials are not delivered, and nothing of them is logged. */
+static void test_a_new_packet_inside_the_burst_after_a_cut_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    feed(pkt, 14, true);
+    set_armed(false);
+    set_armed(true);
+    feed(pkt, n, true);
+    pause(LATER_MS);
+    feed_text("status\n");
+
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+    TEST_ASSERT(!any_line_contains("pass"));
+    TEST_ASSERT(!any_line_contains("HomeNet"));
+}
+
+/* Whether a packet of @p n bytes stalled after @p cut of them still lands: a
+ * header cut does (its matched bytes survive the gap), and so does a cut after
+ * the checksum, leaving only the newline; a cut in between is dropped. */
+static bool delivered_across_a_stall(size_t cut, size_t n)
+{
+    return cut < 6 || cut >= n - 1;
+}
+
+/* No line holds a byte of the packet cut after @p cut bytes, and the console
+ * still runs the next command. */
+static void assert_cut_leaks_nothing(size_t cut)
+{
+    for (int i = 0; i < s_line_count; i++) {
+        printf("\n    edge after byte %zu, line %d: \"%s\"", cut, i, s_lines[i]);
+    }
+    TEST_ASSERT(!any_line_contains("s3cr3tpass"));
+    TEST_ASSERT(!any_line_contains("HomeNet"));
+    TEST_ASSERT(!any_line_contains("PROV"));
+    TEST_ASSERT(s_line_count == 0);
+    pause(LATER_MS);
+    feed_text("status\n");
+    TEST_ASSERT(s_line_count == 1);
+    TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+}
+
+/* A disarm after every byte of a packet, the rest following in the same burst
+ * (the link came up while ESP Web Tools was writing). Before the header is
+ * complete the parser has claimed nothing, yet the packet is in flight: its
+ * first bytes are in the line buffer, and resetting the parser there made the
+ * rest of the packet text, two logged lines holding the SSID and the password.
+ * The packet in flight is finished instead, from any cut. */
+static void test_a_disarm_anywhere_in_a_packet_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 1; cut < n; cut++) {
+        reset();
+        feed(pkt, cut, true);
+        feed(pkt + cut, n - cut, false);
+        TEST_ASSERT(s_creds_calls == 1); /* finished, and delivered */
+        assert_cut_leaks_nothing(cut);
+    }
+}
+
+/* The same disarm with the rest of the packet stalled past the burst gap: the
+ * parser is reset and that burst dropped. A header cut keeps its matched bytes
+ * across the gap, so the rest of the header completes it and the packet still
+ * lands. */
+static void test_a_disarm_with_the_rest_stalled_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 1; cut < n; cut++) {
+        reset();
+        feed(pkt, cut, true);
+        pause(LATER_MS);
+        feed(pkt + cut, n - cut, false);
+        TEST_ASSERT(s_creds_calls == (delivered_across_a_stall(cut, n) ? 1 : 0));
+        assert_cut_leaks_nothing(cut);
+    }
+}
+
+/* A disarm and a re-arm between two bytes of one packet, with the rest of it
+ * arriving at least EDGE_PAIR_GAP_MS later (the two edges are two supervisor
+ * steps apart). Assuming the rest never came, and dropping only up to the next
+ * newline, logged the password from a cut inside the data and the whole packet
+ * from a cut inside the header. */
+static void test_a_disarm_and_re_arm_anywhere_in_a_packet_leaks_nothing(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 1; cut < n; cut++) {
+        reset();
+        feed(pkt, cut, true);
+        set_armed(false);
+        set_armed(true);
+        pause(EDGE_PAIR_GAP_MS);
+        feed(pkt + cut, n - cut, true);
+        TEST_ASSERT(s_creds_calls == (delivered_across_a_stall(cut, n) ? 1 : 0));
+        assert_cut_leaks_nothing(cut);
+    }
+}
+
+/* The same double edge with no gap, which the supervisor cannot produce but the
+ * console does not rely on: the packet is simply finished. */
+static void test_a_disarm_and_re_arm_inside_the_burst_finishes_the_packet(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 1; cut < n; cut++) {
+        reset();
+        feed(pkt, cut, true);
+        set_armed(false);
+        set_armed(true);
+        feed(pkt + cut, n - cut, true);
+        TEST_ASSERT(s_creds_calls == 1);
+        assert_cut_leaks_nothing(cut);
+    }
 }
 
 /* Arming and disarming do not cost a half-typed command its first part. */
@@ -360,6 +556,13 @@ int main(void)
     RUN_TEST(test_a_packet_in_flight_at_disarm_is_finished_not_logged);
     RUN_TEST(test_disarm_takes_effect_when_the_packet_in_flight_ends);
     RUN_TEST(test_a_packet_with_a_short_length_byte_leaks_nothing);
+    RUN_TEST(test_a_rejected_packet_with_a_newline_in_its_tail_leaks_nothing);
+    RUN_TEST(test_two_packets_in_one_burst_both_parse);
+    RUN_TEST(test_a_new_packet_inside_the_burst_after_a_cut_leaks_nothing);
+    RUN_TEST(test_a_disarm_anywhere_in_a_packet_leaks_nothing);
+    RUN_TEST(test_a_disarm_with_the_rest_stalled_leaks_nothing);
+    RUN_TEST(test_a_disarm_and_re_arm_anywhere_in_a_packet_leaks_nothing);
+    RUN_TEST(test_a_disarm_and_re_arm_inside_the_burst_finishes_the_packet);
     RUN_TEST(test_a_link_edge_keeps_a_half_typed_command);
     RUN_TEST(test_odd_sessions_are_armed);
     printf("%d/%d passed\n", test_pass, test_count);

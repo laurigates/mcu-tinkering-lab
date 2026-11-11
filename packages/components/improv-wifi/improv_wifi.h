@@ -162,6 +162,17 @@ bool improv_wifi_process_byte(uint8_t byte);
 void improv_wifi_reset_parser(void);
 
 /**
+ * @brief Whether the parser is between packets, with no header byte matched.
+ *
+ * False from the first matched header byte, while improv_wifi_process_byte()
+ * still returns false for the header, through the checksum. A caller that
+ * stops feeding bytes can ask this first: a packet whose first header bytes
+ * the parser has already seen is still arriving, and its remaining bytes are
+ * not text.
+ */
+bool improv_wifi_parser_idle(void);
+
+/**
  * @brief Send the current device state to the browser.
  *
  * Call after state transitions (e.g. PROVISIONING, PROVISIONED). The state is
