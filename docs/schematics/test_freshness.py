@@ -119,17 +119,24 @@ def test_rendering_named_circuits_leaves_other_images_alone(sandbox):
 # --- schematics-check.yml's SVG gate --------------------------------------
 
 
-def gate_script() -> str:
-    """The shipped ``run:`` block of the SVG gate step, dedented."""
+def step_script(name: str) -> str:
+    """The shipped ``run:`` block of the step called ``name``, dedented.
+
+    A ``run:`` that follows an ``if:`` key is found too."""
     text = WORKFLOW.read_text(encoding="utf-8")
     m = re.search(
-        rf"- name: {re.escape(GATE_STEP)}\n(?P<indent> +)run: \|\n(?P<body>.*?)(?=\n {{0,9}}\S|\Z)",
+        rf"- name: {re.escape(name)}\n(?: +if: [^\n]*\n)?(?P<indent> +)run: \|\n(?P<body>.*?)(?=\n {{0,9}}\S|\Z)",
         text,
         re.DOTALL,
     )
-    assert m, f"no '{GATE_STEP}' step with a run: block in {WORKFLOW.name}"
+    assert m, f"no '{name}' step with a run: block in {WORKFLOW.name}"
     body_indent = len(m.group("indent")) + 2
     return "\n".join(line[body_indent:] for line in m.group("body").split("\n")) + "\n"
+
+
+def gate_script() -> str:
+    """The shipped ``run:`` block of the SVG gate step, dedented."""
+    return step_script(GATE_STEP)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -154,9 +161,9 @@ def repo(tmp_path, monkeypatch):
     return tmp_path
 
 
-def run_gate(repo: Path) -> subprocess.CompletedProcess:
+def run_gate(repo: Path, name: str = GATE_STEP) -> subprocess.CompletedProcess:
     script = repo.parent / "gate.sh"
-    script.write_text(gate_script())
+    script.write_text(step_script(name))
     return subprocess.run(
         ["bash", str(script)], cwd=repo, capture_output=True, text=True
     )
@@ -201,3 +208,32 @@ def test_gate_ignores_png_drift(repo):
     _touch(repo / IMAGES, "extra.png")
     result = run_gate(repo)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# --- the PNG notice beside it (#1091) ---------------------------------------
+
+PNG_STEP = "Surface incidental PNG drift"
+
+
+def test_png_notice_is_quiet_on_the_committed_state(repo):
+    result = run_gate(repo, PNG_STEP)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "::notice::" not in result.stdout
+
+
+@pytest.mark.parametrize("change", ["modified", "untracked"])
+def test_png_notice_reports_drift_without_failing(repo, change):
+    if change == "modified":
+        (repo / IMAGES / "kept.png").write_text("re-encoded\n")
+    else:
+        _touch(repo / IMAGES, "new.png")
+    result = run_gate(repo, PNG_STEP)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "::notice::" in result.stdout
+
+
+def test_png_notice_fails_when_git_status_fails(tmp_path, monkeypatch):
+    work = tmp_path / "not-a-repo"
+    work.mkdir()
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    assert run_gate(work, PNG_STEP).returncode != 0

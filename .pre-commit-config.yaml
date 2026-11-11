@@ -89,11 +89,12 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # setup-tools pins the just whose `just --dry-run` text this reads.
       - id: check-flash-recipes
         name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py|^\.github/actions/setup-tools/action\.yml)$'
         pass_filenames: false
 
       - id: check-flash-recipes-tests
@@ -171,13 +172,14 @@ repos:
       # ESP-IDF ignores an sdkconfig.defaults line whose symbol no Kconfig file
       # defines, with only a build-log warning (issue #707). The test suite
       # checks every tracked sdkconfig.defaults against the symbol lists in
-      # tools/kconfig_symbols, and fails when the ESP-IDF list and the
-      # Dockerfile / CI IDF_VERSION disagree. No build or container needed.
+      # tools/kconfig_symbols, and fails when the ESP-IDF version pins (the
+      # Dockerfile, docker-compose.yml's image tag, any workflow) disagree
+      # with each other or with the ESP-IDF list. No build or container needed.
       - id: kconfig-symbols
         name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
         entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
         language: system
-        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^\.github/workflows/_ci-build-esp32\.yml)$'
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
         pass_filenames: false
 
       # No run: script expands inputs.* or github.event.* through ${{ }}
