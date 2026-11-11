@@ -204,7 +204,8 @@ def check_extraction_recipe(verbose: bool) -> list[str]:
     if run.returncode != 0:
         return [
             f"the guard-extraction recipe in {rule} § 2 exits {run.returncode} against the "
-            f"current workflow: {run.stderr.strip().splitlines()[-1] if run.stderr.strip() else '(no stderr)'}"
+            "current workflow: "
+            f"{run.stderr.strip().splitlines()[-1] if run.stderr.strip() else '(no stderr)'}"
         ]
 
     script = run.stdout

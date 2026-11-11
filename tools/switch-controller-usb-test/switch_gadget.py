@@ -1029,7 +1029,7 @@ Switch Pro Controller USB Gadget Emulator — Commands:
   Session:
     help                    Show this help
     quit / exit             Exit and remove gadget
-""")
+""")  # noqa: E501
 
 
 def repl(state: GadgetState):

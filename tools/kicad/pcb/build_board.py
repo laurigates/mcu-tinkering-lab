@@ -36,7 +36,8 @@ it. ``--silk-only`` instead re-applies the reference positions and sizes and
 the pad clipping to the routed board, adds any board.toml text or module
 outline segment it lacks, and leaves its copper as it is. A module outline
 (board.toml ``[silk] module_outlines``) is the footprint's F.Fab outline,
-placed by kicad.boardinput (``silk.outline_lines``) and drawn on F.SilkS. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
+placed by kicad.boardinput (``silk.outline_lines``) and drawn on F.SilkS.
+Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
 imports nothing from tools/kicad (see tools/kicad/test_pcb_py39.py).
 """
 
@@ -342,10 +343,11 @@ def silk_lines(item):
         a, b = item.GetStart(), item.GetEnd()
         return [((a.x, a.y), (b.x, b.y))]
     if shape in (pcbnew.SHAPE_T_RECT, pcbnew.SHAPE_T_POLY):
-        if shape == pcbnew.SHAPE_T_RECT:
-            points = item.GetRectCorners()
-        else:
-            points = item.GetPolyPoints()
+        points = (
+            item.GetRectCorners()
+            if shape == pcbnew.SHAPE_T_RECT
+            else item.GetPolyPoints()
+        )
         corners = [(c.x, c.y) for c in points]
         return list(zip(corners, corners[1:] + corners[:1]))
     return None
@@ -356,11 +358,12 @@ def clip_silk(fp, board):
 
     Run on a placed footprint (the pads' mask expansion needs the board). A
     line within silk.clearance() of any board pad's mask opening on its own
-    side, the footprint's or another's, loses that piece; a rectangle or polygon outline is first split into its edges.
-    What is left of the original is drawn as new line segments and the
-    original moves to Cmts.User, not removed (Remove() breaks later SWIG calls,
-    the carrier-pcb skill's trap 1). Arcs and circles are left alone; the DRC
-    rule reports any that come too close. Returns how many shapes were cut.
+    side, the footprint's or another's, loses that piece; a rectangle or
+    polygon outline is first split into its edges. What is left of the original
+    is drawn as new line segments and the original moves to Cmts.User, not
+    removed (Remove() breaks later SWIG calls, the carrier-pcb skill's trap 1).
+    Arcs and circles are left alone; the DRC rule reports any that come too
+    close. Returns how many shapes were cut.
     """
     n = 0
     for silk_layer, mask_layer in SILK_MASK:

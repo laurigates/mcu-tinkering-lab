@@ -37,14 +37,6 @@ select = [
     "RUF", # ruff-specific rules
 ]
 
-ignore = [
-    # ruff format wraps code at 88 columns; what E501 still reports is long
-    # strings, comments and URLs the formatter leaves alone (359 lines when
-    # #761 turned the selection on). The simulation and melody-detector
-    # pyproject.toml configs make the same choice.
-    "E501",
-]
-
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
 
@@ -52,6 +44,13 @@ fixable = ["ALL"]
 # in generated labels, wire lists and docstrings (2×3 header, 1–3 mm), not
 # look-alikes of x and -.
 allowed-confusables = ["×", "–"]
+
+# ruff format wraps code at its default 88 columns; E501 then reports only
+# what the formatter leaves alone: docstrings, comments and long strings. A
+# limit of 100 caps those without forcing every prose line to 88.
+# tools/test_ruff_config.py checks both limits.
+[lint.pycodestyle]
+max-line-length = 100
 
 [format]
 # Match existing style

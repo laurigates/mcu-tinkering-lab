@@ -469,7 +469,8 @@ def main() -> None:
         )
         bb = part.bounding_box().size
         print(
-            f"{name}: {part.volume / 1000:.2f} cm3, bbox {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}, valid {part.is_valid}"
+            f"{name}: {part.volume / 1000:.2f} cm3, "
+            f"bbox {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}, valid {part.is_valid}"
         )
     lo, hi = working_distance_range()
     print(f"lens rear face above the bench: {lo:.1f} .. {hi:.1f} mm")

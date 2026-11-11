@@ -26,10 +26,11 @@ value, refs grouped) gets one status:
 - no stock key: the registry entry has no `[stock]` table.
 
 Items that share the category and package (for an mpn: the first four
-characters of the mpn, so ZXMP3A16GTA is near ZXMP4A16GTA) but do not match are listed as near matches, never
-counted. A substitute is a datasheet decision (the part-substitution skill),
-so this report never makes one. It is a report, not a gate: exit 0 unless the
-inventory or a project cannot be read. Not run in CI.
+characters of the mpn, so ZXMP3A16GTA is near ZXMP4A16GTA) but do not match
+are listed as near matches, never counted. A substitute is a datasheet decision
+(the part-substitution skill), so this report never makes one. It is a report,
+not a gate: exit 0 unless the inventory or a project cannot be read. Not run in
+CI.
 """
 
 from __future__ import annotations

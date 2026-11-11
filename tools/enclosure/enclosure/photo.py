@@ -65,9 +65,12 @@ def upload(server: str, path: Path) -> str:
     boundary = uuid.uuid4().hex
     body = b"".join(
         [
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\ntrue\r\n".encode(),
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"subfolder\"\r\n\r\nmcu-product\r\n".encode(),
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{path.name}\"\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="overwrite"\r\n\r\ntrue\r\n'.encode(),
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="subfolder"\r\n\r\nmcu-product\r\n'.encode(),
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="image"; filename="{path.name}"\r\n'
             "Content-Type: image/png\r\n\r\n".encode(),
             path.read_bytes(),
             f"\r\n--{boundary}--\r\n".encode(),

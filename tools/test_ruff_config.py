@@ -13,6 +13,8 @@ file without a warning, so these tests hold the parsed structure instead:
 - `lint.select` and `lint.fixable` are keys of `[lint]`.
 - Every `lint.per-file-ignores` key is a glob that matches a tracked file, and
   every value is a list of rule codes.
+- E501 is not ignored, the lint limit is 100 columns and the formatter's
+  line length stays at 88.
 """
 
 from __future__ import annotations
@@ -74,6 +76,20 @@ class RuffConfigTest(unittest.TestCase):
                 self.assertIsInstance(codes, list)
                 for code in codes:
                     self.assertRegex(code, RULE_CODE)
+
+    def test_e501_is_not_ignored(self):
+        # E501 is enforced: a blanket ignore lets prose and comments grow
+        # without bound, since the formatter wraps only code.
+        self.assertNotIn("E501", self.lint.get("ignore", []))
+
+    def test_lint_line_limit_is_100(self):
+        pycodestyle = self.lint.get("pycodestyle", {})
+        self.assertEqual(pycodestyle.get("max-line-length"), 100)
+
+    def test_formatter_line_length_stays_88(self):
+        # line-length unset means ruff's default of 88; the lint limit above
+        # must not be applied to the formatter.
+        self.assertEqual(self.config.get("line-length", 88), 88)
 
     def test_glob_matching_control(self):
         # The stray keys from #761 must fail the glob check; a real glob passes.

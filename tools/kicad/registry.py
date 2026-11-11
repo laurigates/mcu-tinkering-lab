@@ -34,11 +34,12 @@ the KiCad symbol's pin numbers, and names the symbol and footprint:
 vendored library: every symbol pin mapped exactly once and a pad of the
 footprint, a supported (single-unit, no De Morgan, no hidden power) symbol, and
 the polarity tripwire. A polarised pin ("+"/"-", "K"/"A" on a part with a
-"K", or "G"/"D"/"S" on a part with all three) must be proved by the symbol's own pin name, by the footprint's silkscreen
-text, or by a pinned convention for the symbol (CONVENTIONS); an unproved one
-fails rather than being skipped, because a reversed electrolytic or diode
-agrees with every other check (netlist, board, DRC) built from the same mistake.
-A `[perfboard]` stand-in footprint's own marks must agree too.
+"K", or "G"/"D"/"S" on a part with all three) must be proved by the symbol's
+own pin name, by the footprint's silkscreen text, or by a pinned convention for
+the symbol (CONVENTIONS); an unproved one fails rather than being skipped,
+because a reversed electrolytic or diode agrees with every other check
+(netlist, board, DRC) built from the same mistake. A `[perfboard]` stand-in
+footprint's own marks must agree too.
 
 `pin_numbers = "board-dip-ccw"` reads the numbers off the part's board page
 (the MCU's is `[source] board`): Side L pos n is pin n, Side R pos n is pin

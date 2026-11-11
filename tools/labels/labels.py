@@ -357,13 +357,20 @@ def regmark_svg(reg: dict) -> str:
     line = f"fill:none;stroke:#000000;stroke-width:{s}"
     # The notes line is the format render_silhouette_regmarks.py writes and
     # sendto_silhouette.py reads back to find the mark geometry.
-    note = f"mark distance from document: Left={x:g}mm, Top={y:g}mm; mark to mark distance: X={w:g}mm, Y={ln:g}mm;"
+    note = (
+        f"mark distance from document: Left={x:g}mm, Top={y:g}mm; "
+        f"mark to mark distance: X={w:g}mm, Y={ln:g}mm;"
+    )
     return (
         '  <g inkscape:groupmode="layer" inkscape:label="Regmarks" id="regmark">\n'
-        f'    <rect id="regmark-tl" x="{x:g}" y="{y:g}" width="{REG_SQUARE:g}" height="{REG_SQUARE:g}" style="fill:#000000;stroke:none"/>\n'
-        f'    <path id="regmark-tr" d="M {x + w - a:g},{y:g} L {x + w:g},{y:g} L {x + w:g},{y + a:g}" style="{line}"/>\n'
-        f'    <path id="regmark-bl" d="M {x + a:g},{y + ln:g} L {x:g},{y + ln:g} L {x:g},{y + ln - a:g}" style="{line}"/>\n'
-        f'    <text id="regmark-notes" x="{x + 30:g}" y="{y + ln + 6:g}" style="font-size:2.5px">{escape(note)}</text>\n'
+        f'    <rect id="regmark-tl" x="{x:g}" y="{y:g}" '
+        f'width="{REG_SQUARE:g}" height="{REG_SQUARE:g}" style="fill:#000000;stroke:none"/>\n'
+        f'    <path id="regmark-tr" '
+        f'd="M {x + w - a:g},{y:g} L {x + w:g},{y:g} L {x + w:g},{y + a:g}" style="{line}"/>\n'
+        f'    <path id="regmark-bl" '
+        f'd="M {x + a:g},{y + ln:g} L {x:g},{y + ln:g} L {x:g},{y + ln - a:g}" style="{line}"/>\n'
+        f'    <text id="regmark-notes" x="{x + 30:g}" y="{y + ln + 6:g}" '
+        f'style="font-size:2.5px">{escape(note)}</text>\n'
         "  </g>\n"
     )
 
@@ -374,13 +381,15 @@ def rounded_rect_path(p: Placed) -> str:
     return (
         f"M {x0 + r:g},{y0:g} H {x1 - r:g} A {r:g},{r:g} 0 0 1 {x1:g},{y0 + r:g} "
         f"V {y1 - r:g} A {r:g},{r:g} 0 0 1 {x1 - r:g},{y1:g} H {x0 + r:g} "
-        f"A {r:g},{r:g} 0 0 1 {x0:g},{y1 - r:g} V {y0 + r:g} A {r:g},{r:g} 0 0 1 {x0 + r:g},{y0:g} Z"
+        f"A {r:g},{r:g} 0 0 1 {x0:g},{y1 - r:g} "
+        f"V {y0 + r:g} A {r:g},{r:g} 0 0 1 {x0 + r:g},{y0:g} Z"
     )
 
 
 def cut_svg(page: list[Placed], reg: dict) -> str:
     paths = "".join(
-        f'    <path id="cut-{i + 1}" d="{rounded_rect_path(p)}" style="fill:none;stroke:{CUT_COLOUR};stroke-width:0.1"/>\n'
+        f'    <path id="cut-{i + 1}" d="{rounded_rect_path(p)}" '
+        f'style="fill:none;stroke:{CUT_COLOUR};stroke-width:0.1"/>\n'
         for i, p in enumerate(page)
     )
     return (

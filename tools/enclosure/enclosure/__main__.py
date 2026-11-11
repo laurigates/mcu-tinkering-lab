@@ -4,11 +4,11 @@ For each piece in <project>/hardware/enclosure/enclosure.toml, write the tray
 and the box (base and lid) as STEP, STL and 3MF under
 <project>/hardware/enclosure/output/, check that neither touches the board or
 a part, that the board can be put in (`assemble`: a lift or a tilted tuck) and
-its screws driven, that the lid goes on, and print the sizes and volumes a 3D-printing quote is priced on.
-Exits non-zero on a clash, a board that cannot go in, an unreachable board
-screw, or a missing part height. Each assembly motion is written to
-<piece>-{tray-board,box-board,box-lid}.json, with the meshes it moved, for
-`python -m enclosure.sequence` to animate.
+its screws driven, that the lid goes on, and print the sizes and volumes a
+3D-printing quote is priced on. Exits non-zero on a clash, a board that cannot
+go in, an unreachable board screw, or a missing part height. Each assembly
+motion is written to <piece>-{tray-board,box-board,box-lid}.json, with the
+meshes it moved, for `python -m enclosure.sequence` to animate.
 """
 
 from __future__ import annotations
@@ -134,7 +134,8 @@ def generate(project: Path, check: bool = True) -> list[dict]:
                     "mass_g": {k: round(vol * d, 1) for k, d in DENSITY.items()},
                     "standoff_mm": round(f.standoff, 2),
                     "headroom_mm": round(f.headroom, 2),
-                    "tallest": f"{piece.tallest.ref} {piece.tallest.above:.1f} mm ({piece.tallest.height_source})",
+                    "tallest": f"{piece.tallest.ref} {piece.tallest.above:.1f} mm "
+                    f"({piece.tallest.height_source})",
                     "clash_mm3": {
                         k: round(v, 3) for k, v in clash.items() if k.startswith(style)
                     },

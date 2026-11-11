@@ -2,8 +2,8 @@
 
 Positions are checked against the board pages read independently of the
 module under test, or, for a socket whose page records no pad centres,
-against the `pad_xy` coordinates its sockets.toml table lists. Mutations run on a temp copy of tools/kicad/lib and
-docs/reference/boards; the committed files are only read.
+against the `pad_xy` coordinates its sockets.toml table lists. Mutations run on
+a temp copy of tools/kicad/lib and docs/reference/boards; the committed files are only read.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """

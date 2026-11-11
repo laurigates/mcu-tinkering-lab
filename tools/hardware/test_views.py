@@ -433,7 +433,8 @@ class LoadPinsTest(ViewTest):
             '{ motor = { A1 = "" } }',
         ):
             broken = TWO_LOADS.replace(
-                'load_pins.motor = { A1 = "1", A2 = "2" }\nload_pins.motor2 = { B1 = "1", B2 = "2" }\n',
+                'load_pins.motor = { A1 = "1", A2 = "2" }\n'
+                'load_pins.motor2 = { B1 = "1", B2 = "2" }\n',
                 f"load_pins = {value}\n",
             )
             with self.subTest(value=value):

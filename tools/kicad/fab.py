@@ -15,8 +15,8 @@ from a temporary copy of the board that carries `<sha7> <pcb8>` on F.SilkS at
 board.toml's `[fab] provenance_at`. The committed `.kicad_pcb` and its check
 stamp are only read. `<sha7>` is the commit; `<pcb8>` the first 8 hex digits of
 the stamp's `board_sha256`. A dirty run's text is `<sha7>*<pcb8>`, the same
-width as a clean one's, so the DRC check below passes or fails alike. Per project, into the KiCad project's `output/`
-(git-ignored):
+width as a clean one's, so the DRC check below passes or fails alike. Per
+project, into the KiCad project's `output/` (git-ignored):
 
 - `fab/`: gerbers for the copper, paste, silkscreen, mask and Edge.Cuts layers
   (`--check-zones`), and Excellon drill files with gerber X2 drill maps;

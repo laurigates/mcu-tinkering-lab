@@ -453,7 +453,8 @@ class SetupAction(unittest.TestCase):
                 with self.subTest(file=path.name):
                     self.assertRegex(
                         text,
-                        r"uses: \./\.github/actions/setup-tools\n\s+with:\n(\s+\S.*\n)*?\s+just: true",
+                        r"uses: \./\.github/actions/setup-tools\n"
+                        r"\s+with:\n(\s+\S.*\n)*?\s+just: true",
                     )
 
 

@@ -6,8 +6,8 @@ targets py311 with `fixable = ["ALL"]` (pyupgrade's UP045 would rewrite
 
 - it parses with `ast.parse(..., feature_version=(3, 9))` (no `match`);
 - it imports only the stdlib modules KiCad's Python has and the scripts use,
-  `pcbnew`, and its siblings `dsn`, `dump`, `fanout`, `silk` and `stitch` (no `tomllib`, nothing from tools/kicad or
-  tools/hardware);
+  `pcbnew`, and its siblings `dsn`, `dump`, `fanout`, `silk` and `stitch` (no
+  `tomllib`, nothing from tools/kicad or tools/hardware);
 - an annotation using `|` needs `from __future__ import annotations`;
 - `pcb/` has no `__init__.py`, so it stays a directory of scripts;
 - ruff.toml keeps `tools/kicad/pcb/**` at target py39.

@@ -147,8 +147,9 @@ def fanout(board, fan, clearance):
     or the pad's narrow side if that is less) must clear every
     item of another net on the pad's layer. A pad counts as having a via when
     one is inside it, or a chain of fixed tracks and fanout stubs of its net,
-    through any pads of its net on the way, joins it to a via (an exposed pad's ground pins, the buck's
-    GND pin through C11's). A candidate pointing away from the
+    through any pads of its net on the way, joins it to a via (an exposed
+    pad's ground pins, the buck's GND pin through C11's). A candidate pointing
+    away from the
     pad's own part is tried first. Returns (vias added, the pads that found no
     place).
     """
@@ -586,7 +587,8 @@ def route(spec):
     grown = grow_vias(board, spec)
     if grown:
         print(
-            f"grew {len(grown)} via(s) to their class's size (DRC checks the fit): {', '.join(grown)}"
+            f"grew {len(grown)} via(s) to their class's size (DRC checks the fit): "
+            f"{', '.join(grown)}"
         )
 
     # Freerouting necks a track to half its width to reach a fine-pitch pad,

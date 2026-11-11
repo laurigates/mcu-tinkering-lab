@@ -12,7 +12,8 @@ before this module existed).
 orthogonal (4-direction) path from ``a`` to ``b`` that avoids every placed
 component's bounding box and discourages running on top of, or one grid
 step beside, wires already routed in the same drawing (a perpendicular
-crossing costs nothing: ``finish()`` marks it with a hop) — similar in spirit to the auto-routed connectors in
+crossing costs nothing: ``finish()`` marks it with a hop) — similar in spirit
+to the auto-routed connectors in
 https://github.com/niknah/quick-connections, adapted to schemdraw's static
 SVG output instead of a live canvas.
 

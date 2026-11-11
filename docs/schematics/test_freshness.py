@@ -125,7 +125,8 @@ def step_script(name: str) -> str:
     A ``run:`` that follows an ``if:`` key is found too."""
     text = WORKFLOW.read_text(encoding="utf-8")
     m = re.search(
-        rf"- name: {re.escape(name)}\n(?: +if: [^\n]*\n)?(?P<indent> +)run: \|\n(?P<body>.*?)(?=\n {{0,9}}\S|\Z)",
+        rf"- name: {re.escape(name)}\n(?: +if: [^\n]*\n)?(?P<indent> +)run: \|\n"
+        r"(?P<body>.*?)(?=\n {0,9}\S|\Z)",
         text,
         re.DOTALL,
     )
