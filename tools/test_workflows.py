@@ -7,18 +7,22 @@ Needs PyYAML, so the pre-commit hook runs it through uv:
 What the tests hold:
 
 - No ``run:`` script, and no ``with.command`` (espressif/esp-idf-ci-action
-  pastes it into its own script), expands ``inputs.*``, ``github.event.*`` or
-  ``github.head_ref`` with ``${{ }}``. Actions substitutes the text into the
-  script before the shell parses it, so a value carrying ``$(...)`` or a quote
-  runs as code in a job that may hold ``contents: write`` (issue #855). Pass
-  such a value through ``env:`` and read it as ``"$VAR"``; for
+  pastes it into its own script), expands ``inputs``, ``github.event`` or
+  ``github.head_ref`` with ``${{ }}``, whether dotted (``inputs.x``), through
+  a function (``format('{0}', inputs.x)``, ``toJSON(github.event)``) or by
+  bracket (``github.event['pull_request']``). Actions substitutes the text
+  into the script before the shell parses it, so a value carrying ``$(...)``
+  or a quote runs as code in a job that may hold ``contents: write`` (issue
+  #855). Pass such a value through ``env:`` and read it as ``"$VAR"``; for
   esp-idf-ci-action, also forward it into its container with
   ``extra_docker_args: -e NAME``, which the suite checks. A ``boolean`` or
   ``number`` input is exempt, since GitHub rejects any other value. Other contexts
   (``matrix``, ``needs``, ``steps``, ``env``, ``github.repository``) are not
   covered: their values come from this repo's files or from GitHub itself.
 - build-firmware.yml checks the release tag before any job uses it: every
-  other job needs ``resolve-tag``, directly or through another job.
+  other job needs ``resolve-tag``, directly or through another job. The check
+  itself, run here, passes every tag in the clone and refuses shell text, a
+  pre-release suffix and a bare version.
 - build-firmware.yml builds Pico SDK projects by calling
   ``_ci-build-pico.yml``, the reusable workflow build.yml calls, at the
   release tag, and copies none of its steps (issue #1065). Its select step,
@@ -28,6 +32,20 @@ What the tests hold:
   fix commits it pushes start CI (issue #866).
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
   calls the reusable Claude scan (issue #860).
+- Every workflow declares workflow-level ``permissions:``, except the
+  reusable callers listed in ``INHERITS_REPO_DEFAULT``. auto-fix.yml's caller
+  job grants the reusable's scopes itself, since the workflow level is
+  read-only.
+- A pre-commit hook that watches CI configuration (``.github/``,
+  ``Dockerfile``, ``docker-compose.yml``, the root ``justfile``) runs on a PR
+  that changes only that file: test.yml's ``any-code`` filter covers the file,
+  or an always-on job in test.yml runs the hook (issue #1089). Every job but
+  the advisory C/C++ lint reaches Test Summary's failure check.
+- No gate reads git's output where a failing git reads as clean: inside
+  ``[ ]`` or ``test``, through ``< <(...)``, or with ``git diff --quiet``,
+  which does not see untracked files (issue #1091). build-guide-check.yml's
+  drift step, run here with stub ``typst`` and ``git``, fails when
+  ``git status`` or ``git ls-files`` fails.
 
 Whether the workflows run as intended needs GitHub; actionlint and these tests
 only read them.
@@ -45,17 +63,67 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
+PRE_COMMIT = ROOT / ".pre-commit-config.yaml"
 
-UNTRUSTED_IN_EXPRESSION = re.compile(
-    r"\$\{\{[^}]*?\b(inputs\.[\w-]+|github\.event\.[\w.-]+|github\.head_ref)"
+# The body of each ${{ }} expression, up to the first }} (a format string's
+# '{0}' holds a single brace, so it does not end the match).
+EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
+# A reference to a context whose value a user or a PR author chooses. The
+# lookbehinds keep `steps.x.outputs.inputs` and `foo_github` out; `\b` after
+# `event` keeps `github.event_name` out.
+UNTRUSTED_REFERENCE = re.compile(
+    r"(?<![\w.])(inputs\.[\w-]+|inputs\s*\["
+    r"|github\s*\.\s*event\b|github\s*\[\s*['\"]event['\"]"
+    r"|github\s*\.\s*head_ref\b|github\s*\[\s*['\"]head_ref['\"])"
 )
 PICO_REUSABLE = "./.github/workflows/_ci-build-pico.yml"
 ESP_IDF_ACTION = "espressif/esp-idf-ci-action@"
 PICO_SELECT_STEP = "Match the tag's component to a Pico SDK project"
+RESOLVE_TAG_STEP = "Match the release-please tag pattern"
+DRIFT_STEP_SUFFIX = "check for drift"
+
+# Reusable-workflow callers with no workflow-level permissions: their one job
+# runs a laurigates/.github reusable with the repo's default token, and a
+# block here would cap the scopes that reusable declares (a startup_failure
+# if it is narrower). Give the caller job the reusable's scopes, as
+# auto-fix.yml does, then drop the file from this list.
+INHERITS_REPO_DEFAULT = {
+    "auto-resolve-conflicts.yml",
+    "claude.yml",
+    "fix-release-conflicts.yml",
+    "sync-ai-rules.yml",
+}
+
+# CI configuration: files whose hooks must run on a PR that changes nothing
+# else (issue #1089). Docs (*.md, docs/) stay out on purpose: a docs-only PR
+# should not pay for Code Quality Checks.
+CI_CONFIG = re.compile(r"^(\.github/|Dockerfile$|docker-compose\.yml$|justfile$)")
+CONFIG_HOOKS_JOB = "config-hooks"
+# Advisory: its result is reported but never fails the summary.
+ADVISORY_JOBS = {"lint-c"}
+
+# Gate shapes in which a failing git reads as clean or as unchanged. set -e
+# does not fire for a command substitution inside [ ] or test, nor for a
+# process substitution; `git diff --quiet` ignores untracked files.
+HIDDEN_GIT_FAILURE = re.compile(
+    r"\[\[?[^\]\n]*\$\(\s*git\b"
+    r"|\btest\b[^\n;]*\$\(\s*git\b"
+    r"|<\s*<\(\s*git\b"
+    r"|\bgit\b[^\n|;]*\bdiff\b[^\n|;]*--(quiet|exit-code)\b"
+)
 
 
 def load(name: str) -> dict:
     return yaml.safe_load((WORKFLOWS / name).read_text())
+
+
+def untrusted_references(script: str) -> list[str]:
+    """Each untrusted context referenced inside a ``${{ }}`` in ``script``."""
+    return [
+        ref.group(1)
+        for expression in EXPRESSION.finditer(script)
+        for ref in UNTRUSTED_REFERENCE.finditer(expression.group(1))
+    ]
 
 
 def workflow_files() -> list[Path]:
@@ -106,15 +174,26 @@ class UntrustedContextInRunTest(unittest.TestCase):
             'PR="${{ inputs.pr_number }}"',
             'B="${{ github.event.workflow_run.head_branch }}"',
             'echo "${{ github.head_ref }}"',
+            "T=\"${{ format('{0}', inputs.release_tag) }}\"",
+            "T=\"${{ format('{0}-{1}', matrix.x, github.event.release.name) }}\"",
+            "echo '${{ toJSON(github.event) }}'",
+            "T=\"${{ github.event['pull_request']['title'] }}\"",
+            "P=\"${{ inputs['pr-number'] }}\"",
+            "B=\"${{ github['head_ref'] }}\"",
+            'B="${{ github . head_ref }}"',
         ):
-            self.assertIsNotNone(UNTRUSTED_IN_EXPRESSION.search(text), text)
+            self.assertNotEqual(untrusted_references(text), [], text)
         for text in (
             'if [ "${{ github.event_name }}" = "push" ]',
             'repo="${{ github.repository }}"',
             'cd "${{ matrix.project_path }}"',
             'TAG="$RELEASE_TAG"',
+            'H="${{ steps.hash.outputs.inputs_digest }}"',
+            "N=\"${{ format('{0}', github.run_id) }}\"",
+            # Outside ${{ }}, the text is the shell's, not an expansion.
+            'echo "github.event.release.tag_name and inputs.x"',
         ):
-            self.assertIsNone(UNTRUSTED_IN_EXPRESSION.search(text), text)
+            self.assertEqual(untrusted_references(text), [], text)
 
     def test_no_run_script_expands_untrusted_context(self):
         found = []
@@ -123,13 +202,11 @@ class UntrustedContextInRunTest(unittest.TestCase):
             safe = typed_inputs(workflow)
             for job_id, index, step in steps_of(workflow):
                 for key, script in scripts_of(step):
-                    for match in UNTRUSTED_IN_EXPRESSION.finditer(script):
-                        if match.group(1) in safe:
+                    for ref in untrusted_references(script):
+                        if ref in safe:
                             continue
                         label = step.get("name", f"step {index}")
-                        found.append(
-                            f"{path.name}: {job_id} / {label} ({key}): {match.group(1)}"
-                        )
+                        found.append(f"{path.name}: {job_id} / {label} ({key}): {ref}")
         self.assertEqual(found, [], 'move these to env: and read them as "$VAR"')
 
     def test_esp_idf_command_variables_reach_the_container(self):
@@ -173,6 +250,60 @@ class BuildFirmwareTest(unittest.TestCase):
             if "resolve-tag" not in seen:
                 unchecked.append(job_id)
         self.assertEqual(unchecked, [])
+
+    def run_resolve_tag(self, tag: str) -> tuple[int, dict]:
+        """Run the shipped tag check with ``tag`` as the release tag."""
+        (step,) = [
+            s
+            for _, _, s in steps_of({"jobs": self.jobs})
+            if s.get("name") == RESOLVE_TAG_STEP
+        ]
+        with tempfile.TemporaryDirectory() as scratch:
+            output = Path(scratch) / "github-output"
+            output.touch()
+            env = {**os.environ, "TAG": tag, "GITHUB_OUTPUT": str(output)}
+            proc = subprocess.run(
+                ["bash", "-e", "-c", step["run"]], env=env, capture_output=True
+            )
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines() if line
+            )
+        return proc.returncode, values
+
+    def test_resolve_tag_passes_every_release_tag_in_the_clone(self):
+        tags = subprocess.run(
+            ["git", "-C", str(ROOT), "tag", "--list", "*-v*"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        if not tags:
+            self.skipTest("this clone has no release tags")
+        refused = [t for t in tags if self.run_resolve_tag(t)[0] != 0]
+        self.assertEqual(refused, [])
+        code, values = self.run_resolve_tag("robocar-unified-v0.2.2")
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            values, {"tag": "robocar-unified-v0.2.2", "component": "robocar-unified"}
+        )
+
+    def test_resolve_tag_refuses_anything_else(self):
+        for tag in (
+            "",
+            "v1.2.3",
+            "robocar-unified-v1.2.3-rc1",
+            "robocar-unified-v1.2",
+            "Robocar-v1.2.3",
+            "-v1.2.3",
+            "robocar-unified-v1.2.3\nother=x",
+            'x-v1.2.3"; echo pwned; "',
+            "x-v1.2.3$(id)",
+            "../x-v1.2.3",
+        ):
+            with self.subTest(tag=tag):
+                code, values = self.run_resolve_tag(tag)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(values, {}, "a refused tag must write no output")
 
     def test_pico_projects_build_with_the_ci_reusable_at_the_tag(self):
         callers = [j for j in self.jobs.values() if j.get("uses") == PICO_REUSABLE]
@@ -266,6 +397,345 @@ class ClaudeCallersTest(unittest.TestCase):
             if "reusable-security-secrets.yml" in str(job.get("uses", ""))
         ]
         self.assertEqual(reusable, [])
+
+
+class PermissionsTest(unittest.TestCase):
+    def test_every_workflow_declares_workflow_level_permissions(self):
+        missing = sorted(
+            p.name
+            for p in workflow_files()
+            if "permissions" not in load(p.name) and p.name not in INHERITS_REPO_DEFAULT
+        )
+        self.assertEqual(missing, [], "add a workflow-level permissions: block")
+
+    def test_the_exemptions_are_still_bare_reusable_callers(self):
+        # Tripwire: once a listed caller gains a permissions block, or is
+        # deleted, its entry is stale.
+        for name in sorted(INHERITS_REPO_DEFAULT):
+            with self.subTest(workflow=name):
+                self.assertTrue((WORKFLOWS / name).exists())
+                workflow = load(name)
+                self.assertNotIn("permissions", workflow)
+                jobs = workflow["jobs"].values()
+                self.assertTrue(all("uses" in job for job in jobs))
+
+    def test_auto_fix_caller_grants_the_reusables_scopes(self):
+        # reusable-auto-fix.yml declares these at its workflow level; a called
+        # workflow gets no more than its caller job grants.
+        workflow = load("auto-fix.yml")
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        (caller,) = [
+            job
+            for job in workflow["jobs"].values()
+            if "reusable-auto-fix.yml" in str(job.get("uses", ""))
+        ]
+        self.assertEqual(
+            caller.get("permissions"),
+            {
+                "contents": "write",
+                "pull-requests": "write",
+                "issues": "write",
+                "actions": "read",
+                "id-token": "write",
+            },
+        )
+
+
+def glob_regex(glob: str) -> re.Pattern:
+    """A dorny/paths-filter (picomatch) glob as a regex: ``**`` spans
+    directories, ``*`` stays within one."""
+    out, i = "", 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif glob.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif glob[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        else:
+            out, i = out + re.escape(glob[i]), i + 1
+    return re.compile(out + r"\Z")
+
+
+def tracked_files() -> list[str]:
+    return subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+
+
+def local_hooks() -> list[dict]:
+    config = yaml.safe_load(PRE_COMMIT.read_text())
+    return [
+        hook
+        for repo in config["repos"]
+        if repo["repo"] == "local"
+        for hook in repo["hooks"]
+    ]
+
+
+class TestSuiteTest(unittest.TestCase):
+    def setUp(self):
+        self.jobs = load("test.yml")["jobs"]
+        (filter_step,) = [
+            s for s in self.jobs["detect-changes"]["steps"] if s.get("id") == "filter"
+        ]
+        filters = yaml.safe_load(filter_step["with"]["filters"])
+        self.any_code = [glob_regex(g) for g in filters["any-code"]]
+        always_on = [
+            job for job in self.jobs.values() if "needs" not in job and "if" not in job
+        ]
+        self.always_on_runs = [
+            str(step.get("run", "")).replace(" -v ", " ")
+            for job in always_on
+            for step in job.get("steps") or []
+        ]
+        self.config_hooks = set(
+            str(self.jobs[CONFIG_HOOKS_JOB].get("env", {}).get("HOOKS", "")).split()
+        )
+        # Other workflows that run on pull requests: their path filter (None
+        # when there is none) and the scripts they run.
+        self.pr_workflows = []
+        for path in workflow_files():
+            if path.name == "test.yml":
+                continue
+            workflow = load(path.name)
+            triggers = workflow.get(True) or workflow.get("on") or {}
+            if not isinstance(triggers, dict) or "pull_request" not in triggers:
+                continue
+            paths = (triggers["pull_request"] or {}).get("paths")
+            self.pr_workflows.append(
+                (
+                    None if paths is None else [glob_regex(g) for g in paths],
+                    [str(s.get("run", "")) for _, _, s in steps_of(workflow)],
+                )
+            )
+
+    def run_by_its_own_workflow(self, entry: str, file: str) -> bool:
+        """A workflow other than test.yml runs ``entry`` on a PR touching
+        ``file``, as build-guide-check.yml runs check-typst-docs (#693)."""
+        return any(
+            (paths is None or any(g.match(file) for g in paths))
+            and any(entry in run for run in runs)
+            for paths, runs in self.pr_workflows
+        )
+
+    def uncovered(self, hook_ids: set[str], runs: list[str]) -> list[str]:
+        """``hook: file`` for each CI-config file a local hook watches that
+        neither any-code, an always-on job nor the file's own workflow
+        covers."""
+        top_exclude = re.compile(
+            yaml.safe_load(PRE_COMMIT.read_text()).get("exclude") or r"(?!)"
+        )
+        files = [
+            f
+            for f in tracked_files()
+            if CI_CONFIG.search(f) and not top_exclude.search(f)
+        ]
+        gaps = []
+        for hook in local_hooks():
+            if not hook.get("files"):
+                continue
+            if hook["id"] in hook_ids or any(hook["entry"] in r for r in runs):
+                continue
+            watched = re.compile(hook["files"])
+            gaps += [
+                f"{hook['id']}: {f}"
+                for f in files
+                if watched.search(f)
+                and not any(g.match(f) for g in self.any_code)
+                and not self.run_by_its_own_workflow(hook["entry"], f)
+            ]
+        return gaps
+
+    def test_hooks_guarding_ci_config_run_on_a_config_only_pr(self):
+        self.assertEqual(self.uncovered(self.config_hooks, self.always_on_runs), [])
+
+    def test_coverage_check_has_teeth(self):
+        # Control: without the always-on jobs, the hooks the issue names are
+        # uncovered on exactly the files a workflow-only PR changes.
+        gaps = self.uncovered(set(), [])
+        for expected in (
+            "workflow-structure: .github/workflows/test.yml",
+            "kconfig-symbols: Dockerfile",
+            "kconfig-symbols: .github/workflows/build-firmware.yml",
+            "check-flash-recipes: .github/actions/setup-tools/action.yml",
+            "check-flash-recipes-tests: Dockerfile",
+            "python-suites: .github/python-suites.json",
+        ):
+            self.assertIn(expected, gaps)
+        typst_docs = "python3 tools/check-typst-docs.py"
+        build_guide = ".github/workflows/build-guide-check.yml"
+        self.assertTrue(self.run_by_its_own_workflow(typst_docs, build_guide))
+        self.assertFalse(self.run_by_its_own_workflow(typst_docs, "Dockerfile"))
+
+    def test_glob_regex_follows_picomatch(self):
+        for glob, path, hit in (
+            ("packages/**", "packages/a/b.c", True),
+            ("**/docs/*.typ", "docs/x.typ", True),
+            ("**/docs/*.typ", "pkg/a/docs/x.typ", True),
+            ("**/docs/*.typ", "pkg/docs/auto/x.typ", False),
+            ("tools/*.py", "tools/a/b.py", False),
+            ("Dockerfile", "a/Dockerfile", False),
+        ):
+            with self.subTest(glob=glob, path=path):
+                self.assertEqual(bool(glob_regex(glob).match(path)), hit)
+
+    def test_config_hooks_job_runs_on_every_event_and_names_real_hooks(self):
+        job = self.jobs[CONFIG_HOOKS_JOB]
+        self.assertNotIn("needs", job)
+        self.assertNotIn("if", job)
+        self.assertTrue(self.config_hooks)
+        unknown = self.config_hooks - {h["id"] for h in local_hooks()}
+        self.assertEqual(unknown, set())
+
+    def test_every_gating_job_reaches_the_summary_check(self):
+        summary = self.jobs["test-summary"]
+        script = summary["steps"][-1]["run"]
+        loop = script[script.index("for result in") :]
+        for job_id in self.jobs:
+            if job_id == "test-summary":
+                continue
+            with self.subTest(job=job_id):
+                self.assertIn(job_id, summary["needs"])
+                gated = f"needs.{job_id}.result" in loop
+                self.assertEqual(gated, job_id not in ADVISORY_JOBS)
+
+
+def drift_step() -> str:
+    (step,) = [
+        s
+        for _, _, s in steps_of(load("build-guide-check.yml"))
+        if str(s.get("name", "")).endswith(DRIFT_STEP_SUFFIX)
+    ]
+    return step["run"]
+
+
+class GitGateTest(unittest.TestCase):
+    def test_pattern_catches_the_shapes_it_targets(self):
+        for text in (
+            'if [ -z "$(git status --porcelain -- "${drift_paths[@]}")" ]; then',
+            '[[ -n "$(git status --porcelain)" ]] && exit 1',
+            'test -z "$(git diff --name-only)"',
+            "done < <(git ls-files ':(glob)**/docs/*.typ')",
+            "if ! git diff --quiet -- 'docs/schematics/images/*.png'; then",
+            "git diff --exit-code -- out/",
+        ):
+            self.assertIsNotNone(HIDDEN_GIT_FAILURE.search(text), text)
+        for text in (
+            'drift=$(git status --porcelain -- "${drift_paths[@]}")',
+            'if [ -z "$drift" ]; then',
+            "git --no-pager diff --stat -- 'docs/schematics/images/*.svg'",
+            'mapfile -t projects < <(jq -r ".include[].project" <<< "$MATRIX")',
+        ):
+            self.assertIsNone(HIDDEN_GIT_FAILURE.search(text), text)
+
+    def test_no_gate_hides_a_git_failure(self):
+        found = []
+        for path in sorted(WORKFLOWS.glob("*.yml")):
+            for job_id, index, step in steps_of(load(path.name)):
+                for line in str(step.get("run", "")).splitlines():
+                    if line.lstrip().startswith("#"):
+                        continue
+                    if HIDDEN_GIT_FAILURE.search(line):
+                        label = step.get("name", f"step {index}")
+                        found.append(f"{path.name}: {job_id} / {label}: {line.strip()}")
+        self.assertEqual(
+            found,
+            [],
+            "assign git's output to a variable first (set -e then catches a "
+            "failure), and read drift with git status --porcelain",
+        )
+
+
+class BuildGuideDriftStepTest(unittest.TestCase):
+    """build-guide-check.yml's drift step, run against a scratch repository
+    with stub ``typst`` and ``git``, so a failing git can be staged."""
+
+    REAL_GIT = shutil.which("git")
+
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name)
+        self.repo = self.root / "repo"
+        docs = self.repo / "pkg" / "docs"
+        docs.mkdir(parents=True)
+        (docs / "guide.typ").write_text("= Guide\n")
+        (docs / "guide.pdf").write_text("pdf\n")
+        self.env = {
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.invalid",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.invalid",
+            "TYPST_VERSION": "0.0.0-stub",
+        }
+        for args in (("init", "-q"), ("add", "."), ("commit", "-q", "-m", "init")):
+            subprocess.run(
+                [self.REAL_GIT, "-C", str(self.repo), *args],
+                check=True,
+                capture_output=True,
+                env=self.env,
+            )
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        # typst: --version prints; compile writes $STUB_PDF to the output if
+        # set, else leaves the committed PDF as it is.
+        self._stub(
+            bin_dir / "typst",
+            '[ "$1" = --version ] && { echo "typst stub"; exit 0; }\n'
+            'out="${!#}"\n'
+            '[ -z "${STUB_PDF-}" ] || printf "%s\\n" "$STUB_PDF" > "$out"\n',
+        )
+        # git: fails (exit 128) when any argument equals $STUB_GIT_FAIL.
+        self._stub(
+            bin_dir / "git",
+            'for a in "$@"; do\n'
+            '  [ "$a" = "${STUB_GIT_FAIL-}" ] && { echo "stub: git $a fails" >&2; exit 128; }\n'
+            "done\n"
+            f'exec "{self.REAL_GIT}" "$@"\n',
+        )
+        self.env["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+
+    @staticmethod
+    def _stub(path: Path, body: str) -> None:
+        path.write_text("#!/usr/bin/env bash\n" + body)
+        path.chmod(0o755)
+
+    def run_step(self, **env: str) -> subprocess.CompletedProcess:
+        script = self.root / "step.sh"
+        script.write_text(drift_step())
+        return subprocess.run(
+            ["bash", str(script)],
+            cwd=self.repo,
+            env={**self.env, **env},
+            capture_output=True,
+            text=True,
+        )
+
+    def test_committed_state_is_up_to_date(self):
+        result = self.run_step()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("up to date: pkg/docs/guide.pdf", result.stdout)
+
+    def test_a_recompiled_pdf_that_differs_fails(self):
+        result = self.run_step(STUB_PDF="changed")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Committed Typst output is stale", result.stdout)
+
+    def test_a_failing_git_status_fails_the_step(self):
+        result = self.run_step(STUB_GIT_FAIL="status")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("up to date", result.stdout)
+
+    def test_a_failing_document_discovery_fails_the_step(self):
+        result = self.run_step(STUB_GIT_FAIL="ls-files")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

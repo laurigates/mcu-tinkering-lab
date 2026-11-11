@@ -23,7 +23,7 @@ def main() -> None:
     if "--dry_run=True" not in sys.argv[2:]:
         sys.exit("dry_cut.py only runs dry: pass --dry_run=True")
     sys.path.insert(0, str(driver.parent))
-    from silhouette import Graphtec  # noqa: E402  (the driver's own package)
+    from silhouette import Graphtec
 
     real_read = Graphtec.SilhouetteCameo.read
 

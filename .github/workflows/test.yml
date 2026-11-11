@@ -106,6 +106,67 @@ jobs:
       - name: Run tools/test_issue_labels_taxonomy.py
         run: python3 -m unittest -v tools/test_issue_labels_taxonomy.py
 
+  # The pre-commit hooks that guard CI configuration: the workflows (#855's
+  # untrusted-text rule), every ESP-IDF version pin against the Kconfig symbol
+  # list and the built-in partition tables, the root justfile's module list,
+  # project-matrix.json and the just pin in setup-tools, which decides the
+  # `just --dry-run` text check-flash-recipes reads. any-code does not list
+  # those files, so a workflow-, Dockerfile- or justfile-only PR used to run
+  # none of these hooks (#1089). Widening any-code would run Code Quality
+  # Checks (about 2 minutes) on every such PR; these hooks take a few seconds,
+  # so they run here on every event. Commands live in .pre-commit-config.yaml;
+  # this list names hooks. tools/test_workflows.py fails when a hook that
+  # watches CI configuration is covered neither here nor by any-code.
+  config-hooks:
+    name: CI Config Hooks
+    runs-on: ubuntu-latest
+    env:
+      HOOKS: >-
+        workflow-structure
+        kconfig-symbols
+        check-flash-recipes
+        check-flash-recipes-tests
+        check-component-extra-paths
+        check-component-extra-paths-tests
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.11.17'
+
+      - name: Install uv and just
+        uses: ./.github/actions/setup-tools
+        with:
+          just: true
+          cache-suffix: config-hooks
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      # Its own key: code-quality saves installed hook environments under
+      # pre-commit-<hash>, and this job, which installs none, must not save
+      # that key first.
+      - name: Cache pre-commit repositories
+        uses: actions/cache@v5.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-config-hooks-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run the hooks
+        run: |
+          set -uo pipefail
+          read -ra hooks <<<"$HOOKS"
+          failed=()
+          for hook in "${hooks[@]}"; do
+            pre-commit run "$hook" --all-files --show-diff-on-failure || failed+=("$hook")
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Failed hooks: ${failed[*]}. Run them with: pre-commit run <hook> --all-files"
+            exit 1
+          fi
+
   code-quality:
     name: Code Quality Checks
     needs: [detect-changes]
@@ -342,7 +403,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [detect-changes, code-quality, issue-labels-taxonomy, test-python-simulation, python-suites, python-suites-drift, lint-c, format-check]
+    needs: [detect-changes, config-hooks, code-quality, issue-labels-taxonomy, test-python-simulation, python-suites, python-suites-drift, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -350,6 +411,7 @@ jobs:
         run: |
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- CI Config Hooks: ${{ needs.config-hooks.result }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Label Taxonomy Drift Test: ${{ needs.issue-labels-taxonomy.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
@@ -363,6 +425,7 @@ jobs:
           # skipped, and skips alone would pass.
           for result in \
             "${{ needs.detect-changes.result }}" \
+            "${{ needs.config-hooks.result }}" \
             "${{ needs.code-quality.result }}" \
             "${{ needs.issue-labels-taxonomy.result }}" \
             "${{ needs.test-python-simulation.result }}" \

@@ -21,9 +21,9 @@ import schemdraw
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 
-from components import gpio_anchor, max98357a, xiao_esp32s3_sense  # noqa: E402
-from hardware import HardwareError, Net, join  # noqa: E402
-from hardware_nets import JoinedNets  # noqa: E402
+from components import gpio_anchor, max98357a, xiao_esp32s3_sense
+from hardware import HardwareError, Net, join
+from hardware_nets import JoinedNets
 
 UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
 
@@ -377,7 +377,7 @@ def test_an_anchor_for_a_pin_off_the_bus_is_an_error(model, mux_drawn):
 def test_a_bus_role_with_no_entry_is_an_error(model, mux_drawn):
     xiao, parts = mux_drawn
     nets = JoinedNets(model, xiao, parts)
-    with pytest.raises(HardwareError, match="I2C_BUS_CHANNEL_CAMERA.*bus_nets"):
+    with pytest.raises(HardwareError, match=r"I2C_BUS_CHANNEL_CAMERA.*bus_nets"):
         nets.bus_ends("I2C_BUS_CHANNEL_CAMERA")
 
 
@@ -466,7 +466,7 @@ def test_output_ends_of_the_amplifier_land_on_the_speaker_by_polarity(
 def test_output_ends_of_a_part_that_drives_nothing_is_an_error(model, motors_drawn):
     xiao, parts = motors_drawn
     nets = JoinedNets(model, xiao, parts)
-    with pytest.raises(HardwareError, match="'mux'.*no \\[\\[outputs\\]\\] pins"):
+    with pytest.raises(HardwareError, match=r"'mux'.*no \[\[outputs\]\] pins"):
         nets.output_ends("mux")
 
 
@@ -474,7 +474,7 @@ def test_output_ends_twice_is_an_error(model, motors_drawn):
     xiao, parts = motors_drawn
     nets = JoinedNets(model, xiao, parts)
     nets.output_ends("motor_driver")
-    with pytest.raises(HardwareError, match="motor_driver.*twice"):
+    with pytest.raises(HardwareError, match=r"motor_driver.*twice"):
         nets.output_ends("motor_driver")
 
 
@@ -508,7 +508,7 @@ def test_output_ends_of_a_driver_with_two_outputs_entries_draws_both(
         (tb["B01"], left["1"]),
         (tb["B02"], left["2"]),
     ]
-    with pytest.raises(HardwareError, match="motor_driver.*twice"):
+    with pytest.raises(HardwareError, match=r"motor_driver.*twice"):
         nets.output_ends("motor_driver")
     nets.output_ends("amp")
     nets.check_all_drawn()

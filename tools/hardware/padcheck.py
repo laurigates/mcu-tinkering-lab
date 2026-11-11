@@ -126,7 +126,9 @@ def diff(have: Centres, want: Centres) -> list[str]:
             lines.append(f"{label}: recorded, but not in the board file")
         elif key not in have:
             lines.append(f"{label}: in the board file at {want[key]}, not recorded")
-        elif any(abs(a - b) > TOLERANCE for a, b in zip(have[key], want[key])):
+        elif any(
+            abs(a - b) > TOLERANCE for a, b in zip(have[key], want[key], strict=True)
+        ):
             lines.append(f"{label}: recorded {have[key]}, board file {want[key]}")
     return lines
 

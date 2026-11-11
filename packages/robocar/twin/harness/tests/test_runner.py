@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from robocar_twin.assertions import evaluate
 from robocar_twin.cli import main as cli_main
 from robocar_twin.runner import (

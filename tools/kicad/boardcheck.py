@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import functools
+import itertools
 import math
 import re
 import sys
@@ -583,7 +584,7 @@ def _validate_tracks(
         if outside:
             errors.append(f"{at}: point {outside[0]} is not inside [outline]")
             continue
-        for a, b in zip(pts, pts[1:]):
+        for a, b in itertools.pairwise(pts):
             for k in data.get("keepouts", []):
                 if not _rect(k.get("rect")):
                     continue  # _validate_keepouts reports it
@@ -963,12 +964,15 @@ def validate_config(
                 f"the floor is {floor} mm{floor_note}"
             )
     for text in silk.get("texts", []):
-        if isinstance(text, dict) and _positive(text.get("size")):
-            if text["size"] < floor:
-                errors.append(
-                    f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
-                    f"tall; the floor is {floor} mm{floor_note}"
-                )
+        if (
+            isinstance(text, dict)
+            and _positive(text.get("size"))
+            and text["size"] < floor
+        ):
+            errors.append(
+                f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
+                f"tall; the floor is {floor} mm{floor_note}"
+            )
     errors += provenance.validate(where, data, size, floor)
     errors += _validate_cut_clearance(where, data, size)
     keepout_errors = _validate_keepouts(where, data, size)
@@ -1112,9 +1116,9 @@ def _segment_rect(a: Point, b: Point, r: tuple[float, float, float, float]) -> f
 def _in_polygon(p: Point, poly: list[Point]) -> bool:
     inside = False
     for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1], strict=True):
-        if (y1 > p[1]) != (y2 > p[1]):
-            if p[0] < x1 + (p[1] - y1) * (x2 - x1) / (y2 - y1):
-                inside = not inside
+        crosses = (y1 > p[1]) != (y2 > p[1])
+        if crosses and p[0] < x1 + (p[1] - y1) * (x2 - x1) / (y2 - y1):
+            inside = not inside
     return inside
 
 
@@ -1219,8 +1223,7 @@ def keepout_copper(
                 pts = _arc_points(*(_xy(block, k) for k in ("start", "mid", "end")))
             for name, box in boxes:
                 if any(
-                    _segment_rect(a, b, box) < half
-                    for a, b in zip(pts, pts[1:], strict=False)
+                    _segment_rect(a, b, box) < half for a, b in itertools.pairwise(pts)
                 ):
                     hits.append(
                         (f"{kw} on {_net(block)!r} {rel(pts[0])}-{rel(pts[-1])}", name)
@@ -1312,7 +1315,8 @@ def panel_board(board_text: str, data: dict[str, Any]) -> list[str]:
         else:
             a, b = sorted(got_tabs[name]), sorted(want_tabs[name])
             if len(a) != len(b) or any(
-                abs(p[0] - q[0]) > tol or abs(p[1] - q[1]) > tol for p, q in zip(a, b)
+                abs(p[0] - q[0]) > tol or abs(p[1] - q[1]) > tol
+                for p, q in zip(a, b, strict=True)
             ):
                 errors.append(f"{name}: holes {a}, [panel] says {list(b)}")
     if want and got_drill - {round(want.hole_mm, 4)}:
@@ -1330,14 +1334,14 @@ def panel_board(board_text: str, data: dict[str, Any]) -> list[str]:
         (x0, y0), (x1, y1) = _xy(block, "start"), _xy(block, "end")
         a, b = rel(min(x0, x1), min(y0, y1)), rel(max(x0, x1), max(y0, y1))
         r = (*a, *b)
-        if all(abs(v - u) <= tol for v, u in zip(r, (0.0, 0.0, w, h))):
+        if all(abs(v - u) <= tol for v, u in zip(r, (0.0, 0.0, w, h), strict=True)):
             continue  # the outline
         got_slots.append(r)
     want_slots = sorted(want.slots) if want else []
     got_slots.sort()
     if len(got_slots) != len(want_slots) or any(
-        any(abs(v - u) > tol for v, u in zip(g, s))
-        for g, s in zip(got_slots, want_slots)
+        any(abs(v - u) > tol for v, u in zip(g, s, strict=True))
+        for g, s in zip(got_slots, want_slots, strict=True)
     ):
         errors.append(
             f"Edge.Cuts slots {[list(r) for r in got_slots]}, [panel] says "

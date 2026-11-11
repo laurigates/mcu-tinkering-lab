@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.6...nfc-scavenger-hunt-v0.1.7) (2026-11-10)
+
+
+### Miscellaneous
+
+* **sdkconfig:** drop unknown Kconfig symbols and gate them in pre-commit ([#1072](https://github.com/laurigates/mcu-tinkering-lab/issues/1072)) ([82f621f](https://github.com/laurigates/mcu-tinkering-lab/commit/82f621fe70f5623eea98f7dad84f322730185651))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.5...nfc-scavenger-hunt-v0.1.6) (2026-11-09)
 
 

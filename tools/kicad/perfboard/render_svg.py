@@ -173,10 +173,10 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
         def corners(path):
             """A route's ends and bends: the points its polyline needs."""
             keep = [path[0]]
-            for a, p, b in zip(path, path[1:], path[2:]):
+            for a, p, b in zip(path, path[1:], path[2:], strict=False):
                 if (a[0] == p[0]) != (p[0] == b[0]):
                     keep.append(p)
-            return keep + [path[-1]]
+            return [*keep, path[-1]]
 
         # Wires first, pads over them, so each wire visibly ends on its pad.
         # A bus is bare: a wide pale band with its net's colour down the middle.
@@ -220,7 +220,7 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
             for node in routes[n]:
                 visits.setdefault(node, set()).add(n)
         placed = []
-        for n, _, net, colour, _, _ in wires:
+        for n, _, _net, colour, _, _ in wires:
             # Put each number on a straight stretch of its own wire, as near the
             # middle as it can go while clearing other wires' crossings and the
             # numbers already placed. Gap crossings come first: there the label

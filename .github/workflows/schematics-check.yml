@@ -116,9 +116,14 @@ jobs:
             exit 1
           fi
 
+      # Read the same way as the SVG gate, so a PNG never committed gets the
+      # notice too (#1091); `git diff --quiet` sees only tracked files.
       - name: Surface incidental PNG drift
         if: always()
         run: |
-          if ! git diff --quiet -- 'docs/schematics/images/*.png'; then
-            echo "::notice::PNG(s) differ from committed copy — likely cairo encoder version drift across machines, not a content change. Not failing the build."
+          set -euo pipefail
+          drift=$(git status --porcelain --untracked-files=all -- 'docs/schematics/images/*.png')
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            echo "::notice::PNG(s) differ from committed copy, or were never committed — likely cairo encoder version drift across machines, not a content change. Not failing the build."
           fi

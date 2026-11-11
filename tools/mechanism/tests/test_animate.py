@@ -1,5 +1,6 @@
 """The travel animation: its pose path, the clashes between gate poses, the video."""
 
+import itertools
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +15,7 @@ def test_the_path_visits_every_gate_pose_one_joint_step_at_a_time():
     mod = SimpleNamespace()
     path = animate.path(mod, between=0)
     assert sorted(path) == sorted(check.DEFAULT_SWEEP)
-    for a, b in zip(path, path[1:], strict=False):
+    for a, b in itertools.pairwise(path):
         assert sum(x != y for x, y in zip(a, b, strict=True)) == 1
 
 
@@ -29,7 +30,7 @@ def test_a_three_joint_sweep_is_ordered_too():
     )
     path = animate.path(mod, between=0)
     assert sorted(path) == sorted(mod.SWEEP)
-    for a, b in zip(path, path[1:], strict=False):
+    for a, b in itertools.pairwise(path):
         assert sum(x != y for x, y in zip(a, b, strict=True)) == 1
 
 

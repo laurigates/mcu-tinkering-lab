@@ -50,7 +50,10 @@ that nobody opens.
 
 **A guard that downgrades a failure to a log line must be justified per call**,
 not applied to a whole block. `ota_data_initial.bin` genuinely is optional —
-only projects whose `partitions.csv` declares a `data,ota` row emit one — and
+only projects whose partition table declares a `data,ota` row emit one (the
+table `resolve_partition_table` in `tools/lib/otadata-predicate.sh` names: the
+project's CSV under `CONFIG_PARTITION_TABLE_CUSTOM=y`, otherwise the built-in
+preset, issue #684) — and
 that single legitimate case is what made the pattern look reasonable for the
 three files that are mandatory. Collect failures and exit non-zero at the end of
 the loop, so one run names every broken project instead of only the first.
@@ -58,7 +61,8 @@ the loop, so one run names every broken project instead of only the first.
 ## 3. Nothing downstream can notice, because the manifest is derived from source
 
 `tools/generate-flasher-manifests.sh` builds each `manifest.json` part list from
-the project's `partitions.csv`, not from the files on disk. So it emitted
+the project's partition table and `sdkconfig.defaults`, not from the files on
+disk. So it emitted
 complete, correct-looking manifests for directories holding nothing, Pages
 deployed them, and the release attached them. The site served a four-part
 manifest for `robocar-unified` v0.2.2 in which every referenced path returned
