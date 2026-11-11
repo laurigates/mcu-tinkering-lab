@@ -424,6 +424,30 @@ class CutConnection(unittest.TestCase):
             [a for a in args if a.startswith(("--connection_type", "--bluetooth"))]
         )
 
+    def test_mark_search_starts_past_the_mat_border_by_default(self):
+        args = self.args()
+        reg = labels.DEFAULT_REG
+        self.assertIn(f"--regoriginx={reg['x']}", args)
+        self.assertIn(f"--regoriginy={reg['y'] + 20}", args)
+        self.assertIn("--x_off=0.0", args)
+        self.assertIn("--y_off=20.0", args)
+
+    def test_mark_search_start_moves_without_moving_the_cut(self):
+        # The driver starts the search at regorigin - 10 mm and places the cut
+        # at offset - regorigin, so both flags move together.
+        args = self.args(LABEL_MARK_TOP="15", LABEL_MARK_LEFT="2.5")
+        reg = labels.DEFAULT_REG
+        self.assertIn(f"--regoriginx={reg['x'] + 2.5}", args)
+        self.assertIn(f"--regoriginy={reg['y'] + 15}", args)
+        self.assertIn("--x_off=2.5", args)
+        self.assertIn("--y_off=15.0", args)
+
+    def test_mark_search_start_must_be_a_number(self):
+        r = self.cut(LABEL_MARK_TOP="far")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("LABEL_MARK_TOP", r.stderr)
+        self.assertNotIn(self.SENTINEL, r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

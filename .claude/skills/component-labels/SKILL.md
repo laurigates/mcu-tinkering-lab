@@ -92,6 +92,19 @@ Record the settings that worked in the table below.
 |---|---|---|---|---|
 | (not yet cut) | | | | |
 
+### Where the mark search starts
+
+The driver starts the mark search at the machine's origin and makes no
+allowance for the mat's border. On the Portrait 2 the search then gave up
+before the sheet had fed in to the square (reply `1`, "Couldn't find
+registration marks"). `cut.sh` starts it 20 mm further in, which found the
+marks, and the test cut landed on the sticker (2026-11-11, one sheet).
+`LABEL_MARK_TOP` and `LABEL_MARK_LEFT` (mm) move the start along and across
+the feed if a sheet sits elsewhere on the mat; they do not move the cut.
+
+A reply of `-1` came back whatever the start was until the mat was reloaded
+further from the left edge. What `-1` means is not known.
+
 ## Bluetooth
 
 `cut` and `test-cut` use USB unless `LABEL_CUTTER` is exported. Over Bluetooth

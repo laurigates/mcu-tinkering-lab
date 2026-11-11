@@ -15,6 +15,12 @@
 #   MEDIA=134       inkscape-silhouette's "Sticker Sheet" preset
 #   MAT=portrait_8x12
 #   SILHOUETTE_HOME=~/.cache/inkscape-silhouette   (setup-cutter.sh installs there)
+#   LABEL_MARK_TOP=20   mm from the machine origin, in the feed direction, to
+#                       where the mark search starts. The sheet sits on the
+#                       mat behind the mat's border, and from 0 the Portrait 2
+#                       gave up before feeding in to the square; from 20 it
+#                       found the marks and the cut landed on the sticker
+#   LABEL_MARK_LEFT=0   the same across the sheet
 #
 # Connection (exported by the caller; a dry run ignores it and never connects):
 #   LABEL_CUTTER=usb          usb (default), ble (Bluetooth LE) or bluetooth
@@ -36,8 +42,22 @@ if [ ! -x "$python" ] || [ ! -f "$driver" ]; then
     exit 1
 fi
 
-# x y w l of the marks, from the plan.
-read -r rx ry rw rl < <(python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))["regmarks"]; print(m["x"], m["y"], m["w"], m["l"])' "$plan")
+# x y w l of the marks, from the plan, and where the mark search starts.
+# The driver starts the search at (regorigin - 10 mm) from the machine origin
+# and places the cut at (offset - regorigin). Adding the same distance to both
+# moves the search start and leaves the cut where it was.
+mark_top=${LABEL_MARK_TOP:-20}
+mark_left=${LABEL_MARK_LEFT:-0}
+if ! reg=$(python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1]))["regmarks"]
+top, left = float(sys.argv[2]), float(sys.argv[3])
+print(m["x"] + left, m["y"] + top, m["w"], m["l"], left, top)
+' "$plan" "$mark_top" "$mark_left"); then
+    echo "error: LABEL_MARK_TOP ('$mark_top') and LABEL_MARK_LEFT ('$mark_left') must be numbers, in mm" >&2
+    exit 1
+fi
+read -r rx ry rw rl xoff yoff <<<"$reg"
 
 args=(
     --preview=False
@@ -51,6 +71,7 @@ args=(
     --regsearch=True
     --regoriginx="$rx" --regoriginy="$ry"
     --regwidth="$rw" --reglength="$rl"
+    --x_off="$xoff" --y_off="$yoff"
     --logfile="${svg%.svg}.log"
 )
 if [ "${DRY_RUN:-false}" = "true" ]; then
