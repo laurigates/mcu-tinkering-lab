@@ -982,3 +982,30 @@ add_executable(test_net_supervisor_core
     "${CMAKE_CURRENT_SOURCE_DIR}/test_net_supervisor_core.c"
 )
 add_test(NAME net_supervisor_core COMMAND test_net_supervisor_core)
+
+# -----------------------------------------------------------------------------
+# mqtt_logger client lifecycle (issue #1054 — OTA notify subscription dropped)
+#
+# mqtt_logger.c compiled UNMODIFIED over a recording esp-mqtt
+# (test/include/mqtt_logger_host, ahead of test/include). Pins ADR-028 §2:
+# mqtt_logger_init() creates the client without starting it, so a
+# subscription registered before the first link-up (ota_manager_init()'s
+# check-now topic) is sent on the first connect and again after a link bounce.
+# config.h includes credentials.h, which is untracked; the fixture stands in.
+# -----------------------------------------------------------------------------
+set(MQTT_LOGGER_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/mqtt_logger_fixture")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+               "${MQTT_LOGGER_FIXTURE_DIR}/credentials.h" COPYONLY)
+add_executable(test_mqtt_logger
+    "${MAIN_SRC_DIR}/mqtt_logger.c"
+    "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_logger.c"
+)
+target_include_directories(test_mqtt_logger BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/mqtt_logger_host"
+    "${MQTT_LOGGER_FIXTURE_DIR}"
+)
+# strdup, vasprintf and gettimeofday are outside strict C11.
+target_compile_definitions(test_mqtt_logger PRIVATE _GNU_SOURCE CREDENTIALS_FIXTURE_NO_MQTT=1)
+add_test(NAME mqtt_logger COMMAND test_mqtt_logger)

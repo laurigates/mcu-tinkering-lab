@@ -19,6 +19,9 @@ typedef void (*TaskFunction_t)(void *);
 
 BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t stack, void *arg,
                                    UBaseType_t prio, TaskHandle_t *out, BaseType_t core);
+/* Unpinned variant, same inert behaviour (mqtt_logger.c's log task). */
+BaseType_t xTaskCreate(TaskFunction_t fn, const char *name, uint32_t stack, void *arg,
+                       UBaseType_t prio, TaskHandle_t *out);
 void vTaskDelay(TickType_t ticks);
 /* Declared here rather than in a portmacro shim: it is the only piece of the
  * port layer any host-tested module touches (self_report.c logs its core). */

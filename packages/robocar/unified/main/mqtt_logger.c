@@ -168,25 +168,17 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     // Register event handler
     esp_mqtt_client_register_event(s_context.client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
 
-    // Start MQTT client
-    ret = esp_mqtt_client_start(s_context.client);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(ret));
-        esp_mqtt_client_destroy(s_context.client);
-        s_context.client = NULL;
-        vQueueDelete(s_context.log_queue);
-        s_context.log_queue = NULL;
-        vSemaphoreDelete(s_context.mutex);
-        s_context.mutex = NULL;
-        goto fail_free_strings_ret;
-    }
+    /* The client is created here and not started (ADR-028 §2, issue #1054):
+     * mqtt_logger_resume() connects it on link-up. Creating it at boot lets
+     * ota_manager_init() register its subscription on the first link-up
+     * whichever of OTA and MQTT the supervisor starts first; the
+     * subscription is sent on MQTT_EVENT_CONNECTED. */
 
     // Create log processing task
     BaseType_t task_ret = xTaskCreate(log_processing_task, "mqtt_log_task", 4096, NULL, 5,
                                       &s_context.log_task_handle);
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create log processing task");
-        esp_mqtt_client_stop(s_context.client);
         esp_mqtt_client_destroy(s_context.client);
         s_context.client = NULL;
         vQueueDelete(s_context.log_queue);
@@ -202,7 +194,7 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     s_context.initialized = true;
     s_context.connected = false;
 
-    ESP_LOGI(TAG, "MQTT logger initialized successfully");
+    ESP_LOGI(TAG, "MQTT client created (connects on link-up)");
     ESP_LOGI(TAG, "Broker: %s", s_context.config.broker_uri);
     ESP_LOGI(TAG, "Client ID: %s", s_context.config.client_id);
     ESP_LOGI(TAG, "Log topic: %s", s_context.config.log_topic);
@@ -214,7 +206,6 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
      * is safe from the first strdup onward. */
 fail_free_strings:
     ret = ESP_ERR_NO_MEM;
-fail_free_strings_ret:
     free((void *)s_context.config.broker_uri);
     free((void *)s_context.config.client_id);
     free((void *)s_context.config.log_topic);
@@ -550,6 +541,8 @@ esp_err_t mqtt_logger_flush(void)
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id,
                                void *event_data)
 {
+    (void)handler_args;
+    (void)base;
     esp_mqtt_event_handle_t event = event_data;
 
     switch ((esp_mqtt_event_id_t)event_id) {
@@ -676,6 +669,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 static void log_processing_task(void *pvParameters)
 {
+    (void)pvParameters;
     log_buffer_entry_t entry;
 
     ESP_LOGI(TAG, "Log processing task started");

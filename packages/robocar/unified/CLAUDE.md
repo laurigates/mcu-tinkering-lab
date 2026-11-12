@@ -190,3 +190,4 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - Console lines are built by `console_line_feed()`, which keeps every byte `improv_wifi_process_byte()` claims out of the line: a credentials packet holds the Wi-Fi password, and lines are logged.
 - Improv is armed and disarmed only by bumping `s_improv_session` (odd while armed), which `console_line_feed()` reads per byte, with the read time, to finish a packet in flight across an edge and to drop the rest of a packet's burst (#1087).
 - The Improv announcement is `improv_wifi_announce()`, and a failed attempt ends with `improv_wifi_fail_provisioning()`.
+- The MQTT client is created at boot before the network supervisor and connected only on link-up, so OTA's subscription on the first link-up finds it (ADR-028 §2, #1054).

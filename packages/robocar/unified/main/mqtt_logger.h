@@ -59,7 +59,12 @@ typedef struct {
 } mqtt_log_message_t;
 
 /**
- * @brief Initialize MQTT logger
+ * @brief Create the MQTT client, queue and log task without connecting.
+ *
+ * Called once at boot, before any WiFi link (ADR-028 §2, issue #1054), so
+ * modules started on link-up (ota_manager_init()) can register subscriptions
+ * with mqtt_logger_subscribe() whichever starts first. mqtt_logger_resume()
+ * connects the client; registered subscriptions are sent on connect.
  *
  * @param config Configuration for MQTT logger
  * @return ESP_OK on success, error code otherwise
@@ -81,7 +86,10 @@ esp_err_t mqtt_logger_deinit(void);
  */
 esp_err_t mqtt_logger_pause(void);
 
-/** @brief Restart a client stopped by mqtt_logger_pause(). */
+/**
+ * @brief Connect the client: the first start after mqtt_logger_init(), or a
+ * restart after mqtt_logger_pause(). Called on every WiFi link-up.
+ */
 esp_err_t mqtt_logger_resume(void);
 
 /**
@@ -160,9 +168,9 @@ typedef void (*mqtt_logger_published_cb_t)(int msg_id);
 /**
  * @brief Register the acknowledgement callback (one; NULL clears it).
  *
- * May be called before mqtt_logger_init(): the client is created on the first
- * WiFi link-up, which can be long after the module that wants the
- * acknowledgements has started.
+ * May be called before mqtt_logger_init(): the handler lives outside the
+ * logger's state, so the module that wants the acknowledgements need not
+ * know whether the client exists yet.
  */
 void mqtt_logger_set_published_handler(mqtt_logger_published_cb_t callback);
 
@@ -174,9 +182,13 @@ void mqtt_logger_set_published_handler(mqtt_logger_published_cb_t callback);
  * it will be sent on the next connect. Wildcards (`+`, `#`) follow
  * MQTT topic-matching rules.
  *
+ * Requires mqtt_logger_init(): before it nothing is recorded and the call
+ * returns ESP_ERR_INVALID_STATE, which the caller must report (issue #1054).
+ *
  * @param topic    Topic filter to subscribe to (must not be NULL)
  * @param callback Callback invoked on each matching message
- * @return ESP_OK on success, error code otherwise
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE before mqtt_logger_init(),
+ *         ESP_ERR_NO_MEM when no slot is free, ESP_ERR_INVALID_ARG on NULL
  */
 esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_subscribe_cb_t callback);
 

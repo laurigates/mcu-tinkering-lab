@@ -141,10 +141,18 @@ esp_err_t ota_manager_init(void)
              OTA_MANIFEST_URL);
 
 #if MQTT_LOGGING_ENABLED
-    // Subscribe to MQTT OTA notification topic (a check-now nudge — see
-    // mqtt_ota_notify_handler())
-    mqtt_logger_subscribe(OTA_MQTT_NOTIFY_TOPIC, mqtt_ota_notify_handler);
-    ESP_LOGI(TAG, "Subscribed to MQTT OTA topic: %s", OTA_MQTT_NOTIFY_TOPIC);
+    /* Subscribe to the OTA check-now nudge (mqtt_ota_notify_handler()). It
+     * used to be ignored when it failed, and logged "Subscribed" while the
+     * client did not exist yet (issue #1054). A failure loses only the nudge:
+     * the periodic check and the rollback timer below still run, so it is
+     * reported and initialisation carries on. */
+    const esp_err_t sub_ret = mqtt_logger_subscribe(OTA_MQTT_NOTIFY_TOPIC, mqtt_ota_notify_handler);
+    if (sub_ret == ESP_OK) {
+        ESP_LOGI(TAG, "Subscribed to MQTT OTA topic: %s", OTA_MQTT_NOTIFY_TOPIC);
+    } else {
+        ESP_LOGE(TAG, "MQTT OTA topic %s not subscribed (%s) — check-now nudges ignored",
+                 OTA_MQTT_NOTIFY_TOPIC, esp_err_to_name(sub_ret));
+    }
 #endif
 
     // Clean up previous stability timer if re-initializing

@@ -2413,13 +2413,22 @@ static esp_err_t init_hierarchical_ai(void)
 }
 
 #if MQTT_LOGGING_ENABLED
-/** First link-up creates the client; later ones resume it. */
-static void start_mqtt_service(void)
+/**
+ * @brief Create the MQTT client without connecting it (ADR-028 §2).
+ *
+ * app_main calls this before the network supervisor starts, because the
+ * supervisor's first link-up runs ota_manager_init(), which subscribes to the
+ * OTA check-now topic, before start_mqtt_service(); mqtt_logger_subscribe()
+ * refuses until the client exists (issue #1054). Written by app_main before
+ * the supervisor task exists and by that task afterwards, never concurrently.
+ *
+ * @return true once the client exists.
+ */
+static bool create_mqtt_client(void)
 {
     static bool s_created;
     if (s_created) {
-        mqtt_logger_resume();
-        return;
+        return true;
     }
     const mqtt_logger_config_t mqtt_cfg = {
         .broker_uri = MQTT_BROKER_URI,
@@ -2441,12 +2450,23 @@ static void start_mqtt_service(void)
     if (mqtt_ret != ESP_OK) {
         ESP_LOGW(TAG, "mqtt_logger_init failed (%s) — remote logging disabled",
                  esp_err_to_name(mqtt_ret));
-        return;
+        return false;
     }
     s_created = true;
-    /* create_tasks() runs before the supervisor starts, so the queues the
-     * command handler dispatches into already exist. */
+    /* Called after create_tasks(), so the queues the command handler
+     * dispatches into already exist; no command arrives before the
+     * supervisor connects the client anyway. */
     mqtt_logger_set_command_handler(mqtt_command_received);
+    return true;
+}
+
+/** Every link-up connects the client. A boot-time creation that failed is
+ *  retried here, as the first link-up used to do. */
+static void start_mqtt_service(void)
+{
+    if (create_mqtt_client()) {
+        mqtt_logger_resume();
+    }
 }
 #endif
 
@@ -2732,6 +2752,11 @@ void app_main(void)
      * gracefully when the motors are absent or the executor never started. */
     run_wheel_exercise();
 
+#if MQTT_LOGGING_ENABLED
+    /* Before the supervisor, so OTA's subscription on the first link-up finds
+     * the client (issue #1054). Connects nothing; non-fatal. */
+    create_mqtt_client();
+#endif
     start_network_supervisor();
 
     // Spoken self-introduction + status diagnostic (announces once voice-able,
