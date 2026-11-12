@@ -5,7 +5,7 @@
 //
 //   #import "../../../../tools/typst/build-guide.typ": guide, callout, htable, theme
 //   #show: guide.with(
-//     title: "robocar-unified",
+//     title: "robocar",
 //     subtitle: "Single-Board AI Robot Car",
 //     tagline: "Assembly, Wiring & Firmware Build Guide",
 //     version: "0.1.2",
@@ -189,7 +189,7 @@
 //
 //   #import "../../../../tools/typst/build-guide.typ": card, callout, htable, theme
 //   #show: card.with(
-//     title: "robocar-unified — motor wiring",
+//     title: "robocar — motor wiring",
 //     subtitle: "PCA9685 → TB6612FNG",
 //     header-right: "XIAO ESP32-S3 Sense",
 //     footer-note: [Channel numbers are generated from `main/pin_config.h`.],

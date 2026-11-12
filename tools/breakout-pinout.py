@@ -7,7 +7,7 @@ product photo is worse than memory: the labels are legible, the orientation is
 not, and silkscreen is routinely printed on both faces so a mirrored read looks
 correct. Vendors publish the board file; it is the authority, and this reads it.
 
-Every number the robocar-unified motor wiring card prints came from this — the
+Every number the robocar motor wiring card prints came from this — the
 PCA9685's row order (PWM nearest the chip, then V+, then GND at the edge), its
 6-pin side headers (GND/OE/SCL/SDA/VCC/V+), and the TB6612FNG's two 8-pin rows
 (VM…GND and PWMA…GND, both starting at the same end of the board).

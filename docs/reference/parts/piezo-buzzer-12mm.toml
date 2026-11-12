@@ -1,7 +1,7 @@
 # A 12 mm board-mount buzzer, 7.6 mm pin pitch, soldered straight to the board
 # (Lauri's buzzers, 2026-10-16). Through-hole, hand-soldered, so no LCSC number.
 # Lauri's are piezos (confirmed 2026-10-16), which the 100 ohm series resistor
-# on robocar-unified's carrier assumes. A magnetic buzzer of the same size reads
+# on robocar's carrier assumes. A magnetic buzzer of the same size reads
 # about 16-42 ohm across its pins and would need its GPIO drive rechecked.
 [part]
 name = "Buzzer, 12 mm, 7.6 mm pin pitch"

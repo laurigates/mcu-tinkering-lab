@@ -1,6 +1,6 @@
 # SparkFun Motor Driver — Dual TB6612FNG (ROB-14451)
 
-Breakout for the TB6612FNG dual H-bridge, used by robocar-unified to drive both
+Breakout for the TB6612FNG dual H-bridge, used by robocar to drive both
 wheel motors. Two 8-pin headers on the long edges, outputs on one side and
 control on the other. For the silicon itself see
 [`driver--tb6612fng.md`](../datasheets/driver--tb6612fng.md).

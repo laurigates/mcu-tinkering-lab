@@ -2,7 +2,7 @@
 
 | ID | Feature | PRD | Status | Priority | Notes |
 |----|---------|-----|--------|----------|-------|
-| FR-001 | Robocar firmware on one XIAO ESP32-S3 Sense (robocar-unified) | PRD-001 | active | P0 | Motors, servos, LEDs via PCA9685 behind a TCA9548A; OLED; the Heltec + ESP32-CAM pair is removed (ADR-013) |
+| FR-001 | Robocar firmware on one XIAO ESP32-S3 Sense (robocar) | PRD-001 | active | P0 | Motors, servos, LEDs via PCA9685 behind a TCA9548A; OLED; the Heltec + ESP32-CAM pair is removed (ADR-013) |
 | FR-002 | Camera capture and Gemini vision planner | PRD-002 | active | P0 | OV3660 on the XIAO; Gemini Robotics-ER 2 planner (ADR-016); the ESP32-CAM board is removed (ADR-013) |
 | FR-003 | MQTT telemetry and logging | PRD-001 | active | P1 | robocar/status, robocar/events (ADR-033), remote commands; log forwarding open (#956); mDNS broker discovery proposed (ADR-034 §3) |
 | FR-004 | Pluggable AI backend (Claude / Ollama) | PRD-002 | deprecated | P1 | The claude_*/ollama_* backends are removed; Gemini only. A second backend would be a newly designed abstraction |
@@ -19,7 +19,7 @@
 | — | Arduino platform support | — | planned | P3 | No projects yet; no FR-ID in feature-tracker.json (drift) |
 | — | STM32 platform support | — | planned | P3 | No projects yet; no FR-ID in feature-tracker.json (drift) |
 | — | Automated project scaffolding tool | — | planned | P3 | Mentioned in README as coming soon; no FR-ID in feature-tracker.json (drift) |
-| FR-015 | ESP32 host-based unit tests | — | active | P2 | Host suites under packages/robocar/unified/test, run by just robocar-unified::test (54 ctest suites on 2026-11-09) and in CI |
+| FR-015 | ESP32 host-based unit tests | — | active | P2 | Host suites under packages/robotics/robocar/test, run by just robocar::test (54 ctest suites on 2026-11-09) and in CI |
 | FR-016 | SLAM / autonomous navigation | — | planned | P3 | Listed as future enhancement |
 | — | Multi-robot swarm coordination | — | planned | P3 | Listed as future enhancement; no FR-ID in feature-tracker.json (drift) |
 | FR-017 | Melody detector firmware (CV + ESP-DL + I2S) | PRD-011 | planned | P2 | XIAO ESP32-S3 Sense + MAX98357A; ROI classifier with INT8 CNN |

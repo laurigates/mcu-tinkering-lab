@@ -1,4 +1,4 @@
-"""robocar_unified's power-tag rails come from hardware.toml [[rails]] (#679).
+"""robocar's power-tag rails come from hardware.toml [[rails]] (#679).
 
 The circuit keeps the drawing (where each tag sits, which way it leads); the
 join supplies the fact (which rail the pin is on). A pin moved to another rail
@@ -21,19 +21,19 @@ sys.path.insert(0, str(FsPath(__file__).resolve().parents[2] / "tools"))
 from hardware import Endpoint, HardwareError, join
 from hardware_nets import JoinedNets
 
-UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
+ROBOCAR = FsPath(__file__).resolve().parents[2] / "packages/robotics/robocar"
 
 
 @pytest.fixture(scope="module")
 def model():
-    return join(UNIFIED)
+    return join(ROBOCAR)
 
 
 @pytest.fixture(scope="module")
 def circuit():
     from render import ROOT, load_circuit
 
-    return load_circuit(ROOT / "circuits" / "robocar_unified.py")
+    return load_circuit(ROOT / "circuits" / "robocar.py")
 
 
 def _move_rail(model, endpoint: Endpoint, to: str):

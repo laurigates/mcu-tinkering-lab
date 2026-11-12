@@ -1,9 +1,9 @@
 # VL53L9CX — ST dToF 3D Lidar Module (54 × 42 zones)
 
 **Used in:** nothing yet. It is a candidate depth sensor for
-[robocar-unified](../../../packages/robocar/unified/CLAUDE.md), whose sensors
+[robocar](../../../packages/robotics/robocar/CLAUDE.md), whose sensors
 sit on a TCA9548A behind the [XIAO ESP32-S3 Sense](../boards/xiao-esp32s3-sense.md).
-Nothing has been bought. See [Fit for robocar-unified](#fit-for-robocar-unified-esp32-s3)
+Nothing has been bought. See [Fit for robocar](#fit-for-robocar-esp32-s3)
 for the verdict.
 
 ST's FlightSense direct time-of-flight module: a 54 × 42 SPAD return array, two
@@ -224,7 +224,7 @@ it is recorded above. Write
 `docs/reference/boards/steval-vl53l9.md` once ST's board files or a fitted board
 confirm pin 1's position and the as-shipped resistor population.
 
-## Fit for robocar-unified (ESP32-S3)
+## Fit for robocar (ESP32-S3)
 
 **Verdict: not practical as a full-resolution depth camera. Usable only as a
 low-resolution (24 × 20 or smaller), few-hertz I²C sensor through the
@@ -242,7 +242,7 @@ with known ST-source defects and no published reference on an ESP32-S3.**
    ESP32-S3 has no PIO.
 2. **I²C bandwidth caps resolution and rate.** The ESP32-S3's I²C goes "up to
    800 kbit/s (constrained by SCL and SDA pull-up strength)" (datasheet §4.2.1.2),
-   below the sensor's 1 MHz. robocar-unified runs its whole bus at
+   below the sensor's 1 MHz. robocar runs its whole bus at
    **100 kHz** (`I2C_MASTER_FREQ_HZ`, `main/pin_config.h` line 39) because the
    RCWL-1601s NACK at 400 kHz ([sensor--rcwl-1601.md](sensor--rcwl-1601.md#i2c-mode)).
    A 54 × 42 frame is then ≥ 1.34 s of wire time and would hold the bus the 30 Hz

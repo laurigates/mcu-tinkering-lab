@@ -23,7 +23,7 @@ six answered turns took 8.2–12.8 s from clip to reply text, plus about 2.3 s
 to the first TTS audio (#948): a person waits 11–15 s and often repeats
 themselves, which starts another turn.
 
-The Live API probe (`packages/robocar/unified/tools/live-probe/`, README §
+The Live API probe (`packages/robotics/robocar/tools/live-probe/`, README §
 Measured) ran on 2026-11-07:
 
 | Fact | Measured |
@@ -130,7 +130,7 @@ answer itself.
 ### 6. Model and persona
 
 - `gemini-3.8-live`, a constant with the same rule as every other model id in
-  this firmware (`.claude/rules/gemini-api.md` §1). `just robocar-unified::live-probe-models`
+  this firmware (`.claude/rules/gemini-api.md` §1). `just robocar::live-probe-models`
   is the check when it 404s.
 - The system instruction is built from `voice_persona.c`, as the probe builds
   it (name, `text_brief`, `tts_style`, "answer in Finnish, briefly"), and the

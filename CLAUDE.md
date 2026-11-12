@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-MCU Tinkering Lab is a production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms. The primary project is an AI-powered robot car on a single XIAO ESP32-S3 Sense (`robocar-unified`).
+MCU Tinkering Lab is a production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms. The primary project is an AI-powered robot car on a single XIAO ESP32-S3 Sense (`robocar`, in `packages/robotics/robocar/`).
 
 ## Repository Structure
 
@@ -15,12 +15,13 @@ folder that matches the domain, or create a new domain folder. Drop the
 ```
 mcu-tinkering-lab/
 ├── packages/
-│   ├── robocar/                    # AI robot car
-│   │   ├── unified/                # Firmware: single-board XIAO ESP32-S3 Sense
-│   │   ├── unified-integrated/     # Carrier PCB variant with the breakout chips on board (comparison)
-│   │   ├── bringup/                # Hardware self-test firmware for the unified build
-│   │   ├── simulation/             # Python 3.12 physics simulation (Pymunk)
-│   │   └── twin/                   # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
+│   ├── robotics/                   # Robots
+│   │   ├── robocar/                # AI robot car: firmware (XIAO ESP32-S3 Sense) and its socketed carrier PCB
+│   │   │   ├── integrated/         # Carrier PCB variant with the breakout chips on board (hardware only)
+│   │   │   ├── bringup/            # Hardware self-test firmware
+│   │   │   ├── simulation/         # Python 3.12 physics simulation (Pymunk)
+│   │   │   └── twin/               # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
+│   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + MPU6050 + steppers, Pico SDK)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
 │   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
 │   │   ├── boombox/                # Audio playback box
@@ -51,8 +52,8 @@ mcu-tinkering-lab/
 │   │   └── ceiling-fan-ir/         # IR ceiling-fan controller (ESPHome, ESP8285)
 │   ├── sensors/                    # Sensor firmware
 │   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
-│   ├── robotics/                   # Motion-control robotics (Pico SDK)
-│   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + MPU6050 + steppers)
+│   ├── usb-tools/                  # USB tools and protocol firmware
+│   │   └── facedancer-espdancer-fw/ # ESP32-S3 raw USB relay for facedancer
 │   ├── bench/                      # Workbench tools (3D-printed)
 │   │   └── phone-microscope/       # Phone + M12 lens inspection microscope stand (build123d)
 │   ├── games/
@@ -98,9 +99,9 @@ just --list
 just build-all
 
 # Robocar (XIAO ESP32-S3 Sense; the port is auto-detected by USB VID)
-just robocar-unified::build
-just robocar-unified::flash-monitor
-just robocar-unified::test    # host unit tests, no ESP-IDF needed
+just robocar::build
+just robocar::flash-monitor
+just robocar::test    # host unit tests, no ESP-IDF needed
 ```
 
 ### Code Quality
@@ -125,7 +126,7 @@ pre-commit run --all-files
 ### Python Simulation
 
 ```bash
-cd packages/robocar/simulation
+cd packages/robotics/robocar/simulation
 uv sync                      # Install dependencies
 uv run pytest tests/ --cov   # Run tests with coverage
 ```
@@ -144,7 +145,7 @@ just setup-all               # Docker images + dev tools
 Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
 
 Examples:
-- `feat: Add WiFi reconnection logic to robocar-unified`
+- `feat: Add WiFi reconnection logic to robocar`
 - `fix: Correct UART baud rate for camera communication`
 - `docs: Update hardware connection pinout`
 
@@ -156,6 +157,10 @@ Examples:
 ### File Organization
 - ESP32 firmware projects go in `packages/<domain>/<project-name>/` (pick an
   existing domain folder that fits, or create a new one)
+- A subproject of an existing project goes beneath that project
+  (`packages/robotics/robocar/bringup/`). It sits one level deeper, so its
+  justfile imports `../../../../tools/...` and its docs reach the repo root
+  with four `../`
 - Each ESP32 project has its own `CMakeLists.txt`, `main/`, and `sdkconfig.defaults`
 - Repo-wide reusable components live in `packages/components/` (improv-wifi,
   ota-github)
@@ -168,15 +173,26 @@ Examples:
 
 ## Architecture Notes
 
-### Robot Car (robocar-unified)
+### Robot Car (robocar)
 One XIAO ESP32-S3 Sense runs camera capture (OV3660), the Gemini Robotics-ER
 planner, a 30 Hz reactive executor, motors and servos (PCA9685 behind a TCA9548A
 mux), and Gemini TTS voice through a MAX98357A. Architecture, core affinity and
 the rules for changing it are in
-[`packages/robocar/unified/CLAUDE.md`](packages/robocar/unified/CLAUDE.md).
+[`packages/robotics/robocar/CLAUDE.md`](packages/robotics/robocar/CLAUDE.md).
+
+`integrated/`, `bringup/`, `simulation/` and `twin/` beneath it are separate
+projects, each with its own justfile; the `mod` lines in the root `justfile`
+name their modules.
 
 The earlier dual-ESP32 design (Heltec main controller + ESP32-CAM over I2C,
 ADR-002 and ADR-007) has been removed; it remains in git history.
+
+Until 2026-11 the project was `robocar-unified` in `packages/robocar/unified/`.
+Releases up to 0.2.23 are tagged `robocar-unified-v<version>` and carry
+`robocar-unified.bin`, and from 0.2.18 `robocar-unified.elf`; later ones are
+tagged `robocar-v<version>` and carry `robocar.bin` and `robocar.elf`.
+CHANGELOG entries and quoted PR titles from before the move keep the old name,
+as do some dated incident notes under `.claude/`.
 
 ## CI/CD Workflows
 
@@ -184,7 +200,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 
 | Workflow | Trigger | Purpose | Reusable? |
 |----------|---------|---------|-----------|
-| `build.yml` | Push/PR (path-filtered) | Single CI build for every firmware project (ESP-IDF/ESPHome/Pico). Discovers changed projects from `.github/project-matrix.json` and fans out via the `_ci-build-*.yml` reusables | Local reusable `_ci-build-*.yml` |
+| `build.yml` | Push/PR (path-filtered) | Single CI build for every firmware project (ESP-IDF/ESPHome/Pico). Discovers changed projects from `.github/project-matrix.json` (an entry's `exclude_paths` drops the projects nested inside it from its triggers) and fans out via the `_ci-build-*.yml` reusables | Local reusable `_ci-build-*.yml` |
 | `build-python-simulation.yml` | Push/PR to main/develop | Build the Python simulation package (import check) | No (local) |
 | `test.yml` | Push/PR to main/develop | Pre-commit, simulation pytest, cppcheck, format check, and the Python Suites matrix: every uv project test suite in `.github/python-suites.json` (tools/enclosure, mechanism, cadstd, glitchtip bridge, the robocar behaviour twin per [ADR-030](docs/decisions/ADR-030-robocar-behaviour-twin.md), the live probe, the TTS generator, and the make-only component host suites, `just components::test`) on its own path changes, with `UV_LOCKED=1`. The CI Config Hooks job runs, on every event, the hooks that guard workflows, ESP-IDF version pins, the root justfile, `project-matrix.json` and the just pin, since a PR touching only those runs no Code Quality Checks; `tools/test_workflows.py` fails when such a hook is left uncovered (#1089) | No (local) |
 | `build-firmware.yml` | Release published / manual | Check the tag is `<component>-v<semver>`, then build + attach the flasher-enabled ESP-IDF binaries to the release and deploy the web flasher; a Pico SDK project's release (balancebot) also gets its `.uf2`, built by `_ci-build-pico.yml` at the tag. Release-asset check: `tools/verify-release-assets.sh` | No (local); Pico via local `_ci-build-pico.yml` |
@@ -206,7 +222,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `tools/esp32.just` — Shared justfile config imported by all ESP-IDF projects (container_cmd, port detection, require-port, _serial-monitor)
 - `tools/hardware/` — the board × header × parts join ([ADR-021](docs/decisions/ADR-021-hardware-source-of-truth.md)): reads a project's `hardware.toml`, its `pin_config.h` and the repo-level `docs/reference/boards/` page the sidecar names; `just hardware::gen` regenerates everything it feeds: `docs/auto/pin_defs.typ`; the tables between `<!-- BEGIN GENERATED -->` markers in any Markdown git would track under a project, at any depth, such as `WIRING.md`; the board pinout images; the schematic SVG/PNG (via `schematics::render-all`); and the build-guide PDFs; `just hardware::check` is the CI gate (`hardware-check.yml`)
 - `tools/kicad/` — KiCad carrier PCBs generated from the hardware join ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)): the stdlib schematic writer, the KiCad-free board and stamp checks CI runs (`just kicad::check`, `carrier-check.yml`), the pcbnew scripts under `pcb/`, and `lib/`, the vendored KiCad 10.0.6 and Seeed XIAO library subset pinned by `MANIFEST.tsv`. Workflow and traps: the `carrier-pcb` skill
-- `tools/mechanism/` — printed mechanisms (servo pan-tilts, brackets, linkages) in build123d: servo keep-out envelopes, the clash sweep over a design's travel, tools/enclosure's wall gate, and VTK renders (`just mechanism::check|showcase|animate <design dir>`). Contract, checklist and the design tournament: the `printed-mechanism` skill. Worked example: `packages/robocar/unified/hardware/pan-tilt/`
+- `tools/mechanism/` — printed mechanisms (servo pan-tilts, brackets, linkages) in build123d: servo keep-out envelopes, the clash sweep over a design's travel, tools/enclosure's wall gate, and VTK renders (`just mechanism::check|showcase|animate <design dir>`). Contract, checklist and the design tournament: the `printed-mechanism` skill. Worked example: `packages/robotics/robocar/hardware/pan-tilt/`
 - `tools/cadstd/` — the shared dimensions of printed parts ([ADR-035](docs/decisions/ADR-035-printed-part-dimension-standard.md)): metric fasteners, fits by class per print process (`fdm`, `sla`, `mjf`), `MIN_WALL`, the 10 mm M3 mounting grid, build123d cutters, and the calibration coupon (`just cadstd::test|coupon <process>`). `tools/enclosure` and `tools/mechanism` build from it
 - `tools/labels/` — parts-drawer stickers: TOML data files to A4 print-and-cut pages, printed on the Epson and kiss-cut on the Silhouette Portrait 2 through registration marks, headless (`just labels::build|print|cut`). `labels::candidates` drafts labels for unlabelled items in the private parts-stock repo, read-only. Workflow and cutter traps: the `component-labels` skill
 - `tools/kicad.just` — Shared carrier recipes a project imports (`carrier-schematic`, `carrier-board`, `carrier-board-checked`, `carrier-check`, `carrier-review`, `carrier-fab`); a project's `hardware/carrier/board.toml` holds placement, fixed tracks, silkscreen, net classes, the pour and the ground-via fanout

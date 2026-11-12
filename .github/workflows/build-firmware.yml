@@ -218,7 +218,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     # Pass the tag verbatim — release-please monorepo tags look like
-    # "robocar-unified-v0.1.5" (no leading "v" to strip). Per-project card
+    # "robocar-v<version>" (no leading "v" to strip). Per-project card
     # versions come from .release-please-manifest.json inside the generator.
     env:
       RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
@@ -341,7 +341,7 @@ jobs:
         # into its app (flasher.json "embedsBuildSha") must actually contain
         # the same string. The two come from different places — CMake inside
         # the espressif/idf container in the build job, the generator here —
-        # and robocar-unified's OTA refuses any manifest whose SHA it cannot
+        # and robocar's OTA refuses any manifest whose SHA it cannot
         # use, so a mismatch would publish a release no robot installs while
         # every other gate stays green.
         run: |
@@ -414,6 +414,20 @@ jobs:
           mkdir -p _site/firmware
           cp docs/flasher/* _site/
           cp -r firmware/* _site/firmware/
+          # One OTA hop for robots on robocar-unified <= 0.2.23: they poll
+          # firmware/unified/manifest.json, the project directory's basename
+          # before it became packages/robotics/robocar. The manifest's part
+          # paths are relative to it, so the copy serves robocar.bin from
+          # there, and the firmware it installs polls firmware/robocar/.
+          # The copy is made in _site only: the gates above count and walk
+          # firmware/*. A workflow_dispatch replay of a tag from before the
+          # move has no firmware/robocar: it publishes firmware/unified itself,
+          # or neither if the tag predates that project, and nothing is copied.
+          # Removal is tracked in the follow-up issue linked from the PR that
+          # added this.
+          if [ -d _site/firmware/robocar ] && [ ! -e _site/firmware/unified ]; then
+            cp -r _site/firmware/robocar _site/firmware/unified
+          fi
           # Project pages (docs/site/<page>/ -> /<page>/), from the workflow's
           # own revision like tools/lib above: a workflow_dispatch from main
           # republishes the current pages alongside the given tag's firmware.

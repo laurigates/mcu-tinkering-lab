@@ -1,4 +1,4 @@
-# 14-way IDC ribbon between robocar-unified's head board (the XIAO ESP32-S3)
+# 14-way IDC ribbon between robocar's head board (the XIAO ESP32-S3)
 # and its main board. One entry serves both ends ([[cables]], ADR-021): [pins]
 # is keyed by the XIAO's pad names, so the connectors cannot disagree. It serves
 # every head end too: the main end J1 and each head variant's header.
@@ -32,7 +32,7 @@
 # firmware change. Pin 9 is unconnected at both ends.
 [part]
 name = "IDC 2x7 cable, XIAO ESP32-S3 head to main board"
-source = "KiCad 10.0.6 library PinHeader_2x07_P2.00mm_Vertical (odd pins in one row, even in the other, pad 1 square) for a 2.0 mm 2x7 IDC plug on 1.0 mm-pitch ribbon; pin order: this repo's reversal-safe cable convention (Lauri, 2026-10-16; #750): pin n and pin 15 - n carry the same supply, or two XIAO outputs, or SDA and SCL, or TX and NC; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
+source = "KiCad 10.0.6 library PinHeader_2x07_P2.00mm_Vertical (odd pins in one row, even in the other, pad 1 square) for a 2.0 mm 2x7 IDC plug on 1.0 mm-pitch ribbon; pin order: this repo's reversal-safe cable convention (Lauri, 2026-10-16; #750): pin n and pin 15 - n carry the same supply, or two XIAO outputs, or SDA and SCL, or TX and NC; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robotics/robocar/main/pin_config.h"
 symbol = "Connector_Generic:Conn_02x07_Odd_Even"
 footprint = "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical"
 value = "IDC 2x7 head cable"

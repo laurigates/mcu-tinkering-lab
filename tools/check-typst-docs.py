@@ -13,7 +13,7 @@ generated binding. A literal cannot go stale by construction: the PDF recompiles
 identically and the guard reports "up to date" while the page prints a channel
 number the firmware stopped using.
 
-Observed 2026-09 (robocar-unified): the build guide's PCA9685 channel-map table
+Observed 2026-09 (robocar): the build guide's PCA9685 channel-map table
 listed `([8], [Motor R — IN1 (dir)])` through `([13], …)` as literals. When the
 motor channels were renumbered to follow the TB6612FNG's pin order, the table
 kept printing the old assignment and the guard stayed green — in the one

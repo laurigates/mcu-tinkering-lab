@@ -4,7 +4,7 @@
 **Source**: Conversation 2026-04-17, user observation that on-demand inference is a vestige of non-streaming Claude API era
 **Priority**: P2
 **Confidence**: 7/10
-**Project**: `packages/robocar/unified`
+**Project**: `packages/robotics/robocar`
 
 ---
 
@@ -70,7 +70,7 @@ Google's [robotics-overview](https://ai.google.dev/gemini-api/docs/robotics-over
 
 - IMU, depth, LiDAR. Reactive layer uses the camera (last bounding box via planner) + a single ultrasonic rangefinder + motor state.
 - Real VLA (vision-language-action) motor model. The executor is a hand-written PD/servo controller, not a learned policy.
-- Multi-backend support. **Claude and Ollama backends are removed from robocar-unified in this PRP** — YAGNI. Gemini Robotics-ER is the only planner. If a self-hosted option is needed later, re-introduce behind a clean abstraction at that point; don't keep dead code now.
+- Multi-backend support. **Claude and Ollama backends are removed from robocar in this PRP** — YAGNI. Gemini Robotics-ER is the only planner. If a self-hosted option is needed later, re-introduce behind a clean abstraction at that point; don't keep dead code now.
 
 ## Hardware addition: ultrasonic rangefinder
 
@@ -97,8 +97,8 @@ Six roles. Files listed are each agent's exclusive write scope to avoid collisio
 | B | **Goal state module** | refactor | `main/goal_state.c/.h` (new) | – |
 | C | **Reactive executor + ultrasonic** | refactor | `main/reactive_controller.c/.h`, `main/ultrasonic.c/.h` (new), additions to `main/pin_config.h` | B |
 | D | **Planner task + backend cleanup** | refactor | `main/planner_task.c/.h` (new, replaces `ai_backend.c/.h`); deletes `claude_api.c/.h`, `claude_backend.h`, `ollama_backend.c`, `ollama_discovery.c`, `ai_response_parser.c/.h`; drops Kconfig `CONFIG_AI_BACKEND_CLAUDE`/`OLLAMA`; serialized `main.c` wiring | A, B, C |
-| E | **Host tests + simulation hook** | test | `packages/robocar/simulation/**`, new `packages/robocar/unified/test/**` | B, C, D |
-| F | **Docs** | docs | `docs/decisions/ADR-016-hierarchical-ai-controller.md`, `packages/robocar/unified/CLAUDE.md`, `WIRING.md`, README touchpoints | all others |
+| E | **Host tests + simulation hook** | test | `packages/robotics/robocar/simulation/**`, new `packages/robotics/robocar/test/**` | B, C, D |
+| F | **Docs** | docs | `docs/decisions/ADR-016-hierarchical-ai-controller.md`, `packages/robotics/robocar/CLAUDE.md`, `WIRING.md`, README touchpoints | all others |
 
 ### Orchestration
 
@@ -127,7 +127,7 @@ Each gate must pass before the next phase merges.
 | G4 | On hardware, robot executes a simple task (track a cup) smoothly, no stop-go | Manual bench test + video, measure control-loop rate via serial log |
 | G5 | Failsafe: planner offline → executor halts within 2× ttl_ms | Disconnect WiFi mid-run, confirm `stop()` latched |
 | G6 | Ultrasonic reflex: obstacle at <STOP_THRESHOLD overrides active goal | Bench: wave hand at sensor during a `drive` goal, confirm immediate stop in serial log |
-| G7 | CI build green after Claude/Ollama removal | `just robocar-unified::build`; no references to `claude_*` / `ollama_*` remain |
+| G7 | CI build green after Claude/Ollama removal | `just robocar::build`; no references to `claude_*` / `ollama_*` remain |
 
 ## Risks / open questions
 
@@ -138,8 +138,8 @@ Each gate must pass before the next phase merges.
 
 ## Acceptance criteria
 
-- [ ] ADR-016 merged, describing the hierarchical pattern, the Claude/Ollama removal, and the ultrasonic reflex layer. Supersedes ADR-003 for robocar-unified specifically.
-- [ ] `claude_*` and `ollama_*` sources deleted; `CONFIG_AI_BACKEND_*` Kconfig removed; no references remain in `robocar-unified`.
+- [ ] ADR-016 merged, describing the hierarchical pattern, the Claude/Ollama removal, and the ultrasonic reflex layer. Supersedes ADR-003 for robocar specifically.
+- [ ] `claude_*` and `ollama_*` sources deleted; `CONFIG_AI_BACKEND_*` Kconfig removed; no references remain in `robocar`.
 - [ ] Ultrasonic wired (GPIO3 TRIG / GPIO4 ECHO), driver reads distances reliably, pin map documented in `WIRING.md`.
 - [ ] Robot completes "track cup" and "drive to wall and stop" tasks smoothly; ultrasonic reflex demonstrably overrides goal on obstacle.
 - [ ] Reactive loop telemetry shows ≥25 Hz sustained; planner p50 latency ≤1500 ms on Gemini ER 1.6 with `thinking_budget=0`.

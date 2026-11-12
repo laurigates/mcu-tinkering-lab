@@ -298,18 +298,17 @@ def test_all_real_circuits_route_orthogonally_without_crossing_components(
     assert checked > 0, "no circuits were found to check"
 
 
-def test_robocar_unified_wire_stays_out_of_component_bodies(real_circuit):
+def test_robocar_wire_stays_out_of_component_bodies(real_circuit):
     # The whole-drawing figure behind #490: with every terminal box dropped
-    # for the entire search, robocar_unified carried ~26 units of wire
+    # for the entire search, robocar carried ~26 units of wire
     # inside component bodies — nets entering their own chip on one side
     # and leaving on the other. Once only a stub may cross a body the
     # figure is 0.00 here; the issue's own target was ~3 units, the length
     # a few stub leads through boxes overlapping their pins would add. The
     # bound admits that legitimate case, not a tunnel coming back.
-    m = real_circuit("robocar_unified").metrics
+    m = real_circuit("robocar").metrics
     assert m.inside_any < 3.5, (
-        f"robocar_unified routes {m.inside_any:.2f} units of wire inside "
-        "component bodies"
+        f"robocar routes {m.inside_any:.2f} units of wire inside component bodies"
     )
 
 
@@ -339,7 +338,7 @@ def test_overlap_penalty_is_load_bearing(monkeypatch):
     # than at 60.
     #
     # Which drawing has parallel neighbours moves with circuit edits (#463):
-    # it was balancebot until #738 redrew it with none, after robocar_unified
+    # it was balancebot until #738 redrew it with none, after robocar
     # lost its own to #495. So every real circuit is checked, and only one
     # that still has a tight pair at the default has to respond; a circuit
     # with none has nothing for the penalty to push. When no circuit has one,
@@ -702,13 +701,13 @@ def test_every_real_crossing_carries_a_hop(real_circuits):
         assert len(hops) == crossings(drawing_wires(d)), name
 
 
-def test_robocar_unified_renders_byte_identically_twice(real_circuit):
+def test_robocar_renders_byte_identically_twice(real_circuit):
     # Two independent routes: the session's shared render (its SVG as first
     # drawn) and a fresh load-and-route here.
     from render import circuit_files, draw_circuit, load_circuit
 
-    (path,) = circuit_files(["robocar_unified"])
-    first = real_circuit("robocar_unified").svg
+    (path,) = circuit_files(["robocar"])
+    first = real_circuit("robocar").svg
     second = draw_circuit(load_circuit(path)).get_imagedata("svg")
     assert first == second
     assert b" C " in first, "no hop was drawn in the densest circuit"
@@ -783,7 +782,7 @@ def test_no_dot_where_a_routed_wire_runs_through_a_power_or_ground_tag():
     # A lead ending in a Ground/Vdd tag ends *on the tag*, not free. A routed
     # wire passing through that point (tags are not obstacles) would
     # otherwise read as a T and be dotted — drawing a connection to ground
-    # that does not exist. robocar_unified's STBY net ran through the
+    # that does not exist. robocar's STBY net ran through the
     # TCA9548A's GND tag and got exactly that dot.
     # The tag cost (#591) is switched off so the wire still runs through the
     # tag: this pins the dot rule for the case the cost only discourages.
@@ -916,7 +915,7 @@ def test_a_wire_to_the_tags_own_pin_is_not_charged_for_its_label():
 
 
 def test_no_real_wire_runs_through_a_label(real_circuits):
-    # #641: robocar_unified's SC1 -> OLED SDA net ran down through the OLED's
+    # #641: robocar's SC1 -> OLED SDA net ran down through the OLED's
     # +3V3 label, balancebot's two MPU6050 nets through both +3V3 labels and
     # the pull-up's "10 kΩ", and gamepad_synth's two piezo nets left their
     # pins straight through the chip's own name.
@@ -927,7 +926,7 @@ def test_no_real_wire_runs_through_a_label(real_circuits):
 
 
 def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
-    # #591: robocar_unified's STBY net ran down through the TCA9548A GND tag
+    # #591: robocar's STBY net ran down through the TCA9548A GND tag
     # (0.64 units, the tag's full height) and balancebot's GPIO0 net across
     # the right DRV8825's (0.50). Correctly undotted, but both read as a
     # connection to ground at a glance.
@@ -1268,7 +1267,7 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
         "import sys, contextlib, json; sys.path.insert(0, '.');"
         "from render import circuit_files, load_circuit;"
         "f = contextlib.redirect_stdout(sys.stderr); f.__enter__();"
-        "d = load_circuit(circuit_files(['robocar_unified'])[0]).draw();"
+        "d = load_circuit(circuit_files(['robocar'])[0]).draw();"
         "f.__exit__(None, None, None);"
         "import hashlib;"
         "svg = hashlib.sha256(d.get_imagedata('svg')).hexdigest();"
@@ -1296,7 +1295,7 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
         assert run.returncode == 0, stderr
         outputs.append(stdout)
     assert outputs[0] == outputs[1]
-    assert '"authored"' not in outputs[0], "robocar_unified no longer reorders"
+    assert '"authored"' not in outputs[0], "robocar no longer reorders"
 
 
 def test_ordering_score_sees_a_tight_pair_against_a_lead(monkeypatch):
@@ -1379,12 +1378,12 @@ def test_ordering_score_sees_a_crossing_against_a_lead(monkeypatch):
     assert router.ordering == "reversed"
 
 
-def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
+def test_robocar_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # The #494 baseline, measured by metrics.py with ordering search off
-    # (ORDERINGS cut to "authored"): robocar_unified 0 tight parallel pairs,
+    # (ORDERINGS cut to "authored"): robocar 0 tight parallel pairs,
     # 15 crossings, 298.83 units of wire. The chosen ordering must not lose
     # to it on tight pairs, overlaps, crossings or length.
-    # These numbers are a property of robocar_unified.py as it stood, not of
+    # These numbers are a property of robocar.py as it stood, not of
     # the router: an edit to that circuit can trip or loosen this pin, so
     # re-measure the baseline whenever the circuit changes (#463). Last
     # re-measured for #495, which draws the XIAO, TCA9548A, PCA9685,
@@ -1396,7 +1395,7 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # mux ch3/ch4 and the mux's RST) and drops two (the GPIO-mode TRIG/ECHO):
     # authored order 355.64 units, 13 crossings, 0 tight pairs; the chosen
     # ordering crosses 9 times at the same length.
-    m = real_circuit("robocar_unified").metrics
+    m = real_circuit("robocar").metrics
     assert m.tight_parallel == 0, f"{m.tight_parallel} tight pairs (baseline 0)"
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
@@ -1664,7 +1663,7 @@ def test_nudge_moves_only_wires_it_has_a_plan_for():
 
 
 def test_nudge_removes_a_corner_on_corner_kiss_without_a_new_crossing():
-    # robocar_unified's mux -> PCA9685 SDA/SCL pair at main: the two nets swap
+    # robocar's mux -> PCA9685 SDA/SCL pair at main: the two nets swap
     # rows, cross once at x = 3.5, and SDA then turns exactly where SCL does.
     from metrics import collinear_overlaps, crossings, shared_vertices
 
@@ -1711,7 +1710,7 @@ def test_nudge_never_buys_a_clear_run_with_a_crossing():
 
 
 def _swapped_pin_pair():
-    # Two chips whose facing pins swap rows, as robocar_unified's mux ->
+    # Two chips whose facing pins swap rows, as robocar's mux ->
     # PCA9685 SDA/SCL do: each net must cross the other, and the first one
     # routed runs straight along the row the other's stub ends on.
     d = schemdraw.Drawing(show=False)
@@ -1768,7 +1767,7 @@ def test_nudge_opens_a_collinear_gap_to_two_rows():
 
 
 def test_no_real_circuit_draws_two_nets_as_one_broken_line(real_circuits):
-    # #494: removing robocar_unified's SDA/SCL kiss left SDA's run 0.25 short
+    # #494: removing robocar's SDA/SCL kiss left SDA's run 0.25 short
     # of SCL's on one row, and balancebot had two such gaps at main (0.25 and
     # 0.07 between GPIO pin leads).
     for c in real_circuits:
@@ -1778,7 +1777,7 @@ def test_no_real_circuit_draws_two_nets_as_one_broken_line(real_circuits):
 
 
 def test_no_real_circuit_draws_a_corner_on_another_wire(real_circuits):
-    # #494: at main, robocar_unified's mux -> PCA9685 SDA turned down at
+    # #494: at main, robocar's mux -> PCA9685 SDA turned down at
     # (-13.75, -10.0), the very point where SCL turned in to its pin: an
     # undotted, unhopped "+" that reads as a junction of the two lines.
     for c in real_circuits:
@@ -1787,7 +1786,7 @@ def test_no_real_circuit_draws_a_corner_on_another_wire(real_circuits):
         )
 
 
-def test_robocar_unified_near_parallel_length_drops_below_baseline(real_circuit):
+def test_robocar_near_parallel_length_drops_below_baseline(real_circuit):
     # #494 baseline at main 6626863, before the nudge pass: 21.261167 units of
     # wire two lattice rows from another net's, five pairs (the XIAO -> mux
     # I2C pair, both mux -> PCA9685 and mux -> OLED pairs, a motor lead and
@@ -1798,7 +1797,7 @@ def test_robocar_unified_near_parallel_length_drops_below_baseline(real_circuit)
     # runs down the same corridor as the XIAO -> mux I2C pair, and the pair
     # can no longer separate without going tight against it, so 5.5 units of
     # that pair are back two rows apart (6.205667 in all).
-    m = real_circuit("robocar_unified").metrics
+    m = real_circuit("robocar").metrics
     assert m.near_parallel <= 6.205667 + 1e-6, f"{m.near_parallel} (baseline 21.26)"
 
 

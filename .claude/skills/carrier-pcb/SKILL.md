@@ -28,16 +28,16 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   `board.toml` holds placement, silkscreen, net classes and the pour, VBAT as
   fixed `[[tracks]]` with no via, `[fanout]` and `[pour] stitch` vias, and a
   `.kicad_dru` rule that keeps the pour off the mounting holes
-- `packages/robocar/unified/hardware/carrier/`: a main board and three head
+- `packages/robotics/robocar/hardware/carrier/`: a main board and three head
   boards on one PCB, split by `[[keepouts]]` bands under `[silk] cut_lines` saw
   lines, with a `[pour]` region per ground net (`GND`, `HEAD_GND`,
   `HEAD2_GND`, `HEAD3_GND`). The spare heads come from `[[cables]]
   spare_heads` (ADR-021). Two head IDC headers sit on the back face
   (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
   pads run the other way: at rotation 90 they run toward -x)
-- `packages/robocar/unified-integrated/hardware/carrier/`: the same carrier with
+- `packages/robotics/robocar/integrated/hardware/carrier/`: the same carrier with
   the breakout chips and a buck converter on the board, for comparison.
-  `just robocar-unified-integrated::compare` runs `kicad.area`, the
+  `just robocar-integrated::compare` runs `kicad.area`, the
   courtyard-area comparison against the socketed carrier. A carrier with no
   board yet takes `stage = "schematic"` in `board.toml`: boardcheck, the stamp
   and the local DRC skip it. It also shows the layout features the router
@@ -241,7 +241,7 @@ down):
     socket's pins are all `passive`, and implied no-connects cover GPIO pads
     only, so `netlist` requires every power pad to be on a rail.
 
-### Found laying out the robocar-unified carrier (#750)
+### Found laying out the socketed robocar carrier (#750)
 
 20. **A module socket can accept the module upside down.** Asymmetric column
     spacing rules out a rotated or left-right-mirrored module, but a top-bottom

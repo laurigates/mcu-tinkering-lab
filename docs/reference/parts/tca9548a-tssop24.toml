@@ -1,5 +1,5 @@
 # TCA9548A I2C switch as a bare chip, TSSOP-24: the integrated carrier's mux
-# (packages/robocar/unified-integrated). The socketed carrier's
+# (packages/robotics/robocar/integrated). The socketed carrier's
 # adafruit-tca9548a-socket names its pins by the breakout's silkscreen; this
 # entry keeps those names (VIN, RST) so the two hardware.toml files read alike.
 [part]

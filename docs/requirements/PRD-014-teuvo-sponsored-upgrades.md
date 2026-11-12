@@ -42,7 +42,7 @@ None of the pieces exist today:
 - **Nothing turns a request into a PR.** `claude.yml` ignores bot senders and
   needs an `@claude` mention (`claude.yml:13-22`). It runs on `ubuntu-slim`,
   where single-CPU jobs are killed at 15 minutes.
-- **There is no payment rail and no link channel.** `robocar-unified` has no
+- **There is no payment rail and no link channel.** `robocar` has no
   OLED code; `robocar/bringup/main/oled.c` drives the same 128x32 panel, as
   text only (#780 tracks its geometry). With the ISO quiet zone the panel fits
   only a version-1 QR code (21 modules), about 17 bytes, far short of a PR or
@@ -506,8 +506,8 @@ free on a public repo.
 ### FR-029: Upgrade-plan template
 
 Each plan is a directory `packages/robocar/upgrades/<code>-<slug>/`, outside
-the release-please package `packages/robocar/unified`. A plan merged there
-would add an entry to the pending robocar-unified release PR, and so to the
+the release-please package `packages/robotics/robocar`. A plan merged there
+would add an entry to the pending robocar release PR, and so to the
 next firmware release.
 
 - **`README.md`** has:
@@ -573,7 +573,7 @@ next firmware release.
   - **Limits on a variant.** It may use only parts already in
     `docs/reference/parts/`, symbols already vendored in `tools/kicad/lib`, and
     existing pin roles. A plan that needs a new part, symbol or pin role would
-    need edits outside its directory, such as to `unified/main/pin_config.h`,
+    need edits outside its directory, such as to `packages/robotics/robocar/main/pin_config.h`,
     which the run may not make. Such a plan stays docs-only.
 
 A `README.md` at the upgrades root holds the template.
@@ -604,7 +604,7 @@ A `README.md` at the upgrades root holds the template.
 - **The PR link** sits on the per-order page. The PR itself is public; the
   invoice is not.
 - **The OLED.** An OLED QR code is optional and later. It needs bringup's
-  SSD1306 driver ported to `robocar-unified` with a pixel API, and a phone scan
+  SSD1306 driver ported to `robocar` with a pixel API, and a phone scan
   test of a version-1 code at about 0.175 mm per pixel, drawn lit-on-dark.
 
 ### FR-031: Lead-time calibration

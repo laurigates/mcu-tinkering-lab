@@ -16,7 +16,7 @@ otherwise with the recipes below; not the web UI.
 
 Design and caveats: [ADR-033](../../../docs/decisions/ADR-033-robocar-error-reporting.md).
 Stack, recipes, configuration: [`tools/glitchtip/README.md`](../../../tools/glitchtip/README.md).
-What the firmware sends and when: [`packages/robocar/unified/docs/firmware/error-reporting.md`](../../../packages/robocar/unified/docs/firmware/error-reporting.md).
+What the firmware sends and when: [`packages/robotics/robocar/docs/firmware/error-reporting.md`](../../../packages/robotics/robocar/docs/firmware/error-reporting.md).
 
 ## 1. Is the stack up and receiving?
 
@@ -32,7 +32,7 @@ profile. Only one of the two: they share an MQTT client id and evict each other.
 To prove the whole path, send a synthetic event from the robot and look for it:
 
 ```sh
-just robocar-unified::cmd "report test"   # needs MQTT full-access credentials
+just robocar::cmd "report test"   # needs MQTT full-access credentials
 just glitchtip::issues robocar "report test"
 ```
 
@@ -77,7 +77,8 @@ Add `--json` for the raw API response. The query is GlitchTip search syntax
 | Crash (core dump) | `robocar` | Exception type is the Xtensa cause (`LoadProhibited`) or the panic's phrase (`abort() was called`); frames innermost first; `crash_task`; tag `symbolicated=true/false`; `backtrace=corrupted` means the walk stopped early, so trust the top frames only |
 | Planner note | `robocar-ai` | The message is the model's own prose. Tags `trigger` (`reflex`, `blind`, `track_stuck`, `repeats`, `reflect`) and `kind` (`difficulty`, `behaviour`, `suggestion`); `[goal]` breadcrumbs are the last five goals; extras `reflex_trips`, `scene_score`, `still_score`, `plan_requests` |
 
-`release` (`robocar-unified@<version>`) and `build_sha` name the exact build.
+`release` (`robocar@<version>`; `robocar-unified@<version>` from firmware up
+to 0.2.23) and `build_sha` name the exact build.
 Events for the same issue across releases show whether a fix took.
 
 ## 4. Unsymbolicated frames
@@ -86,9 +87,12 @@ Events for the same issue across releases show whether a fix took.
 
 - **Local build:** `just glitchtip::keep-elf` right after building the
   firmware you flash. It files the ELF under the SHA embedded in it.
-- **Released build:** the bridge fetches `robocar-unified.elf` from the
-  `robocar-unified-v<version>` release and keeps it only if its embedded SHA
+- **Released build:** the bridge fetches `robocar.elf` from the
+  `robocar-v<version>` release and keeps it only if its embedded SHA
   matches. A `-dirty` build is never fetched; keep its ELF yourself.
+- **Released build 0.2.18 to 0.2.23:** the bridge does not fetch these. Their
+  ELF is `robocar-unified.elf` on the `robocar-unified-v<version>` release;
+  download it and file it with `just glitchtip::keep-elf <path>`.
 
 New events symbolicate once the ELF exists; old ones stay as they were.
 
@@ -99,7 +103,7 @@ New events symbolicate once the ELF exists; old ones stay as they were.
 2. Check out the build the event names (`git show <build_sha>`) when HEAD has
    moved; line numbers belong to that build.
 3. Reproduce off the robot where the code allows: host suites
-   (`just robocar-unified::test`) for `*_core.c` logic, the behaviour twin
+   (`just robocar::test`) for `*_core.c` logic, the behaviour twin
    (`just robocar-twin::test`) for planner decisions.
 4. After the fix ships, the issue should stop collecting events for the new
    release. Hardware behaviour needs the bench; say so instead of claiming it.

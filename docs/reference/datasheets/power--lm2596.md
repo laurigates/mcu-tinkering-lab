@@ -1,7 +1,7 @@
 # LM2596 — DC-DC Step-Down (Buck) Converter
 
 **Manufacturer:** Texas Instruments (SIMPLE SWITCHER® family)
-**Used in:** robocar-unified power system (2×18650 in series, 7.4 V → 5 V for the
+**Used in:** robocar power system (2×18650 in series, 7.4 V → 5 V for the
 XIAO, TB6612FNG, PCA9685/servos and MAX98357A)
 
 ## Key Specs

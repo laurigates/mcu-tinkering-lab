@@ -268,7 +268,7 @@ class CliTests(unittest.TestCase):
     def test_stale_hint_names_the_just_module(self):
         # The hint's module comes from the root justfile, not the directory (#766).
         (self.root / "justfile").write_text(
-            "mod robocar-unified 'packages/robotics/balancebot'\n"
+            "mod robocar 'packages/robotics/balancebot'\n"
         )
         self.edit(
             self.kicad_dir / "balancebot-carrier.kicad_sch",
@@ -277,7 +277,7 @@ class CliTests(unittest.TestCase):
         )
         code, out = self.run_main("--check")
         self.assertEqual(code, 1)
-        self.assertIn("run `just robocar-unified::carrier-schematic`", out)
+        self.assertIn("run `just robocar::carrier-schematic`", out)
 
     def test_edited_lib_table_is_stale(self):
         self.edit(

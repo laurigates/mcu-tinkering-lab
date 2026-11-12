@@ -4,7 +4,7 @@ paths:
   - '**/*controller*.{c,h}'
   - '**/pin_config.h'
   - '**/*pca9685*'
-  - 'packages/robocar/unified/test/**'
+  - 'packages/robotics/robocar/test/**'
 ---
 # A Value Array Written to a Run of Named Channels Must Be Indexed by Name
 

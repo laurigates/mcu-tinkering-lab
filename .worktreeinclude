@@ -5,7 +5,7 @@
 # Firmware credentials. Without them an ESP-IDF build in a fresh worktree
 # gets the empty credentials.h placeholder its CMakeLists.txt generates and
 # boots with no WiFi and no API keys, with nothing failing at build time.
-# Present today: packages/robocar/unified/main/credentials.h,
+# Present today: packages/robotics/robocar/main/credentials.h,
 # packages/camera-vision/cam-webserver/main/credentials.h.
 **/credentials.h
 

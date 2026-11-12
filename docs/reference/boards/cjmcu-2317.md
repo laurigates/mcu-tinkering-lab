@@ -1,8 +1,8 @@
 # CJMCU-2317 MCP23017 Breakout
 
-Breakout for the MCP23017 16-bit I2C I/O expander. robocar-unified uses it as
+Breakout for the MCP23017 16-bit I2C I/O expander. robocar uses it as
 optional GPIO expansion on TCA9548A channel 2 (`I2C_BUS_CHANNEL_MCP23017`,
-`MCP23017_ADDR` in `packages/robocar/unified/main/pin_config.h`). For the
+`MCP23017_ADDR` in `packages/robotics/robocar/main/pin_config.h`). For the
 silicon see [`io--mcp23017.md`](../datasheets/io--mcp23017.md).
 
 | | |
@@ -93,7 +93,7 @@ takes its pad positions from `tools/kicad/lib/breakout-sockets/sockets.toml`
 | SDA | R | 7 | single | `SDA/SI` | I2C data |
 | SCL | R | 8 | single | `SCL/SCK` | I2C clock |
 | GND | R | 9 | single | `GND` | |
-| VCC | R | 10 | single | `VCC` | 1.8–5.5 V. robocar-unified feeds it 3.3 V |
+| VCC | R | 10 | single | `VCC` | 1.8–5.5 V. robocar feeds it 3.3 V |
 
 ### Pitch and outline
 
@@ -144,7 +144,7 @@ a carrier is ordered:
 2. **Inner vs outer.** Done: verified by Lauri, 2026-10-16 (first-named
    signal on the inner hole).
 3. **Address pins.** Measure each of A0, A1 and A2 to VCC and to GND. The
-   robocar-unified carrier ties all three straight to GND, which sets 0x20
+   robocar carrier ties all three straight to GND, which sets 0x20
    whatever the module does; a 10 kΩ pull-up on the module would then draw
    0.33 mA per pin and nothing else. On a harness the bias decides the
    address: about 10 kΩ to VCC means 0x27, floating means the harness must tie

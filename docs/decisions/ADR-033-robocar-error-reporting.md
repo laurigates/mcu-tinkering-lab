@@ -30,7 +30,7 @@ members can start it without any particular cluster.
 Facts the design rests on:
 
 - MQTT is in daily use: the broker is `MQTT_BROKER_URI`
-  (`packages/robocar/unified/main/config.h`), topics are `robocar/*`, and
+  (`packages/robotics/robocar/main/config.h`), topics are `robocar/*`, and
   `mqtt_logger_publish()` already publishes from the robot.
 - `reset_reason_name()` exists in `main.c`.
 - The planner's side-channel tools (`speak`, `sound`) follow one
@@ -52,7 +52,7 @@ address, so moving GlitchTip to another host only changes the bridge's DSNs.
 
 ```json
 {"event_id": "<32 lowercase hex>", "timestamp": 0, "level": "error",
- "source": "firmware", "release": "robocar-unified@<version>",
+ "source": "firmware", "release": "robocar@<version>",
  "message": "reset: BROWNOUT", "fingerprint": ["reset", "BROWNOUT"],
  "tags": {"reset_reason": "BROWNOUT", "build_sha": "<ROBOCAR_BUILD_SHA>"},
  "extra": {"uptime_ms": 4210},
@@ -97,7 +97,7 @@ address, so moving GlitchTip to another host only changes the bridge's DSNs.
    partition is added at `0x7E0000`; the OTA slot offsets stay. At boot,
    `esp_core_dump_get_summary()` becomes an exception event, and the dump is
    erased only after the QoS 1 publish is acknowledged. `build-firmware.yml`
-   attaches `robocar-unified.elf` to each release, and the bridge fetches it
+   attaches `robocar.elf` to each release, and the bridge fetches it
    by version when `elf/<sha>.elf` is missing locally (not in PR 1).
 4. **Planner notes**. A side-channel tool `note(kind, text)` with `kind` one
    of `difficulty`, `behaviour`, `suggestion` and at most 280 characters,

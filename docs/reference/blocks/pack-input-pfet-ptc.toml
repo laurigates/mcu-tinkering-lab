@@ -1,5 +1,5 @@
 # Pack input protection for a 2S pack: a reverse-polarity P-MOSFET, then a
-# resettable fuse. First used on robocar-unified-integrated (Q1, R27, F1).
+# resettable fuse. First used on robocar-integrated (Q1, R27, F1).
 #
 # IN (the pack's +) -> fet drain; fet source -> fuse; fuse -> OUT. The P-MOSFET
 # is a high-side switch with its gate to GND through `gate`. Plugged in the
@@ -37,7 +37,7 @@
 
 [block]
 name = "2S pack input: reverse-polarity P-MOSFET and PTC fuse"
-source = "Diodes DS40141 Rev. 5-2 (DMP3013SFV); BHFUSE BSMD1812 datasheet; robocar-unified-integrated sixth pre-fab layout review, N9"
+source = "Diodes DS40141 Rev. 5-2 (DMP3013SFV); BHFUSE BSMD1812 datasheet; robocar-integrated sixth pre-fab layout review, N9"
 
 [ports]
 IN = ["fet.D"]

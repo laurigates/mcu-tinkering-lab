@@ -9,7 +9,7 @@
 
 ## Context
 
-`robocar-unified` had no audio output beyond a piezo buzzer on GPIO2. Adding a
+`robocar` had no audio output beyond a piezo buzzer on GPIO2. Adding a
 MAX98357A I2S class-D amplifier gives the robot a voice, letting the planner
 narrate what it sees rather than only acting on it.
 

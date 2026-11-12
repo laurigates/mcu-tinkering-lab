@@ -51,10 +51,10 @@ robocar-simulation (WebSocket :8765)
 - [ ] Simulation responds to motor commands forwarded from real ESP32 via UART
 - [ ] Pytest suite validates 5+ key command sequences
 - [ ] Tests detect regressions in motor control logic
-- [ ] Setup documented in `packages/robocar/simulation/README.md`
+- [ ] Setup documented in `packages/robotics/robocar/simulation/README.md`
 
 ## Related
 
 - PRD-003: Robot Car Physics Simulation
 - Feature FR-007: Hardware-in-the-loop testing
-- `packages/robocar/simulation/`
+- `packages/robotics/robocar/simulation/`

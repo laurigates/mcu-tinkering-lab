@@ -12,9 +12,9 @@ on:
       - 'packages/audio/**'
       - 'packages/input-gaming/**'
       - 'packages/networking/wireguard-ha/**'
-      - 'packages/robocar/simulation/**'
-      - 'packages/robocar/unified/main/motor_controller.*'
-      - 'packages/robotics/**'
+      - 'packages/robotics/robocar/simulation/**'
+      - 'packages/robotics/robocar/main/motor_controller.*'
+      - 'packages/robotics/balancebot/**'
       - 'CLAUDE.md'
       - '.claude/rules/**'
 
@@ -58,7 +58,7 @@ jobs:
                 HITS["e91ebe8d — USB gadget & HID on ESP32-S3"]=1 ;;&
               docs/decisions/ADR-009-*|docs/requirements/PRD-008-*|packages/audio/gamepad-synth/*|packages/input-gaming/*)
                 HITS["f696b00a — Bluepad32 & BLE HID input"]=1 ;;
-              packages/robocar/*/main/motor_controller.*)
+              packages/robotics/robocar/main/motor_controller.*)
                 HITS["197ef318 — Motor drivers & power electronics"]=1 ;;
               docs/requirements/PRD-007-*|packages/audio/audiobook-player/*|packages/networking/wireguard-ha/*)
                 HITS["2cb7153a — ESPHome platform & components"]=1 ;;
@@ -75,7 +75,7 @@ jobs:
                 HITS["4831062f — ChameleonUltra RFID/NFC"]=1 ;;
               docs/reference/boards/ttgo-lora32-v2.md)
                 HITS["d2d63711 — ESP32 classic boards (CAM, Heltec, TTGO)"]=1 ;;
-              docs/requirements/PRD-003-*|packages/robocar/simulation/*)
+              docs/requirements/PRD-003-*|packages/robotics/robocar/simulation/*)
                 HITS["28c00388 — Python simulation & robotics math"]=1 ;;
               CLAUDE.md|.claude/rules/*)
                 HITS["ae5b0f8b — Claude Code workflow & plugins"]=1 ;;

@@ -318,11 +318,11 @@ class JustModuleTests(unittest.TestCase):
 
     def test_module_name_differs_from_directory(self):
         self.justfile(
-            "mod robocar 'packages/robocar/docs'\n"
-            "mod robocar-unified 'packages/robocar/unified'\n"
+            "mod integrated 'packages/robotics/robocar/docs'\n"
+            "mod robocar-integrated 'packages/robotics/robocar/integrated'\n"
         )
-        project = self.root / "packages/robocar/unified"
-        self.assertEqual(paths.just_module(project, self.root), "robocar-unified")
+        project = self.root / "packages/robotics/robocar/integrated"
+        self.assertEqual(paths.just_module(project, self.root), "robocar-integrated")
 
     def test_mod_forms(self):
         self.justfile(
@@ -361,8 +361,8 @@ class JustModuleTests(unittest.TestCase):
 
     def test_repo_justfile(self):
         self.assertEqual(
-            paths.just_module(paths.REPO_ROOT / "packages/robocar/unified"),
-            "robocar-unified",
+            paths.just_module(paths.REPO_ROOT / "packages/robotics/robocar"),
+            "robocar",
         )
         self.assertEqual(
             paths.just_module(paths.REPO_ROOT / "packages/robotics/balancebot"),

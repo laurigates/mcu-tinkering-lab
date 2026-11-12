@@ -29,7 +29,7 @@ git clone https://github.com/laurigates/mcu-tinkering-lab.git
 cd mcu-tinkering-lab
 just setup-all                   # Docker images, dev tools, pre-commit hooks
 just list-projects               # every project module
-just robocar-unified::build      # build one
+just robocar::build              # build one
 ```
 
 Build, test and CI details are in [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -38,14 +38,13 @@ Build, test and CI details are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Domain | Projects |
 |---|---|
-| [`robocar/`](packages/robocar/unified/README.md) | AI robot car: [single-board firmware](packages/robocar/unified/README.md) (XIAO ESP32-S3 Sense), its [integrated carrier](packages/robocar/unified-integrated/README.md), [bring-up self-test](packages/robocar/bringup/README.md) and a [Pymunk simulation](packages/robocar/simulation/README.md) |
+| `robotics/` | [AI robot car](packages/robotics/robocar/README.md): single-board firmware (XIAO ESP32-S3 Sense), its [integrated carrier](packages/robotics/robocar/integrated/README.md), [bring-up self-test](packages/robotics/robocar/bringup/README.md), a [Pymunk simulation](packages/robotics/robocar/simulation/README.md) and a [behaviour twin](packages/robotics/robocar/twin/README.md). [Self-balancing robot](packages/robotics/balancebot/README.md) (XIAO RP2350, Pico SDK) |
 | `thinkpack/` | ESP-NOW mesh of companion boxes: brainbox (LLM coordinator), boombox, chatterbox, finderbox, glowbug, mesh-demo |
 | `camera-vision/` | MJPEG webserver, camera + I2S audio, LLM Telegram bot, Gemini object detection |
 | `audio/` | BLE gamepad synth, kids' audio toy, melody detector, RFID audiobook player (ESPHome) |
 | `input-gaming/` | Xbox → Switch bridge, Switch USB proxy, LEGO Boost with an Xbox controller |
 | `networking/` | IT troubleshooter, WiFi AP test, WireGuard + Home Assistant (ESPHome) |
 | `sensors/` | 24 GHz mmWave presence sensor (ESPHome) |
-| `robotics/` | Self-balancing robot (XIAO RP2350, Pico SDK) |
 | `usb-tools/` | ESP32-S3 raw USB relay for facedancer |
 | `games/` | NFC scavenger hunt |
 | `components/` | Shared ESP-IDF components: Improv WiFi provisioning, GitHub Releases OTA, ThinkPack libraries |

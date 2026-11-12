@@ -17,7 +17,7 @@ $ARGUMENTS may contain:
 
 ## Available Projects
 
-- `robocar` or `robocar-unified`, `robocar-bringup`
+- `robocar`, `robocar-bringup`
 - `webserver`, `i2s-audio` or `audio`, `telegram`
 - `kids-audio`, `xbox`, `wifitest`
 
@@ -32,7 +32,7 @@ Ports are auto-detected by `tools/esp32.just`:
 
 Based on $ARGUMENTS:
 
-- `robocar`: `just robocar-unified::flash`
+- `robocar`: `just robocar::flash`
 - `robocar-bringup`: `just robocar-bringup::flash`
 - `webserver`: `just webserver::flash`
 - `i2s-audio`: `just i2s-audio::flash`

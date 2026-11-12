@@ -1,0 +1,213 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project]
+name = "esp32-robot-simulation"
+version = "0.1.12" # x-release-please-version
+description = "ESP32 Robot Car Simulation with Genesis Physics Framework"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "ESP32 Robot Team", email = "robot@example.com"}
+]
+maintainers = [
+    {name = "ESP32 Robot Team", email = "robot@example.com"}
+]
+keywords = ["esp32", "robotics", "simulation", "genesis", "physics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: System :: Hardware",
+]
+requires-python = ">=3.12"
+dependencies = [
+    # Core simulation framework with 3D visualization
+    "spatialmath-python==1.1.18",
+    "genesis-world==1.4.5",
+    # Scientific computing
+    "numpy==2.5.4",
+    "scipy==1.18.1",
+    "matplotlib==3.11.2",
+    "pandas==3.1.1",
+    # Computer vision and image processing
+    "opencv-python==5.0.0.93",
+    # genesis-world -> moviepy 2.2.1 (May 2025, the newest release) caps
+    # pillow<12, but the fixes for Pillow's CVEs are in 12.1.1/12.2.0.
+    # The [tool.uv] override-dependencies entry lifts that cap; keep the two
+    # pins equal (tests/test_pillow_override.py checks).
+    "Pillow==13.0.0",
+    # Communication protocols
+    "websockets==17.4",
+    "asyncio-mqtt==0.16.2",
+    "pyserial==3.5",
+    "httpx==0.28.1",  # Required for AI command processor
+    # 3D graphics and visualization
+    "trimesh==5.2.0",
+    # Physics simulation
+    "pymunk==7.3.1",
+    # Configuration and utilities
+    "pyyaml==6.0.3",
+    "toml==0.10.2",
+    "click==8.5.0",
+    # PyTorch (required by Genesis)
+    "torch==2.15.0",
+    "crc8==0.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing framework
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1.post1",
+    "pytest-cov==7.1.0",
+
+    # Code quality
+    "ruff==0.17.4",
+    # Pinned: ty is pre-1.0 and its diagnostic set moves between releases
+    # (e.g. 0.0.79 added the `redundant-condition` rule and 0.0.78 does not
+    # recognise a `# ty: ignore[redundant-condition]` suppression for it).
+    # An unpinned resolve reddened every PR with no commit to explain it
+    # (issue #515). Bump deliberately, verifying `uv run ty check src/`
+    # still passes, rather than dropping the pin.
+    "ty==0.0.98",
+    "types-PyYAML",
+    "types-toml",
+
+    # Documentation
+    "sphinx==9.1.1",
+    "sphinx-rtd-theme==3.1.0",
+]
+gpu = [
+    # GPU-accelerated PyTorch for enhanced Genesis performance
+    "torch[cuda]==2.15.0",
+]
+visualization = [
+    # Additional visualization dependencies (optional)
+    # Note: open3d and pyvista may have compatibility issues with newer Python versions
+]
+
+[project.urls]
+Homepage = "https://github.com/esp32-robot/simulation"
+Documentation = "https://esp32-robot-simulation.readthedocs.io/"
+Repository = "https://github.com/esp32-robot/simulation.git"
+"Bug Tracker" = "https://github.com/esp32-robot/simulation/issues"
+
+[project.scripts]
+esp32-sim = "main:main"
+esp32-robot-sim = "main:main"
+
+[tool.uv]
+# moviepy's master branch already requires only pillow>=9.2.0; drop this once
+# a moviepy release past 2.2.1 lifts the pillow<12 cap. Genesis imports
+# moviepy only to write videos (genesis/utils/tools.py, the pyrender viewer).
+override-dependencies = ["pillow==13.0.0"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["migrations", "tests/fixtures"]
+
+[tool.ruff.lint]
+# Enable pycodestyle errors/warnings, pyflakes, isort, and other useful rules
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by formatter
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["S101", "ARG", "FBT"]
+# E402: module-level import not at top of file — unavoidable in scripts
+# that must manipulate sys.path before importing local modules
+"debug_*.py" = ["E402"]
+"test_*.py" = ["E402"]
+"tests/*.py" = ["E402"]
+"src/main.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["robot_model", "communication_bridge", "genesis_visualizer"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ty]
+# Python type checker by Astral (https://github.com/astral-sh/ty).
+# Successor to mypy; uses sensible strict defaults.
+
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.rules]
+# Silence import-resolution errors for third-party packages without type stubs.
+# Equivalent to mypy's `ignore_missing_imports` for these modules.
+import-not-found = "ignore"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    # spatialmath-python docstrings contain invalid escape sequences; on
+    # Python >=3.12 these raise SyntaxWarning at import, which the "error"
+    # filter above would turn into collection errors. Third-party code.
+    "ignore:invalid escape sequence:SyntaxWarning",
+    # genesis-world decorates its geometry helpers with @torch.jit.script at
+    # import time, which newer torch releases deprecate with a FutureWarning.
+    # Third-party code we do not call directly; only genesis can stop emitting
+    # it. Without this, `import genesis` fails under the "error" filter above.
+    "ignore:`torch.jit.script` is deprecated:FutureWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "hardware: marks tests requiring hardware",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

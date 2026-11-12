@@ -14,7 +14,7 @@ and balancebot's input stage are still to come)
 ## Context
 
 Each carrier's `hardware.toml` spells out its power stages part by part:
-robocar-unified-integrated's TPS563208 buck is thirteen `[parts.*]` tables,
+robocar-integrated's TPS563208 buck is thirteen `[parts.*]` tables,
 four internal rails and three port lists folded into other rails, with about
 fifty lines of datasheet reasoning in comments. The pack-input stage (PTC,
 reverse-polarity P-FET, gate resistor) was designed for that carrier and
@@ -108,7 +108,7 @@ copied parts database.
 - A stage's reasoning sits once, beside its values. A correction to the
   block reaches every carrier on the next regeneration, and the carrier check
   shows which boards it changed.
-- robocar-unified-integrated's `hardware.toml` is 200 lines shorter: it lost the part
+- robocar-integrated's `hardware.toml` is 200 lines shorter: it lost the part
   tables and rails and keeps only the board-specific notes.
 - The netlist, schematic, stamp and board check of a re-expressed project are
   byte-identical: the netlist sorts components by ref and nets by name, so the

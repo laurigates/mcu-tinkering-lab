@@ -13,7 +13,7 @@ The XIAO ESP32-S3 Sense carries an onboard PDM microphone (GPIO42 CLK / GPIO41
 DATA) that this firmware had never used. It costs no header pins and no wiring —
 unusual for this board, where the GPIO budget has been exhausted since ADR-019.
 
-`robocar-unified` already decides on-device whether the planner is even *offered*
+`robocar` already decides on-device whether the planner is even *offered*
 the `speak` tool, because every Gemini request is stateless: the model has no
 previous frame and no record of having spoken, so an instruction like "remark
 only when the scene changes" names a fact it cannot check. Two gates existed:

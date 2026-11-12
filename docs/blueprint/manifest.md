@@ -1,7 +1,7 @@
 # Blueprint Manifest
 
 MCU Tinkering Lab — embedded systems monorepo for ESP32, STM32, and Arduino platforms.
-Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, planning with Gemini Robotics-ER (`packages/robocar/unified`).
+Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, planning with Gemini Robotics-ER (`packages/robotics/robocar`).
 
 ## Documents
 

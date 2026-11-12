@@ -4,9 +4,11 @@
         [--refresh | --offline] [--max-age HOURS] [--json]
 
 With no numbers and no `--project`, it checks every LCSC number in use
-(`used`): each parts-registry entry's `lcsc`, and each `packages/*/*/hardware.toml`
-part's, resolved as kicad.netlist resolves it (the part's own `lcsc`, else
-its registry entry's). `--project` narrows that to one project's
+(`used`): each parts-registry entry's `lcsc`, and each part's in every
+git-tracked `hardware.toml` under `packages/`, at any depth (a subproject such
+as packages/robotics/robocar/integrated counts), resolved as kicad.netlist
+resolves it (the part's own `lcsc`, else its registry entry's). `--project`
+narrows that to one project's
 hardware.toml and the registry entries its parts name. Numbers given on the
 command line are checked as they are.
 
@@ -80,7 +82,7 @@ from typing import Any
 from hardware import HardwareError
 from hardware.blocks import load_sidecar
 
-from . import registry
+from . import paths, registry
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -166,9 +168,10 @@ def used(
     """LCSC number -> where it is used.
 
     With no `projects`: every registry entry with an `lcsc`, and every part of
-    every packages/*/*/hardware.toml. With `projects`: only their
-    hardware.toml parts. A part's LCSC number is its own `lcsc`, else its
-    registry entry's, as kicad.netlist fills the LCSC field.
+    every git-tracked hardware.toml under packages/, at any depth. With
+    `projects`: only their hardware.toml parts. A part's LCSC number is its
+    own `lcsc`, else its registry entry's, as kicad.netlist fills the LCSC
+    field.
     """
     found: dict[str, list[Use]] = {}
     specs: dict[str, registry.PartSpec] = {}
@@ -183,7 +186,10 @@ def used(
             s = spec(slug)
             if s.lcsc:
                 found.setdefault(s.lcsc, []).append(Use(f"parts/{slug}", s.footprint))
-        sidecars = sorted(repo_root.glob("packages/*/*/hardware.toml"))
+        sidecars = [
+            p / "hardware.toml"
+            for p in paths.tracked_projects(repo_root, "hardware.toml")
+        ]
     else:
         sidecars = [p / "hardware.toml" for p in projects]
     for sidecar in sidecars:

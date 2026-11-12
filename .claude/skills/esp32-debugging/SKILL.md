@@ -28,12 +28,12 @@ If the error isn't clear from `$ARGUMENTS`, ask the user to provide:
 2. Which project they're building
 3. Recent code changes
 
-**robocar-unified reports its own resets.** Before asking for a serial
+**robocar reports its own resets.** Before asking for a serial
 capture of a reboot that already happened, look in GlitchTip with the
 `glitchtip-triage` skill: the reset event names the reset reason, the exact
 build (`release`, `build_sha`) and carries the last 32 log lines before the
 reset as breadcrumbs. See
-`packages/robocar/unified/docs/firmware/error-reporting.md`.
+`packages/robotics/robocar/docs/firmware/error-reporting.md`.
 After a panic it also writes a core dump, and the next boot sends the
 exception, task and backtrace as a crash event whose frames GlitchTip shows
 already resolved to source lines; read that before decoding a Guru
@@ -95,7 +95,7 @@ Stack smashing detected
 ```
 Fix: Local buffer overflow — check array bounds and string operations.
 
-That message needs `CONFIG_COMPILER_STACK_CHECK_MODE_*` enabled. With it off (the robocar-unified default) the same overflow reports as a **double exception** with a corrupted backtrace instead — see the table above. Pin the fix with a host test that compiles the file unmodified under `-fsanitize=address` (`packages/robocar/unified/test/test_pca9685_multi.c` is the template).
+That message needs `CONFIG_COMPILER_STACK_CHECK_MODE_*` enabled. With it off (the robocar default) the same overflow reports as a **double exception** with a corrupted backtrace instead — see the table above. Pin the fix with a host test that compiles the file unmodified under `-fsanitize=address` (`packages/robotics/robocar/test/test_pca9685_multi.c` is the template).
 
 ### 3. Memory Debugging
 

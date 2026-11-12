@@ -1,13 +1,13 @@
 # MSM261D3526H1CPM — PDM Digital MEMS Microphone
 
 **Manufacturer:** MEMSensing Microsystems (Suzhou)
-**Used in:** robocar-unified, as the onboard microphone of the Seeed XIAO
+**Used in:** robocar, as the onboard microphone of the Seeed XIAO
 ESP32-S3 Sense camera board
 ([`../boards/xiao-esp32s3-sense.md`](../boards/xiao-esp32s3-sense.md)). The
 firmware reads it through I2S0 in PDM RX mode at 16 kHz / 16-bit / mono
-(`packages/robocar/unified/main/mic_pdm.c` lines 97–115, `pin_config.h`
+(`packages/robotics/robocar/main/mic_pdm.c` lines 97–115, `pin_config.h`
 lines 265–282); voice turns and the ambient-audio gate depend on it
-([`voice.md`](../../../packages/robocar/unified/docs/firmware/voice.md)).
+([`voice.md`](../../../packages/robotics/robocar/docs/firmware/voice.md)).
 
 **Part number:** `MSM261D3526H1CPM`, as printed on the symbol `MIC1` in
 Seeed's "XIAO ESP32S3 Exp. Board v1.2" schematic (the Sense camera/mic/SD

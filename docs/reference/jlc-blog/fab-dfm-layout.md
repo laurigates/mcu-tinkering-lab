@@ -1,7 +1,7 @@
 # JLCPCB blog: bare-board fabrication, DFM and layout for the KiCad carriers
 
 Scope: 2-layer FR-4 carriers (`tools/kicad`, ADR-027), three boards:
-balancebot, robocar-unified (saw), robocar-unified-integrated (saw, Economic
+balancebot, robocar (saw), robocar-integrated (saw, Economic
 PCBA, fiducials, MAX98357A TQFN-16 at 0.5 mm pitch). Read: the `carrier-pcb`
 skill, `pcb-reviewer`, ADR-027, `jlcpcb-order`, `boardcheck.py`, `panel.py`,
 `fab.py`, `pcb/review.py`, the three `board.toml`, `.kicad_pro`, `.kicad_dru`,
@@ -275,7 +275,7 @@ F3. **V-cut as a third option for the saw carriers.**
   - lines ≥2 mm apart (3 recommended);
   - ±0.4 mm tolerance;
   - a hybrid (V-cut one axis, route the other) is allowed.
-- Status: **new**. The unified carrier is 100×100 mm and its x = 70.5 line
+- Status: **new**. The socketed robocar carrier is 100×100 mm and its x = 70.5 line
   runs edge to edge (`board.toml:216`), so it can be V-cut. The head lines
   stop at it (`:217-220`) and could not be: hybrid only.
 - The existing ≥3 mm copper-free bands (README:20) already meet the 0.4/1.0 mm

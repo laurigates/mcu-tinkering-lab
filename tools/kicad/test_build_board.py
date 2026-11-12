@@ -234,7 +234,7 @@ class CutoutTests(unittest.TestCase):
 class BackSideTests(unittest.TestCase):
     """A placement's fourth element "back" mounts the footprint on B.Cu (#750).
 
-    robocar-unified's head carries the IDC ribbon header on the back face.
+    robocar's head carries the IDC ribbon header on the back face.
     """
 
     @classmethod

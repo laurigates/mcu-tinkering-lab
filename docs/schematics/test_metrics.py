@@ -94,7 +94,7 @@ def test_length_over_tags_counts_only_tags_the_wire_is_not_wired_to():
     down = [(0, 3), (0, -3)]  # down its centre line: the full 0.64 height
     # Down the right edge: unlike a component body this counts, because a
     # ground tag's box is exactly its top bar's width — the run touches the
-    # bar's end. robocar_unified's STBY net did that once moved off-centre.
+    # bar's end. robocar's STBY net did that once moved off-centre.
     along_edge = [(0.25, 3), (0.25, -3)]
     beside = [(0.5, 3), (0.5, -3)]  # one grid step clear: nothing
     own_pin = [(-1.0, 1.0), (-1.0, 3.0)]  # ends on the pin the stub leads to
@@ -267,7 +267,7 @@ def test_near_parallel_needs_a_positive_overlap_and_two_wires():
 
 
 def test_corner_on_a_corner_is_a_shared_vertex():
-    # robocar_unified's SDA/SCL kiss at main: both wires turn at one point,
+    # robocar's SDA/SCL kiss at main: both wires turn at one point,
     # drawing a "+" with no dot and no hop.
     sda = [(4, 0), (0, 0), (0, -1), (-1, -1)]
     scl = [(4, -1), (3.5, -1), (3.5, 0.5), (0, 0.5), (0, 0), (-1, 0)]
@@ -330,7 +330,7 @@ def test_measure_reports_near_parallel_and_shared_vertices():
 
 
 def test_two_nets_stopping_a_row_short_on_one_line_are_a_collinear_gap():
-    # robocar_unified's SDA run, once stepped off the kiss, ended 0.25 short
+    # robocar's SDA run, once stepped off the kiss, ended 0.25 short
     # of SCL's turn on the same row: one line with a hairline break.
     sda = [(4, 0), (0.25, 0), (0.25, -1)]
     scl = [(0, 1), (0, 0), (-1, 0)]
@@ -419,7 +419,7 @@ def test_real_circuits_load_and_measure():
     results = measure_circuits()
     names = [m.name for m in results]
     assert names == sorted(names)
-    assert "robocar_unified" in names
+    assert "robocar" in names
     for m in results:
         assert m.wires > 0
         assert m.total_length > 0

@@ -29,7 +29,7 @@
     },
     {
       "description": "Hold sphinx below 9.2 in the robocar simulation: sphinx 9.2 requires Python >=3.13 while the simulation's requires-python floor is 3.12, so uv cannot resolve. Drop once the simulation floor moves to 3.13.",
-      "matchFileNames": ["packages/robocar/simulation/**"],
+      "matchFileNames": ["packages/robotics/robocar/simulation/**"],
       "matchPackageNames": ["/^sphinx$/i"],
       "allowedVersions": "<9.2"
     },

@@ -9,7 +9,7 @@
 
 ## Context
 
-The `robocar-unified` voice architecture previously evolved in narrow slices:
+The `robocar` voice architecture previously evolved in narrow slices:
 - **ADR-019**: MAX98357A I2S amplifier added so the 15 s Gemini Robotics-ER planner could narrate observations via `speak(text)`.
 - **ADR-020**: PDM microphone added as an uncalibrated amplitude excursion / spectral evidence gate (`ambient_audio.c`) on the planner's `speak` declaration.
 - **ADR-022**: Planner dormancy ladder and spend ceiling to prevent runaway API spend in static, silent rooms.

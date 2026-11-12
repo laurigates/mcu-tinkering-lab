@@ -1,6 +1,6 @@
 # Seeed Studio XIAO ESP32-S3 Sense
 
-The XIAO ESP32-S3 with an expansion board that adds a DVP camera, PDM digital microphone, and microSD card slot. The camera depends on the production run: early boards carry an OV2640 (1600x1200), later ones an OV3660 (2048x1536) or OV5640, per Seeed's getting-started page; robocar-unified's board reads PID 0x3660 (see [the OV3660 page](../datasheets/camera--ov3660.md)). Read the PID before applying any sensor-specific fact. All the AI/ML capabilities of the [base XIAO ESP32-S3](xiao-esp32s3.md) — dual-core LX7, 8 MB PSRAM, USB OTG — plus vision and audio input in a 21 x 17.8 x 15 mm stack. The smallest ESP32 camera board available at ~$14–18.
+The XIAO ESP32-S3 with an expansion board that adds a DVP camera, PDM digital microphone, and microSD card slot. The camera depends on the production run: early boards carry an OV2640 (1600x1200), later ones an OV3660 (2048x1536) or OV5640, per Seeed's getting-started page; robocar's board reads PID 0x3660 (see [the OV3660 page](../datasheets/camera--ov3660.md)). Read the PID before applying any sensor-specific fact. All the AI/ML capabilities of the [base XIAO ESP32-S3](xiao-esp32s3.md) — dual-core LX7, 8 MB PSRAM, USB OTG — plus vision and audio input in a 21 x 17.8 x 15 mm stack. The smallest ESP32 camera board available at ~$14–18.
 
 ## Why XIAO ESP32-S3 Sense
 
@@ -205,7 +205,7 @@ idf.py set-target esp32s3
 
 The XIAO ESP32-S3 Sense is the target for:
 
-- **[Unified Robocar](../../packages/robocar/unified/)** — Single-board replacement for the dual Heltec + ESP32-CAM architecture ([ADR-013](../blueprint/adrs/ADR-013-single-board-xiao-esp32s3.md)). Camera for vision, I2C to TCA9548A/PCA9685 for motor control, WiFi for MQTT/OTA.
+- **[Robocar](../../../packages/robotics/robocar/)** — Single-board replacement for the dual Heltec + ESP32-CAM architecture ([ADR-013](../blueprint/adrs/ADR-013-single-board-xiao-esp32s3.md)). Camera for vision, I2C to TCA9548A/PCA9685 for motor control, WiFi for MQTT/OTA.
 
 Future candidates:
 - Standalone AI doorbell / security camera with on-device inference

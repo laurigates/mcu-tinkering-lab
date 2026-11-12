@@ -1,5 +1,6 @@
 # Shared ESP-IDF project configuration
 # Import this from project justfiles: import '../../../tools/esp32.just'
+# (a project nested one level deeper, packages/<domain>/<name>/<sub>/, adds one '../')
 #
 # Provides:
 #   container_cmd    — docker or podman
@@ -14,8 +15,11 @@
 # Container engine (docker or podman)
 container_cmd := env("CONTAINER_CMD", "docker")
 
-# Shared docker-compose.yml (relative to each project at packages/<domain>/<name>/)
-compose_file := "../../../docker-compose.yml"
+# Shared docker-compose.yml, as an absolute path built from this file's
+# directory (tools/). A path relative to the project only held at
+# packages/<domain>/<name>/; a nested project such as
+# packages/robotics/robocar/bringup/ is one level deeper.
+compose_file := parent_directory(source_directory()) / "docker-compose.yml"
 
 # Absolute path to monorepo tools/ directory (for helper scripts).
 #

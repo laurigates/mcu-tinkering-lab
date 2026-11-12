@@ -17,7 +17,7 @@ must happen within milliseconds (braking for an obstacle, holding a heading, aim
 head) has to run on the robot without it.
 
 The first design split this across two ESP32 boards (ADR-002). Since ADR-013 it runs on
-one **XIAO ESP32-S3 Sense** (`packages/robocar/unified`): camera, planner, reactive
+one **XIAO ESP32-S3 Sense** (`packages/robotics/robocar`): camera, planner, reactive
 control, voice, WiFi, MQTT and OTA on one module with 8 MB PSRAM. This PRD states what
 that system must do; PRD-002 covers vision and the planner in detail.
 
@@ -111,7 +111,7 @@ that system must do; PRD-002 covers vision and the planner in detail.
 ADR-013 (single board), ADR-016 (planner and executor), ADR-019, ADR-020, ADR-022,
 ADR-024, ADR-025, ADR-028, ADR-029, ADR-032, ADR-033, ADR-034; PRD-002 (vision and
 planner), PRD-003 (simulation), PRD-015 (robots for other owners), PRD-017 (behaviour
-twin). Subsystem detail: `packages/robocar/unified/docs/firmware/`.
+twin). Subsystem detail: `packages/robotics/robocar/docs/firmware/`.
 
 ## History
 

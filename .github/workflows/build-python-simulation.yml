@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/robocar/simulation/**'
+      - 'packages/robotics/robocar/simulation/**'
       - '.github/workflows/build-python-simulation.yml'
       - '.github/actions/setup-tools/**'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/robocar/simulation/**'
+      - 'packages/robotics/robocar/simulation/**'
       - '.github/workflows/build-python-simulation.yml'
       - '.github/actions/setup-tools/**'
   workflow_dispatch:
@@ -41,11 +41,11 @@ jobs:
           cache-suffix: simulation
 
       - name: Install dependencies
-        working-directory: packages/robocar/simulation
+        working-directory: packages/robotics/robocar/simulation
         run: uv sync --locked  # the committed uv.lock, never a fresh resolve
 
       - name: Check imports
-        working-directory: packages/robocar/simulation
+        working-directory: packages/robotics/robocar/simulation
         run: |
           uv run --locked python -c "import sys; print(f'Python {sys.version}')"
           uv run --locked python -c "import numpy; print(f'NumPy {numpy.__version__}')"

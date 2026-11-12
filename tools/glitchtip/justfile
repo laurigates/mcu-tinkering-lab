@@ -80,7 +80,7 @@ mcp-env:
     echo "export GLITCHTIP_MCP_URL=${GLITCHTIP_DOMAIN:-http://localhost:${GLITCHTIP_PORT:-8000}}/mcp"
 
 [doc("Keep a firmware ELF for symbolication as elf/<embedded build SHA>.elf")]
-keep-elf elf=(_root / "packages/robocar/unified/build/robocar-unified.elf"):
+keep-elf elf=(_root / "packages/robotics/robocar/build/robocar.elf"):
     #!/usr/bin/env python3
     # The name must be the exact ROBOCAR_BUILD_SHA string the firmware sends in
     # its build_sha tag (40 hex, maybe "-dirty"), so read it out of the ELF
@@ -89,7 +89,7 @@ keep-elf elf=(_root / "packages/robocar/unified/build/robocar-unified.elf"):
     from pathlib import Path
     elf = Path({{quote(elf)}})
     if not elf.is_file():
-        sys.exit(f"no ELF at {elf}; build first (just robocar-unified::build)")
+        sys.exit(f"no ELF at {elf}; build first (just robocar::build)")
     shas = set(re.findall(rb"(?<![0-9a-f])([0-9a-f]{40}(?:-dirty)?)\x00", elf.read_bytes()))
     if len(shas) != 1:
         found = ", ".join(s.decode() for s in sorted(shas)) or "none"

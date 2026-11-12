@@ -10,7 +10,7 @@ three config constraints enforced against **hardware register widths**. Violatin
 any one fails a different call, and — critically — a driver that falls back to a
 GPIO-polling mode on RMT failure makes a broken RMT config **silent**: the device
 still "works" (degraded) and you never see the error unless you read the boot
-log. All three below were latent in robocar-unified's former HC-SR04 echo driver
+log. All three below were latent in robocar's former HC-SR04 echo driver
 for exactly this reason; each was exposed only after fixing the one before it.
 No project in the repo uses RMT RX today (that driver became an I2C rangefinder
 driver in #790; the WS2812 status LEDs use RMT **TX**), so these lessons apply

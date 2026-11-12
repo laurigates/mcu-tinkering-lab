@@ -73,11 +73,11 @@ each fail a different call.
 
 An on-chip peripheral only helps if the signal reaches a pin it can use.
 
-- **Is the signal on an MCU pin at all?** robocar-unified drives every motor
+- **Is the signal on an MCU pin at all?** robocar drives every motor
   and servo line through the PCA9685 (I2C), so MCPWM fault inputs, timer DMA and
   ETM cannot touch them; only `MOTOR_STBY_PIN` (GPIO1) is direct.
 - **Are pins free?** Read the generated pin table in the project's `WIRING.md`
-  (`hardware.toml` is the source, ADR-021). robocar-unified has D3 (GPIO4) and
+  (`hardware.toml` is the source, ADR-021). robocar has D3 (GPIO4) and
   D7 (GPIO44) spare; everything else goes through the MCP23017.
 - **Does the bus already belong to someone?** A ULP polling an I2C bus the
   main core drives at 30 Hz needs arbitration the firmware does not have.
@@ -119,10 +119,10 @@ measurement), with the file and line that decided it.
 | Offload | Where | Note |
 |---|---|---|
 | PIO step generation | `packages/robotics/balancebot/src/stepper.pio` | `pull noblock` holds the last rate; the CPU only pushes a period per control tick |
-| External PWM | robocar-unified PCA9685 (`motor_controller.c`) | frees MCU pins and timers; costs an I2C write per change |
+| External PWM | robocar PCA9685 (`motor_controller.c`) | frees MCU pins and timers; costs an I2C write per change |
 | I2S TX DMA with silence preload | `audio_player.c` `preload_silence()` | `auto_clear` zeroes on underrun, not at enable |
 | Producer batching into a DMA consumer | `gemini_tts.c` `TTS_PCM_BATCH_BYTES` | software fix for a scheduling cost; no new peripheral |
-| I2C rangefinders instead of echo timing | robocar-unified `ultrasonic.c` (#782, #790) | moved pulse capture into the sensor module |
+| I2C rangefinders instead of echo timing | robocar `ultrasonic.c` (#782, #790) | moved pulse capture into the sensor module |
 
 Counter-example: balancebot's bitwise `crc32_calc()` runs once per parameter
 save over one small parameter record (`PARAM_V3_SIZE`). The RP2350 DMA CRC sniffer would save nothing

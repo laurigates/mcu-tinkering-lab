@@ -1,6 +1,6 @@
 # OTA Firmware Update System — Implementation Plan
 
-> **Historical.** This plan targeted the dual-ESP32 `robocar-main` / `robocar-camera` firmware, which has been removed in favour of `robocar-unified` (its OTA is described in `packages/robocar/unified/CLAUDE.md` § OTA). Paths below under `packages/robocar/{main,camera,docs}` no longer exist.
+> **Historical.** This plan targeted the dual-ESP32 `robocar-main` / `robocar-camera` firmware, which has been removed in favour of `robocar` (its OTA is described in `packages/robotics/robocar/docs/firmware/wifi-and-ota.md`). Paths below under `packages/robocar/{main,camera,docs}` no longer exist.
 
 ## Phase Status
 

@@ -46,7 +46,7 @@ product project *views:
     {{_run}} python -m enclosure.product finish {{project}}
 
 # Product photos from the plates with Fibo 2.0 on popos's ComfyUI (CC BY-NC:
-# non-commercial use only), e.g. `just enclosure::photo packages/robocar/unified
-# --style workbench --only unified-main-board`. Styles: studio, workbench, dark.
+# non-commercial use only), e.g. `just enclosure::photo packages/robotics/robocar
+# --style workbench --only robocar-main-board`. Styles: studio, workbench, dark.
 photo project *args:
     cd {{_root}} && python3 tools/enclosure/enclosure/photo.py {{project}} {{args}}

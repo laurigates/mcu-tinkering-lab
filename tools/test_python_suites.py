@@ -59,7 +59,7 @@ RENOVATE = REPO_ROOT / "renovate.json"
 OTHER_CONSUMERS: dict[str, tuple[str, ...]] = {
     "docs/schematics": ("schematics-check.yml",),
     "packages/audio/melody-detector/training": ("test-melody-train.yml",),
-    "packages/robocar/simulation": ("test.yml", "build-python-simulation.yml"),
+    "packages/robotics/robocar/simulation": ("test.yml", "build-python-simulation.yml"),
 }
 # uv projects no workflow installs. Each must have no tests: once one gains a
 # test, it needs a suite.
@@ -531,7 +531,7 @@ class ComponentHostSuites(unittest.TestCase):
             self.test_dirs,
         )
         self.assertNotIn(
-            "packages/robocar/unified/test",
+            "packages/robotics/robocar/test",
             self.test_dirs,
             "a project, not a component",
         )

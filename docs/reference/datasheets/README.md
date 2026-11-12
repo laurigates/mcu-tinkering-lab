@@ -39,8 +39,8 @@ Files use a flat `category--component-name.md` convention:
 
 ### Peripherals
 - [OV2640](camera--ov2640.md) — 2MP CMOS image sensor
-- [OV3660](camera--ov3660.md) — 3MP CMOS image sensor with on-chip JPEG (robocar-unified; XIAO ESP32-S3 Sense)
-- [SSD1306](display--ssd1306.md) — 128x64 OLED controller; also the 0.91-inch 128x32 module on robocar-unified
+- [OV3660](camera--ov3660.md) — 3MP CMOS image sensor with on-chip JPEG (robocar; XIAO ESP32-S3 Sense)
+- [SSD1306](display--ssd1306.md) — 128x64 OLED controller; also the 0.91-inch 128x32 module on robocar
 - [PCA9685](driver--pca9685.md) — 16-ch 12-bit PWM/servo driver
 - [TB6612FNG](driver--tb6612fng.md) — Dual DC motor driver
 - [SG90](actuator--sg90.md) — 9g micro servo
@@ -51,9 +51,9 @@ Files use a flat `category--component-name.md` convention:
 - [XL6009](power--xl6009.md) — DC-DC boost converter
 - [SX1276](radio--sx1276.md) — LoRa transceiver
 - [WS2812B](led--ws2812b.md) — Addressable RGB LED
-- [MCP23017](io--mcp23017.md) — 16-bit I2C GPIO expander (robocar-unified, optional; CJMCU-2317 breakout)
-- [RCWL-1601](sensor--rcwl-1601.md) — Ultrasonic rangefinder, 3–5.5 V, HC-SR04 compatible (robocar-unified obstacle reflex)
-- [MSM261D](sensor--msm261d.md) — PDM MEMS microphone (robocar-unified; XIAO ESP32-S3 Sense expansion board)
+- [MCP23017](io--mcp23017.md) — 16-bit I2C GPIO expander (robocar, optional; CJMCU-2317 breakout)
+- [RCWL-1601](sensor--rcwl-1601.md) — Ultrasonic rangefinder, 3–5.5 V, HC-SR04 compatible (robocar obstacle reflex)
+- [MSM261D](sensor--msm261d.md) — PDM MEMS microphone (robocar; XIAO ESP32-S3 Sense expansion board)
 - [MPU-6050](sensor--mpu6050.md) — 6-axis IMU, obsolete (balancebot and glowbug; GY-521 breakout)
 - [VL53L4CD](sensor--vl53l4cd.md) — Short-range ToF, 1–1300 mm, 18° (candidate robocar cliff sensor; Adafruit 5396)
 - [VL53L8CX](sensor--vl53l8cx.md) — 8×8 multizone ToF, 45°×45° (candidate; Pololu 3419)

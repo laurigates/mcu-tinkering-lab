@@ -1,7 +1,7 @@
 ---
 name: printed-mechanism
 description: Design, gate, render and order 3D-printed servo mechanisms (pan-tilts, brackets, linkages, eyebrows) with tools/mechanism (build123d), including the multi-agent design tournament. Use when designing or changing a printed part that moves or carries a servo, comparing mechanism designs, or ordering one from JLC3DP.
-argument-hint: <design dir, e.g. packages/robocar/unified/hardware/pan-tilt/print>
+argument-hint: <design dir, e.g. packages/robotics/robocar/hardware/pan-tilt/print>
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 ---
 
@@ -9,8 +9,8 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 
 `tools/mechanism` checks any directory holding a `design.py`. Cases for a
 carrier board are the `enclosure-cad` skill; this one is for parts that move.
-The worked example is robocar-unified's MG90D pan-tilt
-(`packages/robocar/unified/hardware/pan-tilt/`): five tournament entries, the
+The worked example is robocar's MG90D pan-tilt
+(`packages/robotics/robocar/hardware/pan-tilt/`): five tournament entries, the
 refined winner in `print/`, and the record in its README.
 
 ```sh

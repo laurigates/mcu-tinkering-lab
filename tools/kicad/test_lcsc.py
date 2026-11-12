@@ -16,6 +16,7 @@ import http.client
 import io
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 import urllib.request
@@ -355,12 +356,20 @@ footprint = "Resistor_SMD:{slug}"
 
 
 class UsedTests(unittest.TestCase):
-    """`used` over a temp repo: two registry entries and two projects."""
+    """`used` over a temp repo: two registry entries and two projects.
+
+    The repo is a git work tree with the projects added, because `used` finds
+    projects from the tracked hardware.toml files.
+    """
+
+    def git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
+        self.git("init", "-q")
         parts = self.root / "docs/reference/parts"
         parts.mkdir(parents=True)
         for slug, code in (("buck", "C468250"), ("r0805", ""), ("spare", "C8598")):
@@ -381,6 +390,7 @@ class UsedTests(unittest.TestCase):
             '[parts.reg]\npart = "buck"\nref = "U2"\nlcsc = "C6186"\n'
         )
         self.a, self.b = a, b
+        self.git("add", "packages")
 
     def labels(self, found):
         return {c: sorted(u.label for u in uses) for c, uses in found.items()}
@@ -398,6 +408,19 @@ class UsedTests(unittest.TestCase):
             },
         )
         self.assertEqual({u.footprint for u in found["C468250"]}, {"Resistor_SMD:buck"})
+
+    def test_subproject_inside_a_project_is_found(self):
+        """A hardware.toml nested in another project's directory is a project
+        too: packages/robotics/robocar/integrated sits inside robocar."""
+        sub = self.a / "sub"
+        sub.mkdir()
+        (sub / "hardware.toml").write_text(
+            '[parts.reg]\npart = "buck"\nref = "U3"\nlcsc = "C7777"\n'
+        )
+        self.git("add", "packages")
+        found = self.labels(lcsc.used(repo_root=self.root))
+        self.assertEqual(found["C7777"], ["dom/a/sub [parts.reg]"])
+        self.assertEqual(found["C468250"], ["dom/a [parts.reg]", "parts/buck"])
 
     def test_project_narrows(self):
         found = lcsc.used([self.a], repo_root=self.root)
@@ -417,6 +440,17 @@ class UsedTests(unittest.TestCase):
         found = lcsc.used()
         self.assertIn("C468250", found)  # registry: TPS563208
         self.assertIn("C17414", found)  # balancebot pull-up
+        labels = {u.label for uses in found.values() for u in uses}
+        for project in (
+            "robotics/balancebot",
+            "robotics/robocar",
+            "robotics/robocar/integrated",  # one level deeper than the others
+        ):
+            with self.subTest(project=project):
+                self.assertTrue(
+                    any(label.startswith(f"{project} [") for label in labels),
+                    f"no LCSC use found under {project}",
+                )
 
 
 class WhereTests(unittest.TestCase):

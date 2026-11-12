@@ -31,7 +31,7 @@ from hardware import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UNIFIED = REPO_ROOT / "packages/robocar/unified"
+ROBOCAR = REPO_ROOT / "packages/robotics/robocar"
 XIAO_S3 = REPO_ROOT / "docs/reference/boards/xiao-esp32s3.md"
 BALANCEBOT = REPO_ROOT / "packages/robotics/balancebot"
 XIAO_RP2350 = REPO_ROOT / "docs/reference/boards/xiao-rp2350.md"
@@ -233,7 +233,7 @@ class BoardTableTest(unittest.TestCase):
 
 
 class XiaoEsp32s3ReferenceTest(unittest.TestCase):
-    """The real board reference the robocar-unified join reads."""
+    """The real board reference the robocar join reads."""
 
     @classmethod
     def setUpClass(cls):
@@ -1340,18 +1340,18 @@ class CableTest(unittest.TestCase):
                 self.spares(f"spare_heads = {spares}\n")
 
 
-class RobocarUnifiedJoinTest(unittest.TestCase):
+class RobocarJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
 
     @classmethod
     def setUpClass(cls):
-        cls.model = join(UNIFIED)
+        cls.model = join(ROBOCAR)
 
     def test_dropping_an_undrawn_entry_from_the_committed_sidecar_fails(self):
         # The completeness gate (#460) holds on the real project, not only on
         # the synthetic one: in the harness view UART0_TX_PIN is excused only by
         # this entry (the carrier wires it to the UART0 tap).
-        text = (UNIFIED / "hardware.toml").read_text(encoding="utf-8")
+        text = (ROBOCAR / "hardware.toml").read_text(encoding="utf-8")
         entry = re.search(
             r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nbuild = "harness"\n'
             r'why = "[^"\n]*"\n\n?',
@@ -1359,8 +1359,8 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         )
         self.assertIsNotNone(entry)
         with tempfile.TemporaryDirectory() as tmp:
-            proj = Path(tmp) / "unified"
-            shutil.copytree(UNIFIED / "main", proj / "main")
+            proj = Path(tmp) / "robocar"
+            shutil.copytree(ROBOCAR / "main", proj / "main")
             (proj / "hardware.toml").write_text(
                 text.replace(entry.group(0), ""), encoding="utf-8"
             )
@@ -1371,15 +1371,15 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, which is now
         # TCA9548A_RST_PIN's pin (#782; it was the ultrasonic trigger's). Every
         # generator used to accept it; the router failed later.
-        header = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
+        header = (ROBOCAR / "main/pin_config.h").read_text(encoding="utf-8")
         moved = header.replace(
             "#define PIEZO_PIN GPIO_NUM_2", "#define PIEZO_PIN GPIO_NUM_3"
         )
         self.assertNotEqual(moved, header)
         with tempfile.TemporaryDirectory() as tmp:
-            proj = Path(tmp) / "unified"
-            shutil.copytree(UNIFIED / "main", proj / "main")
-            shutil.copy(UNIFIED / "hardware.toml", proj / "hardware.toml")
+            proj = Path(tmp) / "robocar"
+            shutil.copytree(ROBOCAR / "main", proj / "main")
+            shutil.copy(ROBOCAR / "hardware.toml", proj / "hardware.toml")
             (proj / "main/pin_config.h").write_text(moved, encoding="utf-8")
             with self.assertRaises(HardwareError) as ctx:
                 join(proj, repo_root=REPO_ROOT)
@@ -1447,7 +1447,7 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
     def test_the_motor_driver_mapping_agrees_with_pin_config_comments(self):
         # pin_config.h states the PCA9685 -> TB6612FNG mapping in comments
         # (`// -> PWMA`); hardware.toml states it as nets. Pin the two together.
-        text = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
+        text = (ROBOCAR / "main/pin_config.h").read_text(encoding="utf-8")
         claimed = dict(re.findall(r"#define (\w+_CHANNEL) \d+\s*// -> (\w+)", text))
         joined = {
             n.role: n.pin for n in self.model.channel_nets if n.part == "motor_driver"
@@ -1488,7 +1488,7 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         )
 
     def test_headers_are_pin_config_then_the_planner_headers(self):
-        rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]
+        rel = [p.relative_to(ROBOCAR).as_posix() for p in self.model.headers]
         self.assertEqual(
             rel, ["main/pin_config.h", "main/planner_task.h", "main/plan_activity.h"]
         )
@@ -1497,7 +1497,7 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
 class GeneratorTest(unittest.TestCase):
     """Issue #459's acceptance: pin_defs.typ comes out byte-identical."""
 
-    committed = UNIFIED / "docs/auto/pin_defs.typ"
+    committed = ROBOCAR / "docs/auto/pin_defs.typ"
 
     def run_generator(self, cwd: Path, project: str) -> bytes:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1512,12 +1512,12 @@ class GeneratorTest(unittest.TestCase):
             return out.read_bytes()
 
     def test_output_from_repo_root_matches_the_committed_file(self):
-        out = self.run_generator(REPO_ROOT, "packages/robocar/unified")
+        out = self.run_generator(REPO_ROOT, "packages/robotics/robocar")
         self.assertEqual(out, self.committed.read_bytes())
 
     def test_output_from_the_project_directory_is_identical(self):
         # The justfile runs it from the project, CI from the repo root.
-        out = self.run_generator(UNIFIED, ".")
+        out = self.run_generator(ROBOCAR, ".")
         self.assertEqual(out, self.committed.read_bytes())
 
     def test_balancebot_convention_emits_its_own_extract_list(self):
@@ -1556,9 +1556,7 @@ class GeneratorTest(unittest.TestCase):
         self.assertEqual(
             gen.regenerate_command(BALANCEBOT), "just balancebot::gen-pin-defs"
         )
-        self.assertEqual(
-            gen.regenerate_command(UNIFIED), "just robocar-unified::gen-pin-defs"
-        )
+        self.assertEqual(gen.regenerate_command(ROBOCAR), "just robocar::gen-pin-defs")
 
 
 if __name__ == "__main__":

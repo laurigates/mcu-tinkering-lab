@@ -331,6 +331,40 @@ class CheckFileTests(unittest.TestCase):
         self.assertEqual(self._check("CONFIG_SHARED_OWN=y\nCONFIG_LEAF=y\n"), [])
         self.assertEqual(len(self._check("CONFIG_TOP=y\n")), 1)
 
+    def test_a_nested_project_defines_nothing_for_the_project_around_it(self):
+        # packages/demo/app/sub is an ESP-IDF project of its own (robocar's
+        # bringup): the app's build reads neither its Kconfig nor its manifest.
+        sub = self.project / "sub"
+        _write(
+            sub / "CMakeLists.txt",
+            "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(sub)\n",
+        )
+        _write(sub / "main" / "Kconfig.projbuild", "config NESTED_ONLY\n")
+        _write(
+            sub / "main" / "idf_component.yml",
+            "dependencies:\n  espressif/leaf: '*'\n",
+        )
+        _write(self.project / "main" / "idf_component.yml", "dependencies: {}\n")
+        findings = self._check(
+            "CONFIG_APP_OWN=y\nCONFIG_NESTED_ONLY=y\nCONFIG_LEAF=y\n"
+        )
+        self.assertEqual(len(findings), 2)
+        self.assertIn("sdkconfig.defaults:2: CONFIG_NESTED_ONLY", findings[0])
+        self.assertIn("sdkconfig.defaults:3: CONFIG_LEAF", findings[1])
+        # The nested project still sees its own.
+        nested_defaults = _write(
+            sub / "sdkconfig.defaults", "CONFIG_NESTED_ONLY=y\nCONFIG_LEAF=y\n"
+        )
+        self.assertEqual(
+            check.check_file(
+                nested_defaults, self.idf, self.components, root=self.root
+            ),
+            [],
+        )
+        # Control: without the project.cmake include, sub/ is part of the app.
+        _write(sub / "CMakeLists.txt", "# a directory of components\n")
+        self.assertEqual(self._check("CONFIG_NESTED_ONLY=y\nCONFIG_LEAF=y\n"), [])
+
     def test_external_checkout_resolves_through_its_recorded_list(self):
         # The checkout is cloned by a recipe, so it is absent here, as in CI.
         _write(

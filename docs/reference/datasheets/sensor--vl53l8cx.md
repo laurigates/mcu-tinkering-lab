@@ -1,6 +1,6 @@
 # VL53L8CX — 8×8 Multizone Time-of-Flight Sensor (ST)
 
-**Used in:** nothing yet. Candidate for robocar-unified: one sensor aimed
+**Used in:** nothing yet. Candidate for robocar: one sensor aimed
 forward and down to see floor edges and obstacles across the robot's width, on
 a free TCA9548A channel (5–7). Nothing is bought. Candidate breakout:
 [`../boards/pololu-vl53l8cx.md`](../boards/pololu-vl53l8cx.md).

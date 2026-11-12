@@ -63,7 +63,7 @@ def test_robot_timestamp_kept_when_set():
 
 def test_reset_event_shape():
     out = to_sentry_event(fixture("reset-brownout.json"), received_at=0)
-    assert out["release"] == "robocar-unified@0.0.0-fixture"
+    assert out["release"] == "robocar@0.0.0-fixture"
     assert out["message"] == {"formatted": "reset: BROWNOUT"}
     assert out["fingerprint"] == ["reset", "BROWNOUT"]
     assert out["tags"] == {

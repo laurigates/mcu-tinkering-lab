@@ -21,13 +21,26 @@ What the tests hold:
   covered: their values come from this repo's files or from GitHub itself.
 - build-firmware.yml checks the release tag before any job uses it: every
   other job needs ``resolve-tag``, directly or through another job. The check
-  itself, run here, passes every tag in the clone and refuses shell text, a
-  pre-release suffix and a bare version.
+  itself, run here, passes every tag in the clone and a robocar tag from each
+  side of its rename, and refuses shell text, a pre-release suffix and a bare
+  version.
+- build-firmware.yml's Pages assembly step, run here in a scratch tree, copies
+  ``firmware/robocar`` to ``_site/firmware/unified`` (the one OTA hop for
+  robots on robocar-unified <= 0.2.23) and leaves ``firmware/`` as it was,
+  which the release gates count and walk. A tree with ``firmware/unified``, or
+  with neither directory (a replayed older tag), is assembled with no copy.
 - build-firmware.yml builds Pico SDK projects by calling
   ``_ci-build-pico.yml``, the reusable workflow build.yml calls, at the
   release tag, and copies none of its steps (issue #1065). Its select step,
   run here against the repo's own files, picks balancebot, skips an ESP-IDF
   component, and selects nothing for a tag older than project-matrix.json.
+- build.yml's discovery step, run here against the repo's own
+  project-matrix.json, does not select the robocar firmware for a change
+  inside one of the four projects nested in its directory (bringup,
+  integrated, simulation, twin), still selects it and robocar-bringup for a
+  firmware change, alone or in the same pull request as a nested-project
+  change, and keeps ``extra_paths`` and ``exclude_paths`` out of the job
+  matrix.
 - auto-fix.yml passes the release-please App to the reusable auto-fix, so the
   fix commits it pushes start CI (issue #866).
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
@@ -51,6 +64,7 @@ Whether the workflows run as intended needs GitHub; actionlint and these tests
 only read them.
 """
 
+import json
 import os
 import re
 import shutil
@@ -80,6 +94,10 @@ PICO_REUSABLE = "./.github/workflows/_ci-build-pico.yml"
 ESP_IDF_ACTION = "espressif/esp-idf-ci-action@"
 PICO_SELECT_STEP = "Match the tag's component to a Pico SDK project"
 RESOLVE_TAG_STEP = "Match the release-please tag pattern"
+PAGES_STEP = "Assemble Pages site"
+DISCOVER_STEP = "Filter buildable projects by change scope"
+MATRIX = ROOT / ".github" / "project-matrix.json"
+ROBOCAR = "packages/robotics/robocar"
 DRIFT_STEP_SUFFIX = "check for drift"
 
 # Reusable-workflow callers with no workflow-level permissions: their one job
@@ -287,6 +305,18 @@ class BuildFirmwareTest(unittest.TestCase):
             values, {"tag": "robocar-unified-v0.2.2", "component": "robocar-unified"}
         )
 
+    def test_resolve_tag_passes_robocar_tags_from_both_sides_of_the_rename(self):
+        # Needs no tag in the clone. Releases up to 0.2.23 are tagged
+        # robocar-unified-v*, and a workflow_dispatch replay may still name one.
+        for tag, component in (
+            ("robocar-v0.2.24", "robocar"),
+            ("robocar-unified-v0.2.23", "robocar-unified"),
+        ):
+            with self.subTest(tag=tag):
+                code, values = self.run_resolve_tag(tag)
+                self.assertEqual(code, 0)
+                self.assertEqual(values, {"tag": tag, "component": component})
+
     def test_resolve_tag_refuses_anything_else(self):
         for tag in (
             "",
@@ -304,6 +334,67 @@ class BuildFirmwareTest(unittest.TestCase):
                 code, values = self.run_resolve_tag(tag)
                 self.assertNotEqual(code, 0)
                 self.assertEqual(values, {}, "a refused tag must write no output")
+
+    def assemble_pages(self, projects: list[str]) -> tuple[int, str, dict, list]:
+        """Run the shipped Pages assembly step in a scratch tree holding one
+        firmware/<project>/ per name. Returns the exit code, stderr, the files
+        under _site/firmware by relative path, and firmware/'s entries after
+        the step."""
+        (step,) = [
+            s
+            for _, _, s in steps_of({"jobs": self.jobs})
+            if s.get("name") == PAGES_STEP
+        ]
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = Path(scratch)
+            files = {
+                "docs/flasher/index.html": "flasher",
+                "workflow-tools/docs/site/robocar/index.html": "page",
+                "firmware/projects.json": "[]",
+            }
+            for project in projects:
+                files[f"firmware/{project}/manifest.json"] = f"manifest of {project}"
+                files[f"firmware/{project}/{project}.bin"] = f"image of {project}"
+            for rel, text in files.items():
+                (tree / rel).parent.mkdir(parents=True, exist_ok=True)
+                (tree / rel).write_text(text)
+            proc = subprocess.run(
+                ["bash", "-eo", "pipefail", "-c", step["run"]],
+                cwd=tree,
+                capture_output=True,
+                text=True,
+            )
+            site = tree / "_site" / "firmware"
+            published = {
+                str(f.relative_to(site)): f.read_text()
+                for f in sorted(site.rglob("*"))
+                if f.is_file()
+            }
+            firmware = sorted(os.listdir(tree / "firmware"))
+        return proc.returncode, proc.stderr, published, firmware
+
+    def test_pages_publishes_robocar_under_the_old_ota_directory_too(self):
+        code, stderr, published, firmware = self.assemble_pages(["robocar", "other"])
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(published["robocar/manifest.json"], "manifest of robocar")
+        for name in ("manifest.json", "robocar.bin"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    published.get(f"unified/{name}"), published[f"robocar/{name}"]
+                )
+        # The copy is in _site only: the release gates count firmware/*.
+        self.assertEqual(firmware, ["other", "projects.json", "robocar"])
+
+    def test_pages_copies_nothing_for_a_tag_from_before_the_move(self):
+        for projects in (["unified", "other"], ["main", "camera"]):
+            with self.subTest(projects=projects):
+                code, stderr, published, firmware = self.assemble_pages(projects)
+                self.assertEqual(code, 0, stderr)
+                self.assertEqual(
+                    {Path(name).parts[0] for name in published},
+                    {*projects, "projects.json"},
+                )
+                self.assertEqual(firmware, sorted([*projects, "projects.json"]))
 
     def test_pico_projects_build_with_the_ci_reusable_at_the_tag(self):
         callers = [j for j in self.jobs.values() if j.get("uses") == PICO_REUSABLE]
@@ -349,7 +440,7 @@ class BuildFirmwareTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("jq"), "the select step needs jq")
     def test_pico_select_skips_an_esp_idf_component(self):
-        code, values = self.run_pico_select("robocar-unified", with_files=True)
+        code, values = self.run_pico_select("robocar", with_files=True)
         self.assertEqual((code, values.get("count")), (0, "0"))
 
     def test_pico_select_passes_a_tag_older_than_the_matrix(self):
@@ -369,6 +460,138 @@ class BuildFirmwareTest(unittest.TestCase):
             )
         ]
         self.assertEqual(copied, [])
+
+
+@unittest.skipUnless(shutil.which("jq"), "the discovery step needs jq")
+class BuildDiscoveryTest(unittest.TestCase):
+    """build.yml's shipped discovery step, run on a pull request that changes
+    the given file or files, in a scratch repository holding the files the
+    step reads."""
+
+    def discover(
+        self, changed: str | list[str], matrix: list | None = None
+    ) -> list[dict]:
+        (step,) = [
+            s
+            for _, _, s in steps_of(load("build.yml"))
+            if s.get("name") == DISCOVER_STEP
+        ]
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = Path(scratch) / "tree"
+            (tree / ".github" / "workflows").mkdir(parents=True)
+            for name in (
+                "build.yml",
+                *(p.name for p in WORKFLOWS.glob("_ci-build-*.yml")),
+            ):
+                shutil.copy(WORKFLOWS / name, tree / ".github" / "workflows" / name)
+            (tree / ".github" / "project-matrix.json").write_text(
+                MATRIX.read_text() if matrix is None else json.dumps(matrix)
+            )
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(tree), *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "t@example.invalid")
+            git("config", "user.name", "t")
+            git("config", "commit.gpgsign", "false")
+            git("add", "-A")
+            git("commit", "-q", "-m", "base")
+            base = git("rev-parse", "HEAD")
+            for rel in [changed] if isinstance(changed, str) else changed:
+                path = tree / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("a") as f:
+                    f.write("changed\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "change")
+            output = Path(scratch) / "github-output"
+            output.touch()
+            env = {
+                **os.environ,
+                "EVENT": "pull_request",
+                "PR_BASE": base,
+                "PUSH_BEFORE": "",
+                "GITHUB_OUTPUT": str(output),
+            }
+            proc = subprocess.run(
+                ["bash", "-c", step["run"]],
+                cwd=tree,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines() if line
+            )
+        return [
+            entry
+            for system in ("esp32", "esphome", "pico")
+            for entry in json.loads(values[system])["include"]
+        ]
+
+    def selected(
+        self, changed: str | list[str], matrix: list | None = None
+    ) -> list[str]:
+        return sorted(entry["project"] for entry in self.discover(changed, matrix))
+
+    def test_a_project_nested_in_robocar_does_not_rebuild_the_firmware(self):
+        for nested, expected in (
+            ("bringup", ["robocar-bringup"]),
+            ("integrated", []),
+            ("simulation", []),
+            ("twin", []),
+        ):
+            with self.subTest(nested=nested):
+                self.assertEqual(
+                    self.selected(f"{ROBOCAR}/{nested}/main/x.c"), expected
+                )
+
+    def test_a_firmware_change_selects_the_firmware_and_bringup(self):
+        # robocar-bringup compiles the firmware's main/ (its extra_paths).
+        self.assertEqual(
+            self.selected(f"{ROBOCAR}/main/x.c"), ["robocar", "robocar-bringup"]
+        )
+        self.assertEqual(self.selected(f"{ROBOCAR}/sdkconfig.defaults"), ["robocar"])
+        self.assertEqual(
+            self.selected(f"{ROBOCAR}/hardware/carrier/x.toml"), ["robocar"]
+        )
+
+    def test_a_mixed_change_still_selects_the_firmware(self):
+        # exclude_paths drops a changed file, not the project: a pull request
+        # that touches the twin and the firmware builds the firmware.
+        self.assertEqual(
+            self.selected([f"{ROBOCAR}/twin/main/x.c", f"{ROBOCAR}/main/x.c"]),
+            ["robocar", "robocar-bringup"],
+        )
+
+    def test_the_nested_check_fails_without_the_exclude(self):
+        # Control: with exclude_paths dropped, the same change selects the
+        # firmware, so the test above reads the field and not the layout.
+        matrix = json.loads(MATRIX.read_text())
+        self.assertTrue(any("exclude_paths" in entry for entry in matrix))
+        for entry in matrix:
+            entry.pop("exclude_paths", None)
+        self.assertEqual(self.selected(f"{ROBOCAR}/twin/main/x.c", matrix), ["robocar"])
+
+    def test_discovery_inputs_stay_out_of_the_job_matrix(self):
+        # Selected by path, and all at once on a change to a shared build file.
+        for changed in (f"{ROBOCAR}/main/x.c", "Dockerfile"):
+            with self.subTest(changed=changed):
+                entries = self.discover(changed)
+                leaked = [
+                    entry["project"]
+                    for entry in entries
+                    if {"extra_paths", "exclude_paths"} & set(entry)
+                ]
+                self.assertEqual(leaked, [])
+        self.assertEqual(len(entries), len(json.loads(MATRIX.read_text())))
 
 
 class ClaudeCallersTest(unittest.TestCase):

@@ -21,7 +21,7 @@ This skill enables safe execution of build system operations with appropriate sa
 ### Build Commands (containerized)
 ```bash
 just build-all
-just robocar-unified::build
+just robocar::build
 just robocar-bringup::build
 just webserver::build
 just i2s-audio::build
@@ -33,7 +33,7 @@ just wifitest::build
 
 ### Flash Commands (native — ports auto-detected)
 ```bash
-just robocar-unified::flash
+just robocar::flash
 just robocar-bringup::flash
 just webserver::flash
 just i2s-audio::flash
@@ -45,7 +45,7 @@ just wifitest::flash
 
 ### Monitor Commands (native)
 ```bash
-just robocar-unified::monitor
+just robocar::monitor
 just webserver::monitor
 just i2s-audio::monitor
 just telegram::monitor
@@ -55,14 +55,14 @@ just xbox::monitor
 ### Clean Commands
 ```bash
 just clean-all
-just robocar-unified::clean
+just robocar::clean
 just webserver::clean
 just telegram::clean
 ```
 
 ### Development Workflows (build + flash + monitor)
 ```bash
-just robocar-unified::flash-monitor
+just robocar::flash-monitor
 just webserver::develop
 just telegram::develop
 ```
@@ -105,7 +105,7 @@ This skill does NOT allow:
 
 ### Build a project
 "Build the robocar"
-→ `just robocar-unified::build`
+→ `just robocar::build`
 
 ### Flash with specific port
 "Flash the webserver to /dev/ttyUSB0"

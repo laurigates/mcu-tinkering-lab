@@ -22,7 +22,7 @@ see [The docs describe a different surface](#the-docs-describe-a-different-surfa
 When a fact here stops holding, re-probe; don't reason from this file's memory
 of the API any more than from your own.
 
-Consumers in this repo: `packages/robocar/unified/main/gemini_tts.c` (the
+Consumers in this repo: `packages/robotics/robocar/main/gemini_tts.c` (the
 transport), `tts_request.c` (the request body and tag translation), `voice_persona.c` (the table), `dialogue_style.c` (per-line
 variation), `speech_tags.c` (the tag allow-list), `audio_player.c` (playback).
 
@@ -273,5 +273,5 @@ the TTFB gap is the whole reason the streaming endpoint matters.
 
 - `.claude/rules/gemini-api.md` — model-ID / `thinkingLevel` / token-budget drift on the *planner* side
 - `.claude/skills/audio-static-debugging/` — when the audio plays but sounds wrong
-- `packages/robocar/unified/docs/firmware/voice.md` — the speech-is-a-queue-not-a-goal rule and the rest of the voice design
+- `packages/robotics/robocar/docs/firmware/voice.md` — the speech-is-a-queue-not-a-goal rule and the rest of the voice design
 - ADR-019 — the original voice design

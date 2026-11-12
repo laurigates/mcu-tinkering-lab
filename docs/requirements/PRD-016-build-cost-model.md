@@ -71,7 +71,7 @@ Consequences the planner must express:
 
 ## Goals
 
-- A delivered cost per robot type (balancebot, robocar unified, robocar
+- A delivered cost per robot type (balancebot, robocar socketed, robocar
   integrated) at N = 1, 5, 20, split into PCB, assembly, parts, cases,
   shipping, import charges, VAT and labour. R1 and R3 cover parcels of €150 or
   less; a larger parcel (likely at N = 20) is out of the model until open

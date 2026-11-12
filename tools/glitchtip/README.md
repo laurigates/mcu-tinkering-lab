@@ -60,7 +60,7 @@ The `crash` fixture's addresses resolve against an ELF built from
    something it notices. The firmware publishes one event on
    `robocar/events`; the bridge forwards it, and GlitchTip opens an issue
    (or counts another event on an existing one). What each kind carries is in
-   [`error-reporting.md`](../../packages/robocar/unified/docs/firmware/error-reporting.md).
+   [`error-reporting.md`](../../packages/robotics/robocar/docs/firmware/error-reporting.md).
 2. **Find it.** In the UI, or from the terminal:
 
    ```sh
@@ -71,14 +71,14 @@ The `crash` fixture's addresses resolve against an ELF built from
    ```
 
    ```
-   #2 robocar    fatal   1x last 2026-11-09T08:01:25.121Z robocar-unified@0.0.0-fixture  LoadProhibited: PC 0x0000000a
+   #2 robocar    fatal   1x last 2026-11-09T08:01:25.121Z robocar@0.0.0-fixture  LoadProhibited: PC 0x0000000a
    ```
    ```
    Exception: LoadProhibited: PC 0x0000000a
      frames (innermost first):
        0x0000000a add tools/glitchtip/fixtures/tiny.c:3
        0x0000002c entry tools/glitchtip/fixtures/tiny.c:8
-   Tags: source=firmware, release=robocar-unified@0.0.0-fixture, build_sha=fixture, reset_reason=PANIC, symbolicated=true
+   Tags: source=firmware, release=robocar@0.0.0-fixture, build_sha=fixture, reset_reason=PANIC, symbolicated=true
    ```
 
    Add `--json` to either for the API's own response.
@@ -89,7 +89,7 @@ The `crash` fixture's addresses resolve against an ELF built from
 4. **Fix and verify.** Reproduce in the host tests or the behaviour twin where
    the code allows, flash, and check that the issue stops collecting events
    for the new release. `report test` on the robot console (or
-   `just robocar-unified::cmd "report test"` over MQTT) sends a synthetic
+   `just robocar::cmd "report test"` over MQTT) sends a synthetic
    event to confirm the whole path still works.
 
 The recipes read with a read-only API token (scopes `org:read`,
@@ -104,7 +104,7 @@ the event's `tags.build_sha`, the exact string the firmware embeds
 (`ROBOCAR_BUILD_SHA`). After building firmware you intend to run:
 
 ```sh
-just glitchtip::keep-elf    # copies build/robocar-unified.elf to elf/<embedded sha>.elf
+just glitchtip::keep-elf    # copies build/robocar.elf to elf/<embedded sha>.elf
 ```
 
 The SHA is read out of the ELF, not from git, so an older build is filed under
@@ -112,12 +112,23 @@ the commit it came from. Without a matching ELF the event still arrives,
 tagged `symbolicated=false`, with raw addresses.
 
 For a released build there is nothing to keep: when `elf/<build_sha>.elf` is
-missing, the bridge downloads `robocar-unified.elf` from the
-`robocar-unified-v<version>` GitHub release (attached by
-`build-firmware.yml`) and keeps it only if the SHA embedded in it equals the
-event's `build_sha`. A `-dirty` build is never fetched. Set
-`ELF_RELEASE_URL` to another template (`{version}` is filled in) for a fork,
-or to empty to turn fetching off.
+missing, the bridge downloads `robocar.elf` from the `robocar-v<version>`
+GitHub release (attached by `build-firmware.yml`) and keeps it only if the SHA
+embedded in it equals the event's `build_sha`. A `-dirty` build is never
+fetched. Set `ELF_RELEASE_URL` to another template (`{version}` is filled in)
+for a fork, or to empty to turn fetching off.
+
+Releases 0.2.18 to 0.2.23 predate the project's rename: they are tagged
+`robocar-unified-v<version>` and carry `robocar-unified.elf`, which the default
+template does not reach (earlier releases carry no ELF). A crash from that firmware arrives with
+`symbolicated=false` unless its ELF is in `elf/`: download
+`robocar-unified.elf` from that release and file it with
+`just glitchtip::keep-elf <path to the download>`. A bridge run on the host
+(`just glitchtip::bridge`) can instead set `ELF_RELEASE_URL` to
+`https://github.com/laurigates/mcu-tinkering-lab/releases/download/robocar-unified-v{version}/robocar-unified.elf`.
+
+The default template is part of the bridge image, so a running container
+keeps the one it was built with until `just glitchtip::up` rebuilds it.
 
 ## Claude Code (MCP)
 
@@ -159,7 +170,7 @@ token, add the server without the header at local scope:
 | `*_COMPOSE` DSNs | container bridge | written by `bootstrap` |
 | `ELF_DIR` | bridge | `tools/glitchtip/elf` |
 | `GLITCHTIP_API_TOKEN`, `GLITCHTIP_ORG_SLUG` | `issues`, `event`, `mcp-env` recipes | written by `bootstrap` |
-| `ELF_RELEASE_URL` | bridge (host run; the container keeps the default) | this repo's `robocar-unified-v{version}/robocar-unified.elf` release asset; empty turns fetching off |
+| `ELF_RELEASE_URL` | bridge (host run; the container keeps the default) | this repo's `robocar-v{version}/robocar.elf` release asset; empty turns fetching off |
 
 `bootstrap` also reads `GLITCHTIP_ORG`, `GLITCHTIP_PROJECTS`,
 `GLITCHTIP_ADMIN_EMAIL` and `GLITCHTIP_DSN_HOST` (see `bootstrap.sh`), so the

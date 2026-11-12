@@ -221,12 +221,12 @@ class MutationTests(unittest.TestCase):
 
 
 # --- Mux channel buses (#768) ---------------------------------------------------
-# A stand-in project on the frozen tree's XIAO and registry: robocar-unified's
+# A stand-in project on the frozen tree's XIAO and registry: robocar's
 # own I2C and TCA9548A channel macros, a mux on a 1x8 socket and three 2-pin
 # loads. A stand-in rather than the real project, so a change to its
 # hardware.toml cannot move these cases.
 
-UNIFIED_HEADER = REPO_ROOT / "packages/robocar/unified/main/pin_config.h"
+ROBOCAR_HEADER = REPO_ROOT / "packages/robotics/robocar/main/pin_config.h"
 
 MUX_PARTS = {
     "test-mux": """\
@@ -365,7 +365,7 @@ class BusNetTests(unittest.TestCase):
         (self.project / "main").mkdir(parents=True)
         # The real header's I2C and mux-channel macros, extracted, not retyped.
         wanted = re.compile(r"#define (I2C_SDA_PIN|I2C_SCL_PIN|I2C_BUS_CHANNEL_\w+) ")
-        text = UNIFIED_HEADER.read_text(encoding="utf-8")
+        text = ROBOCAR_HEADER.read_text(encoding="utf-8")
         lines = [line for line in text.splitlines() if wanted.match(line)]
         # SDA, SCL and five mux channels (#782 added the two rangefinders').
         # MUX_SIDECAR wires three of them; a bus channel role need not be wired.
@@ -468,7 +468,7 @@ class BusNetTests(unittest.TestCase):
 
 
 # --- One driver, two loads on separate pins (#769) -------------------------------
-# robocar-unified's TB6612FNG drives the right motor from A01/A02 and the left
+# robocar's TB6612FNG drives the right motor from A01/A02 and the left
 # from B01/B02 (sparkfun-tb6612fng.md), and both motors use one 2-pin connector
 # entry. A stand-in project on the frozen tree's XIAO and registry, so a change
 # to the real project's hardware.toml cannot move these cases.
@@ -631,7 +631,7 @@ class LoadPinTests(unittest.TestCase):
 
 
 # --- A cable between the head board and the main board (#750) --------------------
-# robocar-unified's XIAO ESP32-S3 rides on the pan-tilt head and reaches the main
+# robocar's XIAO ESP32-S3 rides on the pan-tilt head and reaches the main
 # board through a ribbon cable. A stand-in project: the real S3 socket entry and
 # board page, the real header's I2C and UART0 macros, and an 8-way cable whose
 # [pins] are keyed by the XIAO's pad names.
@@ -738,7 +738,7 @@ class CableTests(unittest.TestCase):
         wanted = re.compile(
             r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|UART0_RX_PIN) "
         )
-        text = UNIFIED_HEADER.read_text(encoding="utf-8")
+        text = ROBOCAR_HEADER.read_text(encoding="utf-8")
         lines = [line for line in text.splitlines() if wanted.match(line)]
         self.assertEqual(len(lines), 4, lines)
         (self.project / "main/pin_config.h").write_text(
@@ -930,7 +930,7 @@ class CableTests(unittest.TestCase):
 
 
 # --- Board pages on carrier parts (#750 step 2) -----------------------------------
-# robocar-unified's breakouts name a `board` page that documents a module's
+# robocar's breakouts name a `board` page that documents a module's
 # headers, not a GPIO pin map. Only a `pin_numbers` entry reads its page; a
 # breakout's [pins] come from the registry, so its page must not be parsed.
 

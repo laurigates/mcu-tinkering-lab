@@ -4,8 +4,8 @@
 Usage:
     python3 tools/typst/generate-pin-defs.py <project_dir> [<output.typ>]
 
-    python3 tools/typst/generate-pin-defs.py packages/robocar/unified
-    # -> packages/robocar/unified/docs/auto/pin_defs.typ
+    python3 tools/typst/generate-pin-defs.py packages/robotics/robocar
+    # -> packages/robotics/robocar/docs/auto/pin_defs.typ
 
 The project's `hardware.toml` names the headers to read (`[source] header` plus
 `extra_headers`), and `tools/hardware/` parses and joins them (ADR-021, issue

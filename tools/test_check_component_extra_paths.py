@@ -2,9 +2,9 @@
 
     uv run --no-project --with pytest==9.1.1 python -m pytest -q tools/test_check_component_extra_paths.py
 
-Most tests build a small packages/ tree under tmp_path. The last two run the
-check against the real repository, so a matrix edit that drops a consumer's
-entry fails here as well as in the pre-commit hook.
+Most tests build a small packages/ tree under tmp_path. The ones named `real`
+run the check against the real repository, so a matrix edit that drops a
+consumer's entry fails here as well as in the pre-commit hook.
 """  # noqa: E501
 
 from __future__ import annotations
@@ -124,6 +124,25 @@ def test_a_trimmed_build_compiles_only_the_requires_closure(tree: Path) -> None:
     assert names(tree, "robo/car") == ["components/b", "components/c"]
 
 
+IDF_PROJECT = "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(x)\n"
+
+
+def test_a_nested_project_keeps_its_components_to_itself(tree: Path) -> None:
+    top = SHARED + "idf_build_set_property(MINIMAL_BUILD ON)\n"
+    project(tree, "robo/car", top + IDF_PROJECT, main_requires="REQUIRES b")
+    # robo/car/sub is a project of its own; its main/ requires a.
+    project(tree, "robo/car/sub", IDF_PROJECT, main_requires="REQUIRES a")
+    assert cce.nested_project_dirs(tree / "packages/robo/car") == [
+        tree / "packages/robo/car/sub"
+    ]
+    assert names(tree, "robo/car") == ["components/b"]
+    # Control: the same directory with no project.cmake include is one of
+    # robo/car's own components, and its REQUIRES count.
+    write(tree / "packages/robo/car/sub/CMakeLists.txt", "# not a project\n")
+    assert cce.nested_project_dirs(tree / "packages/robo/car") == []
+    assert names(tree, "robo/car") == ["components/a", "components/b"]
+
+
 def test_requires_ignores_names_that_are_not_shared_components() -> None:
     text = REGISTER.format(
         requires='REQUIRES "esp_wifi" improv-wifi\n# REQUIRES ghost\nPRIV_REQUIRES log'
@@ -187,16 +206,154 @@ def test_non_esp_idf_systems_are_skipped(tree: Path) -> None:
     assert cce.check(tree, [matrix_entry("robo/nothing-here", system="esphome")]) == []
 
 
+def test_an_exclude_path_must_be_a_directory_inside_the_project(tree: Path) -> None:
+    project(tree, "robo/car", "project(car)\n")
+    project(tree, "robo/car/bringup", "project(bringup)\n")
+    entry = matrix_entry("robo/car")
+    entry["exclude_paths"] = ["robo/car/bringup", "robo/car/bringup/"]
+    assert cce.check_exclude_paths(tree, [entry]) == []
+    # A package-relative name, a sibling sharing the prefix, the project
+    # itself and a directory that is not there: none can exclude a nested file.
+    entry["exclude_paths"] = ["bringup", "robo/carpet", "robo/car", "robo/car/gone"]
+    assert [str(f) for f in cce.check_exclude_paths(tree, [entry])] == [
+        'robo-car: exclude_paths entry "bringup" is not inside its path "robo/car"',
+        'robo-car: exclude_paths entry "robo/carpet" is not inside its path "robo/car"',
+        'robo-car: exclude_paths entry "robo/car" is not inside its path "robo/car"',
+        'robo-car: exclude_paths entry "robo/car/gone" is not a directory under packages/',
+    ]
+
+
+def test_main_fails_on_an_exclude_path_that_excludes_nothing(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    project(tree, "robo/car", "project(car)\n")
+    entry = matrix_entry("robo/car", [])
+    entry["exclude_paths"] = ["robo/car/main"]
+    write(tree / cce.MATRIX, json.dumps([entry]))
+    write(tree / cce.JUSTFILE, "mod car 'packages/robo/car'\n")
+    monkeypatch.setattr(cce, "REPO_ROOT", tree)
+    monkeypatch.setattr(cce, "NOT_IN_MATRIX", {})
+    monkeypatch.setattr(cce, "NESTED_NOT_EXCLUDED", {})
+    assert cce.main([]) == 0
+    entry["exclude_paths"] = ["robo/car/twin"]
+    write(tree / cce.MATRIX, json.dumps([entry]))
+    assert cce.main([]) == 1
+    assert 'exclude_paths entry "robo/car/twin"' in capsys.readouterr().err
+
+
 def test_main_exit_codes(tree: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     project(tree, "robo/car", SHARED)
     write(tree / cce.MATRIX, json.dumps([matrix_entry("robo/car", ["components"])]))
     write(tree / cce.JUSTFILE, "mod car 'packages/robo/car'\n")
     monkeypatch.setattr(cce, "REPO_ROOT", tree)
     monkeypatch.setattr(cce, "NOT_IN_MATRIX", {})
+    monkeypatch.setattr(cce, "NESTED_NOT_EXCLUDED", {})
     assert cce.main([]) == 0
     write(tree / cce.MATRIX, json.dumps([matrix_entry("robo/car", [])]))
     assert cce.main([]) == 1
     assert "robo-car" in capsys.readouterr().err
+
+
+def nested_findings(
+    modules: dict[str, str], matrix: list[dict], allowed: dict[str, str]
+) -> list[str]:
+    return [str(f) for f in cce.check_nested(modules, matrix, allowed)]
+
+
+def test_a_nested_project_needs_an_exclude_or_a_reason() -> None:
+    car = matrix_entry("robo/car")
+    modules = {"car": "packages/robo/car", "sub": "packages/robo/car/sub"}
+    missing = (
+        'robo-car: the project at "robo/car/sub" is inside its path but not in '
+        "its exclude_paths, so a change there rebuilds it"
+    )
+    # Registered in the root justfile only, and as a matrix entry only.
+    assert nested_findings(modules, [car], {}) == [missing]
+    assert nested_findings({}, [car, matrix_entry("robo/car/sub")], {}) == [missing]
+    # A sibling sharing the prefix is not nested.
+    assert nested_findings({"pet": "packages/robo/carpet"}, [car], {}) == []
+    assert nested_findings(modules, [car], {"robo/car/sub": "on purpose"}) == []
+    car["exclude_paths"] = ["robo/car/sub/"]
+    assert nested_findings(modules, [car], {}) == []
+
+
+def test_a_nested_exemption_needs_a_reason_and_goes_stale() -> None:
+    car = matrix_entry("robo/car")
+    modules = {"car": "packages/robo/car", "sub": "packages/robo/car/sub"}
+    assert nested_findings(modules, [car], {"robo/car/sub": " "}) == [
+        "robo/car/sub: NESTED_NOT_EXCLUDED entry has no reason"
+    ]
+    assert nested_findings({}, [car], {"robo/car/sub": "on purpose"}) == [
+        "robo/car/sub: NESTED_NOT_EXCLUDED names it, but it is not a project "
+        "inside a matrix entry's path"
+    ]
+    car["exclude_paths"] = ["robo/car/sub"]
+    assert nested_findings(modules, [car], {"robo/car/sub": "on purpose"}) == [
+        "robo/car/sub: is in an exclude_paths list, so its NESTED_NOT_EXCLUDED "
+        "entry is stale"
+    ]
+
+
+def release_findings(matrix: list[dict], packages: dict) -> list[str]:
+    return [str(f) for f in cce.check_release_excludes(matrix, packages)]
+
+
+def test_release_please_excludes_the_same_directories() -> None:
+    car = matrix_entry("robo/car")
+    car["exclude_paths"] = ["robo/car/sub", "robo/car/twin/"]
+    both = ["packages/robo/car/twin", "packages/robo/car/sub"]
+    assert release_findings([car], {"packages/robo/car": {"exclude-paths": both}}) == []
+    # A project release-please does not release needs no list.
+    assert release_findings([car], {"packages/robo/boat": {}}) == []
+    assert release_findings([car], {"packages/robo/car": {}}) == [
+        "robo-car: release-please-config.json exclude-paths [] differ from its "
+        "exclude_paths, which need ['packages/robo/car/sub', 'packages/robo/car/twin']"
+    ]
+    # Relative to the package, as project-matrix.json writes them: refused.
+    assert (
+        release_findings(
+            [car], {"packages/robo/car": {"exclude-paths": ["sub", "twin"]}}
+        )
+        != []
+    )
+    # A release-please list with no matrix exclude_paths behind it.
+    assert release_findings(
+        [matrix_entry("robo/car")], {"packages/robo/car": {"exclude-paths": both[:1]}}
+    ) == [
+        "robo-car: release-please-config.json exclude-paths "
+        "['packages/robo/car/twin'] differ from its exclude_paths, which need []"
+    ]
+
+
+def test_main_fails_on_a_nested_project_and_on_a_release_please_gap(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    project(tree, "robo/car", "project(car)\n")
+    project(tree, "robo/car/sub", "project(sub)\n")
+    entry = matrix_entry("robo/car", [])
+    entry["exclude_paths"] = ["robo/car/sub"]
+    justfile = "mod car 'packages/robo/car'\nmod sub 'packages/robo/car/sub'\n"
+    release = {
+        "packages": {"packages/robo/car": {"exclude-paths": ["packages/robo/car/sub"]}}
+    }
+    write(tree / cce.MATRIX, json.dumps([entry]))
+    write(tree / cce.JUSTFILE, justfile)
+    write(tree / cce.RELEASE_CONFIG, json.dumps(release))
+    monkeypatch.setattr(cce, "REPO_ROOT", tree)
+    monkeypatch.setattr(cce, "NOT_IN_MATRIX", {"robo/car/sub": "host build"})
+    monkeypatch.setattr(cce, "NESTED_NOT_EXCLUDED", {})
+    assert cce.main([]) == 0
+    capsys.readouterr()
+
+    release["packages"]["packages/robo/car"].pop("exclude-paths")
+    write(tree / cce.RELEASE_CONFIG, json.dumps(release))
+    assert cce.main([]) == 1
+    assert "release-please-config.json exclude-paths []" in capsys.readouterr().err
+
+    entry.pop("exclude_paths")
+    write(tree / cce.MATRIX, json.dumps([entry]))
+    assert cce.main([]) == 1
+    assert 'the project at "robo/car/sub" is inside its path' in capsys.readouterr().err
 
 
 REAL_MATRIX = json.loads((cce.REPO_ROOT / cce.MATRIX).read_text(encoding="utf-8"))
@@ -204,6 +361,30 @@ REAL_MATRIX = json.loads((cce.REPO_ROOT / cce.MATRIX).read_text(encoding="utf-8"
 
 def test_the_real_matrix_covers_every_consumer() -> None:
     assert [str(f) for f in cce.check(cce.REPO_ROOT, REAL_MATRIX)] == []
+
+
+def test_the_real_exclude_paths_name_directories_inside_their_project() -> None:
+    assert [str(f) for f in cce.check_exclude_paths(cce.REPO_ROOT, REAL_MATRIX)] == []
+    # The robocar firmware's directory holds four separate projects; each
+    # must be excluded, or a change to it alone rebuilds the firmware.
+    robocar = next(e for e in REAL_MATRIX if e["project"] == "robocar")
+    assert robocar["exclude_paths"] == [
+        "robotics/robocar/bringup",
+        "robotics/robocar/integrated",
+        "robotics/robocar/simulation",
+        "robotics/robocar/twin",
+    ]
+
+
+def test_the_real_exclude_check_fails_on_a_package_relative_entry() -> None:
+    # Control: the check above must be able to fail on the real tree.
+    matrix = copy.deepcopy(REAL_MATRIX)
+    robocar = next(e for e in matrix if e["project"] == "robocar")
+    robocar["exclude_paths"][0] = "bringup"
+    assert [str(f) for f in cce.check_exclude_paths(cce.REPO_ROOT, matrix)] == [
+        'robocar: exclude_paths entry "bringup" is not inside its path '
+        '"robotics/robocar"'
+    ]
 
 
 JUSTFILE_TEXT = """\
@@ -284,6 +465,7 @@ def test_main_fails_on_an_unbuilt_registration(
     write(tree / cce.JUSTFILE, "mod car 'packages/robo/car'\n")
     monkeypatch.setattr(cce, "REPO_ROOT", tree)
     monkeypatch.setattr(cce, "NOT_IN_MATRIX", {})
+    monkeypatch.setattr(cce, "NESTED_NOT_EXCLUDED", {})
     assert cce.main([]) == 0
     write(
         tree / cce.JUSTFILE,
@@ -320,3 +502,50 @@ def test_the_real_matrix_fails_when_a_consumer_entry_is_dropped() -> None:
     assert [str(f) for f in cce.check(cce.REPO_ROOT, matrix)] == [
         'thinkpack-brainbox: extra_paths misses "components/improv-wifi", which it compiles'
     ]
+
+
+REAL_RELEASE_PACKAGES = json.loads(
+    (cce.REPO_ROOT / cce.RELEASE_CONFIG).read_text(encoding="utf-8")
+)["packages"]
+
+
+def test_every_real_nested_project_is_excluded_or_exempt() -> None:
+    assert nested_findings(REAL_MODULES, REAL_MATRIX, cce.NESTED_NOT_EXCLUDED) == []
+
+
+def test_the_real_nested_check_fails_when_an_exclude_is_dropped() -> None:
+    # Control: the check above must be able to fail on the real tree.
+    matrix = copy.deepcopy(REAL_MATRIX)
+    robocar = next(e for e in matrix if e["project"] == "robocar")
+    robocar["exclude_paths"].remove("robotics/robocar/twin")
+    assert nested_findings(REAL_MODULES, matrix, cce.NESTED_NOT_EXCLUDED) == [
+        'robocar: the project at "robotics/robocar/twin" is inside its path but '
+        "not in its exclude_paths, so a change there rebuilds it"
+    ]
+
+
+def test_real_release_please_excludes_match_the_matrix() -> None:
+    assert release_findings(REAL_MATRIX, REAL_RELEASE_PACKAGES) == []
+    # The comparison must have something to compare.
+    robocar = REAL_RELEASE_PACKAGES["packages/robotics/robocar"]
+    assert len(robocar["exclude-paths"]) == 4
+
+
+def test_the_real_release_check_fails_when_the_list_is_lost() -> None:
+    # Control: without the list, a bringup-only commit is released as robocar.
+    packages = copy.deepcopy(REAL_RELEASE_PACKAGES)
+    del packages["packages/robotics/robocar"]["exclude-paths"]
+    (finding,) = release_findings(REAL_MATRIX, packages)
+    assert finding.startswith(
+        "robocar: release-please-config.json exclude-paths [] differ"
+    )
+
+
+def test_real_bringup_components_do_not_count_as_the_firmware_own() -> None:
+    robocar = cce.REPO_ROOT / "packages/robotics/robocar"
+    assert robocar / "bringup" in cce.nested_project_dirs(robocar)
+    own = [
+        c.relative_to(robocar).as_posix() for c in cce._local_component_cmakes(robocar)
+    ]
+    assert "main/CMakeLists.txt" in own
+    assert [c for c in own if c.startswith("bringup/")] == []

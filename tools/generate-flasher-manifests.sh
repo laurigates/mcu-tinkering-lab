@@ -5,7 +5,7 @@
 #   ./tools/generate-flasher-manifests.sh <version> [firmware-dir]
 #
 # Arguments:
-#   version      Release tag that triggered the build, e.g. "robocar-unified-v0.1.5".
+#   version      Release tag that triggered the build, e.g. "robocar-v<version>".
 #                Used as the site-level version and as a fallback for projects
 #                missing from .release-please-manifest.json.
 #   firmware-dir Output directory for manifests (default: "firmware")
@@ -28,7 +28,7 @@
 #      and "notes": the version's Features / Bug Fixes / Performance entries
 #      from the project's CHANGELOG.md as a JSON array of short strings
 #      (tools/changelog-notes.py), [] when there is no section. ESP Web Tools
-#      ignores it too; it is there for robocar-unified to announce an update.
+#      ignores it too; it is there for robocar to announce an update.
 #   4. Writes firmware/projects.json index consumed by the flasher page
 #
 # Environment:
@@ -38,7 +38,7 @@
 #                compiled. Written into every manifest as "buildSha": every
 #                release rebuilds every project at the triggering commit, so a
 #                project's version alone cannot say which commit its binary
-#                came from. robocar-unified's OTA compares it against the SHA
+#                came from. robocar's OTA compares it against the SHA
 #                compiled into the running firmware (issue #627).
 #
 # Requirements: bash >= 4, jq, python3, git (unless BUILD_SHA is set)

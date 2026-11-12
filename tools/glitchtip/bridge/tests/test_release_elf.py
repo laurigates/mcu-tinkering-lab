@@ -13,7 +13,7 @@ from robocar_glitchtip_bridge.symbolicate import ElfStore
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 OTHER = "fedcba9876543210fedcba9876543210fedcba98"
-TEMPLATE = "https://example.invalid/robocar-unified-v{version}/robocar-unified.elf"
+TEMPLATE = "https://example.invalid/robocar-v{version}/robocar.elf"
 
 
 def image(*shas: str) -> bytes:
@@ -38,8 +38,10 @@ def test_embedded_shas_finds_clean_and_dirty():
 
 def test_release_version_prefers_the_tag():
     assert release_version({"tags": {"version": "0.2.17"}}) == "0.2.17"
+    # Firmware up to 0.2.23 reports itself as robocar-unified@<version>.
     assert release_version({"release": "robocar-unified@0.2.16"}) == "0.2.16"
-    assert release_version({"release": "robocar-unified@"}) is None
+    assert release_version({"release": "robocar@1.2.3"}) == "1.2.3"
+    assert release_version({"release": "robocar@"}) is None
     assert release_version({}) is None
 
 

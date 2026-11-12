@@ -20,7 +20,7 @@ is rich enough for the planner prompt to behave as it does on the bench.
 
 ## Overview
 
-Teuvo (`packages/robocar/unified`) is judged by how he behaves in a room: when
+Teuvo (`packages/robotics/robocar`) is judged by how he behaves in a room: when
 he speaks, what he says, whether he answers a person, when he goes quiet, where
 he looks. Today that behaviour is evaluated by watching the bench and reading
 monitor logs. This PRD defines a set of user stories for that behaviour and a
@@ -52,7 +52,7 @@ CI or by an agent, and compared against the previous version as a scorecard.
 - **Live evaluation spends the quota the robot runs on.** The planner already
   saturates the Robotics-ER free tier (`docs/firmware/planner.md`); bench
   experiments compete with the robot itself.
-- **The existing simulation does not model this.** `packages/robocar/simulation`
+- **The existing simulation does not model this.** `packages/robotics/robocar/simulation`
   (PRD-003) is a Pymunk physics model of the removed dual-ESP32 design, with a
   Claude/Ollama backend and an I2C bridge. It models motion, not the planner,
   speech gates or voice turns.
@@ -63,7 +63,7 @@ CI or by an agent, and compared against the previous version as a scorecard.
 |------|-------|
 | Lauri | Decide whether a prompt, persona or model change made Teuvo better, before flashing |
 | Coding agents | A closed loop: change, run, read a scorecard, iterate, open a PR with evidence |
-| CI | A deterministic, free, must-pass subset on every PR touching `packages/robocar/unified` |
+| CI | A deterministic, free, must-pass subset on every PR touching the firmware (`packages/robotics/robocar/main`) or the twin |
 
 ## User stories — Teuvo
 
@@ -146,7 +146,7 @@ source already states, written so a scenario can test it.
 | FR-5 | The trace is JSONL using the field names of the firmware's log lines (`scene:`, `still:`, `gate:`, `why:`, `spent:`), so twin traces and bench logs are comparable |
 | FR-6 | Model adapters: replay (cassettes keyed by request hash), live Gemini, and other providers through a translating adapter |
 | FR-7 | Judged rubrics are versioned files; the judge model and rubric version are recorded in every scorecard |
-| FR-8 | D-oracle scenarios with replay cassettes run in CI on every PR touching `packages/robocar/unified` |
+| FR-8 | D-oracle scenarios with replay cassettes run in CI on every PR touching the firmware (`packages/robotics/robocar/main`) or the twin |
 
 ## Non-goals
 
@@ -167,7 +167,7 @@ source already states, written so a scenario can test it.
 
 1. **Tracer bullet**: planner cycle core extracted, twin binary with virtual
    clock, replay adapter, scenarios for US-E1, US-E2, US-A4. CI job.
-   *Progress (2026-11-06):* built in `packages/robocar/twin`; US-E1, US-E2,
+   *Progress (2026-11-06):* built in `packages/robotics/robocar/twin`; US-E1, US-E2,
    US-A4, US-F2 and the planner half of US-E3 pass under
    `just robocar-twin::test` (CI: `robocar-twin.yml`) with inline replies.
    The voice fuse half of US-E3, and `plan resume` / `voice resume`, wait for

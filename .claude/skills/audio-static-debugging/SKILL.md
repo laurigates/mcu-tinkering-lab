@@ -88,7 +88,7 @@ enter the ring (splice the carried byte + the first new byte into one 2-byte
 sample, send the even remainder, carry any new odd tail). Reset the carry at
 utterance end/abort so a half-sample can't bleed into the next utterance. With
 even writes into an even-sized buffer and even-sized reads, alignment holds
-through wraps. See `packages/robocar/unified/main/audio_player.c`
+through wraps. See `packages/robotics/robocar/main/audio_player.c`
 (`audio_player_write`) for the reference implementation.
 
 Related sizing gotcha found the same day: the speech text buffer

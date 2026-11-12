@@ -306,7 +306,7 @@ def tca9548a(layout: str = "schematic") -> elm.Ic:
     ``docs/reference/boards/adafruit-tca9548a.md`` — power, upstream bus,
     RST, A0-A2 and channels 0-1 down the left; channels 7 to 2 down the right.
 
-    ``layout="schematic"``: only the channels used by robocar-unified are
+    ``layout="schematic"``: only the channels used by robocar are
     exposed (ch0 = PCA9685, ch1 = OLED, ch2 = MCP23017). Upstream I2C + power
     on the left, downstream channels on the right, ordered for the router.
     """
@@ -457,7 +457,7 @@ def rcwl1601() -> elm.Ic:
 
     ``docs/reference/boards/rcwl-1601.md``: one 4-pin header on the bottom edge,
     VCC, SCL, SDA, GND left to right with the transducers facing the viewer.
-    The pins carry their I2C-mode names (robocar-unified fits R4, #782); the
+    The pins carry their I2C-mode names (robocar fits R4, #782); the
     silkscreen also prints the GPIO-mode Trig/Echo.
     """
     return physical_module(board_layout("rcwl-1601"))

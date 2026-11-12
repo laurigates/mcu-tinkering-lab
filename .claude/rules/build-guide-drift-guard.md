@@ -30,7 +30,7 @@ silent. Companion to `web-flasher.md` (the release/flasher path) and
 `generate-pin-defs.py` reads the project through the hardware join
 (`tools/hardware/`, issue #459), which takes its inputs from the project's
 `hardware.toml`: `[source] header` (`main/pin_config.h`) plus `extra_headers` —
-for robocar-unified the planner cadence headers `main/planner_task.h` and
+for robocar the planner cadence headers `main/planner_task.h` and
 `main/plan_activity.h` (issue #485). That list lives once, in the sidecar; the
 justfile recipe and the guard both pass only the project directory. The
 criterion is who writes the source, not whether it is hardware: a
@@ -147,7 +147,7 @@ breaks the pair is committing one without the other.
 
 ## 1d. The board pinout images are generated, and the guard regenerates them
 
-robocar-unified's build guide embeds one SVG per board
+robocar's build guide embeds one SVG per board
 (`docs/auto/pinouts/<board-slug>.svg`), drawn by `tools/hardware/pinout.py` from
 the board references hardware.toml names (`[source] board` and each part's
 `board`, #629). Unlike the schematic PNG they are byte-reproducible text, so for
@@ -176,7 +176,7 @@ A `--check` mode that compares against the
 checkout, as `tools/kicad` and `tools/hardware` use, does not have the blind
 spot: a file never committed is absent from CI's checkout and reads as missing.
 
-`just robocar-unified::build-guide` runs `gen-pinouts` first, and
+`just robocar::build-guide` runs `gen-pinouts` first, and
 `just hardware::gen` regenerates them alongside everything else the join emits.
 Commit the SVGs and the PDF together. Edit the board reference or hardware.toml,
 never an SVG: the next regeneration overwrites a hand edit.

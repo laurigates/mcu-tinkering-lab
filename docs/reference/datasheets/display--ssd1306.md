@@ -1,7 +1,7 @@
 # SSD1306 — 128x64 OLED/PLED Controller
 
 **Manufacturer:** Solomon Systech
-**Used in:** Heltec WiFi LoRa 32 V1 (integrated 128x64 OLED); robocar-unified
+**Used in:** Heltec WiFi LoRa 32 V1 (integrated 128x64 OLED); robocar
 (0.91-inch 128x32 module on TCA9548A channel 1 —
 [board page](../boards/ssd1306-091in-128x32.md))
 
@@ -13,7 +13,7 @@ Sources, cited below by short name:
   to the same Adafruit PDF as its pages 60–65, cited by the note's own `P n/6`.
 - **UG** — Univision UG-2832HSWEG02 product specification, Doc. SAS1-B026-B
   rev B: a 0.91-inch 128x32 SSD1306 panel; page numbers are the document's own
-  (PDF page minus 5). The robocar-unified listing does not name its glass, so
+  (PDF page minus 5). The robocar listing does not name its glass, so
   UG is the reference panel for that size, not a confirmed part.
 
 ## Key Specs
@@ -35,7 +35,7 @@ Sources, cited below by short name:
 
 The Heltec WiFi LoRa 32 V1's onboard OLED answered at `0x3C` (the removed
 `robocar-main` firmware's `OLED_I2C_ADDR`) — a repo fact, not a datasheet one.
-robocar-unified also assumes `0x3C` (`packages/robocar/unified/main/pin_config.h`),
+robocar also assumes `0x3C` (`packages/robotics/robocar/main/pin_config.h`),
 unconfirmed until a bench scan.
 
 ## Panel variants
@@ -79,7 +79,7 @@ robot.
 The UG panel's 14-pin flex brings out VDD, VSS, VCC, VBAT, VBREF, IREF, VCOMH,
 the two charge-pump capacitor pairs, RES#, SCL and SDA (UG §1.5, p. 3). It has no
 D/C# pin, so a module built on it cannot strap the address. Header order of the
-robocar-unified module is on its [board page](../boards/ssd1306-091in-128x32.md).
+robocar module is on its [board page](../boards/ssd1306-091in-128x32.md).
 
 ## I2C framing the firmware relies on
 

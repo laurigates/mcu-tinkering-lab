@@ -1,12 +1,18 @@
 """Fetch a released firmware ELF when no local copy matches an event's build.
 
-build-firmware.yml attaches `robocar-unified.elf` to each
-`robocar-unified-v<version>` release (`elfAssetName` in flasher.json). A
-crash from a released build can then be symbolicated without anyone having run
-`just glitchtip::keep-elf`. The downloaded ELF is kept only if the build SHA
-embedded in it is exactly the event's `build_sha`: every release rebuilds
-every project at the triggering commit, so the version alone does not name
-the build, and a mismatched ELF would resolve addresses to the wrong lines.
+build-firmware.yml attaches `robocar.elf` to each `robocar-v<version>` release
+(`elfAssetName` in flasher.json). A crash from a released build can then be
+symbolicated without anyone having run `just glitchtip::keep-elf`. The
+downloaded ELF is kept only if the build SHA embedded in it is exactly the
+event's `build_sha`: every release rebuilds every project at the triggering
+commit, so the version alone does not name the build, and a mismatched ELF
+would resolve addresses to the wrong lines.
+
+Releases 0.2.18 to 0.2.23 are tagged `robocar-unified-v<version>` and carry
+`robocar-unified.elf` (earlier ones carry no ELF). The default template does
+not reach them, so a crash from that firmware arrives unsymbolicated unless its
+ELF was kept by hand (`just glitchtip::keep-elf <path>`) or ELF_RELEASE_URL
+names the old template.
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_URL_TEMPLATE = (
     "https://github.com/laurigates/mcu-tinkering-lab/releases/download/"
-    "robocar-unified-v{version}/robocar-unified.elf"
+    "robocar-v{version}/robocar.elf"
 )
 
 # ROBOCAR_BUILD_SHA as the firmware embeds it: 40 hex, maybe "-dirty", NUL-ended.

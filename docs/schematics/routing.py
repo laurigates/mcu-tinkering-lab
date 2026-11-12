@@ -61,10 +61,10 @@ _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 #
 # One tier, on purpose (#494). A second, decaying tier two rows out was built
 # and measured at weights 0.01 to 0.15, and none improved any circuit on the
-# finished-set score finish() picks orderings by. At 0.1, robocar_unified kept
+# finished-set score finish() picks orderings by. At 0.1, robocar kept
 # four tight pairs under every candidate ordering against one with a single
 # tier, and balancebot's authored order gained a collinear overlap; at 0.01
-# robocar_unified matched one tier on tight pairs but crossed six more times.
+# robocar matched one tier on tight pairs but crossed six more times.
 # Two rows is 0.5 drawing units at the default grid — the spacing a routed
 # bus settles into naturally — so the charge taxed the healthy spacing along
 # its whole length and squeezed the bus into adjacent rows wherever it could
@@ -75,13 +75,13 @@ _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 # length rather than taxing every cell beside a wire. With that pass in
 # place a second tier of 0.01, 0.03, 0.05, 0.08 or 0.12 was re-measured, and
 # each one still raised balancebot from 2 crossings to 6; from 0.03 up it
-# also gave robocar_unified a tight pair, a collinear overlap and two shared
+# also gave robocar a tight pair, a collinear overlap and two shared
 # vertices.
 _NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 
 # Charge per lattice point on or inside a foreign power/ground tag (#591), in
 # grid steps. Measured with metrics.py's over_tags column: balancebot's SCL
-# net leaves the MPU6050 GND tag from 2 up, but robocar_unified's STBY net
+# net leaves the MPU6050 GND tag from 2 up, but robocar's STBY net
 # keeps running down the TCA9548A GND tag's edge until 14 — its way round is
 # up and over the mux and the PCA9685, ~10 units longer. 20 clears that with
 # margin, and nothing changed between 14 and 100. A soft cost, not a block:
@@ -90,7 +90,7 @@ TAG_PENALTY = 20.0
 
 # Charge per lattice point on or inside a text label the wire does not own
 # (#641), in grid steps. Measured with metrics.py's over_labels column. Before
-# any circuit changed, robocar_unified's SC1 -> OLED SDA vertical cleared from
+# any circuit changed, robocar's SC1 -> OLED SDA vertical cleared from
 # 2 up with no other column moving, but most of the 3.16 units total could not
 # be charged away: a label over a pin stub, which the search never sees
 # (gamepad_synth's chip name under GPIO8/GPIO9, the MPU6050 +3V3 over
@@ -1408,7 +1408,7 @@ def _order_score(
 # One step moves a segment one lattice row, which lengthens its wire by at
 # most two rows (0.5 at the default grid) when both neighbours sit on the far
 # side, so at 1.0 a near-parallel run is stepped away from only where it
-# shares more than that: robocar_unified's 5.5-unit bus pairs are, a 0.25
+# shares more than that: robocar's 5.5-unit bus pairs are, a 0.25
 # end adjacency is not.
 _NUDGE_NEAR = 1.0
 # A corner lying on another wire is an undotted, unhopped "+" that reads as a
@@ -1418,7 +1418,7 @@ _NUDGE_NEAR = 1.0
 _NUDGE_SHARED = 100.0
 # Two nets on one line stopping a row or less short of each other read as a
 # single wire with a hairline break. Removing the kiss above made one in
-# robocar_unified (SDA's run ended 0.25 short of SCL's), and balancebot had
+# robocar (SDA's run ended 0.25 short of SCL's), and balancebot had
 # two already. Weighted as a tight pair, which it reads like. Measured at 20,
 # 30 and 50 the result is the same; at 1, 5 and 10 balancebot keeps one gap
 # and takes 0.64 units of near-parallel run for a tight pair instead.

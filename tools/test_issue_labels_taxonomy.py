@@ -34,6 +34,12 @@ What the tests hold:
   behind by a moved or deleted directory routes nothing and says nothing.
 - Every scope selects one entry. The script lets one scope select several
   labels; this repo keeps them apart so a title scope names one label.
+- Every tracked file under a project's ``hardware/carrier``, ``perfboard``,
+  ``enclosure`` or ``pan-tilt`` directory is matched by its area entry, at
+  whatever depth the project sits. A glob with a fixed number of segments
+  keeps matching the projects at the old depth, so the check above stays
+  green while a nested project (packages/robotics/robocar/integrated) loses
+  its label.
 
 Whether each ``build:`` and ``area:`` name, colour and description matches the
 live labels needs the network, so it is not tested here. The gate for that is
@@ -149,6 +155,29 @@ def shared_scopes(tax: dict) -> list[str]:
     ]
 
 
+# The ``hardware/<name>`` directories that route to an area label, wherever
+# under packages/ the project that owns them sits.
+HARDWARE_AREAS: dict[str, tuple[str, ...]] = {
+    "area.carrier-pcb": ("carrier", "perfboard"),
+    "area.cad": ("enclosure", "pan-tilt"),
+}
+
+
+def unrouted_hardware(tax: dict, tracked: list[str]) -> list[str]:
+    """``section.key: path`` for each tracked file in a project's
+    ``hardware/<name>`` directory that none of its area entry's globs match."""
+    by_where = dict(entries(tax))
+    missed = []
+    for where, names in HARDWARE_AREAS.items():
+        globs = [glob_regex(g) for g in by_where.get(where, {}).get("paths", [])]
+        for name in names:
+            anywhere = glob_regex(f"packages/**/hardware/{name}/**")
+            for path in tracked:
+                if anywhere.match(path) and not any(g.match(path) for g in globs):
+                    missed.append(f"{where}: {path}")
+    return missed
+
+
 def schema_problems(tax: object) -> list[str]:
     """What check_taxonomy(tax, for_provision=True) at 2a46797 rejects.
 
@@ -237,10 +266,23 @@ class GlobRegex(unittest.TestCase):
     def test_segment_wildcards_before_a_fixed_tail(self) -> None:
         glob = "packages/*/*/hardware/carrier/**"
         self.assertTrue(
-            self.matches("packages/robocar/unified/hardware/carrier/b.toml", glob)
+            self.matches("packages/robotics/robocar/hardware/carrier/b.toml", glob)
         )
         self.assertFalse(
-            self.matches("packages/robocar/unified/x/hardware/carrier/b.toml", glob)
+            self.matches(
+                "packages/robotics/robocar/integrated/hardware/carrier/b.toml", glob
+            )
+        )
+
+    def test_a_leading_double_star_reaches_any_depth(self) -> None:
+        glob = "packages/**/hardware/carrier/**"
+        for path in (
+            "packages/robotics/robocar/hardware/carrier/b.toml",
+            "packages/robotics/robocar/integrated/hardware/carrier/b.toml",
+        ):
+            self.assertTrue(self.matches(path, glob), path)
+        self.assertFalse(
+            self.matches("packages/robotics/robocar/hardware/x.toml", glob)
         )
 
     def test_a_plain_name_matches_only_itself(self) -> None:
@@ -273,6 +315,35 @@ class Checks(unittest.TestCase):
     def test_a_scope_equal_to_a_builtin_core_key_is_reported(self) -> None:
         tax = {"area": {"pipeline": {"scopes": ["ci"]}}}
         self.assertEqual(shared_scopes(tax), ["ci: area.pipeline, core.ci"])
+
+    def test_a_hardware_directory_below_the_globs_depth_is_reported(self) -> None:
+        tracked = [
+            "packages/robotics/car/hardware/carrier/board.toml",
+            "packages/robotics/car/integrated/hardware/carrier/board.toml",
+            "packages/robotics/car/integrated/hardware/enclosure/case.toml",
+            "packages/robotics/car/hardware/notes.md",
+        ]
+        fixed = {
+            "area": {
+                "carrier-pcb": {"paths": ["packages/*/*/hardware/carrier/**"]},
+                "cad": {"paths": ["tools/enclosure/**"]},
+            }
+        }
+        self.assertEqual(
+            unrouted_hardware(fixed, tracked),
+            [
+                "area.carrier-pcb: "
+                "packages/robotics/car/integrated/hardware/carrier/board.toml",
+                "area.cad: packages/robotics/car/integrated/hardware/enclosure/case.toml",
+            ],
+        )
+        any_depth = {
+            "area": {
+                "carrier-pcb": {"paths": ["packages/**/hardware/carrier/**"]},
+                "cad": {"paths": ["packages/**/hardware/enclosure/**"]},
+            }
+        }
+        self.assertEqual(unrouted_hardware(any_depth, tracked), [])
 
 
 class CoreMerge(unittest.TestCase):
@@ -388,6 +459,24 @@ class Taxonomy(unittest.TestCase):
 
     def test_every_scope_selects_one_entry(self) -> None:
         self.assertEqual(shared_scopes(self.tax), [])
+
+    def test_every_hardware_directory_routes_to_its_area(self) -> None:
+        self.assertEqual(unrouted_hardware(self.tax, self.tracked), [])
+
+    def test_the_hardware_check_reads_a_nested_project(self) -> None:
+        # Control on the real tree: with the two-segment globs this file had
+        # before robocar's integrated carrier moved inside the firmware
+        # project, that carrier and its enclosure are the files left unrouted.
+        tax = json.loads(
+            json.dumps(self.tax).replace(
+                "packages/**/hardware/", "packages/*/*/hardware/"
+            )
+        )
+        projects = {
+            line.split(": ", 1)[1].split("/hardware/", 1)[0]
+            for line in unrouted_hardware(tax, self.tracked)
+        }
+        self.assertIn("packages/robotics/robocar/integrated", projects)
 
 
 if __name__ == "__main__":

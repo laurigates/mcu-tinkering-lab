@@ -6,7 +6,7 @@
 
 Breakout for ST's VL53L4CD time-of-flight sensor: a 2.8 V regulator, I2C level
 shifting, a 6-pin header along one edge and two STEMMA QT (Qwiic-compatible)
-connectors. robocar-unified plans two of them, aimed down at the front corners
+connectors. robocar plans two of them, aimed down at the front corners
 as cliff detectors on TCA9548A channels 5 and 6. For the sensor itself see
 [`sensor--vl53l4cd.md`](../datasheets/sensor--vl53l4cd.md).
 
@@ -58,7 +58,7 @@ and I2C pins (`tools/breakout-pinout.py`, elements `CONN3` and `CONN4`):
 ## Pad centres
 
 Not recorded while the board is a candidate: `tools/hardware/test_padcheck.py`
-pins the pages carrying a pad-centre table to the breakouts robocar-unified
+pins the pages carrying a pad-centre table to the breakouts robocar
 mounts. When the board is adopted, add the table with
 `PYTHONPATH=tools python3 -m hardware.padcheck --print adafruit-vl53l4cd` and add
 the slug to that test's `BREAKOUTS`. The header pads lie on a 2.54 mm pitch
@@ -108,8 +108,8 @@ Traced through the board file's `<signal>` contact lists:
 
 ## In this repository
 
-Not yet used. Planned for robocar-unified, TCA9548A channels 5 and 6
-(`packages/robocar/unified/WIRING.md` lists ch5–7 as reserved for "IMU / ToF /
+Not yet used. Planned for robocar, TCA9548A channels 5 and 6
+(`packages/robotics/robocar/WIRING.md` lists ch5–7 as reserved for "IMU / ToF /
 future sensors"). No `hardware.toml` entry until the checklist below is done.
 
 ## Source

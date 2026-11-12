@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       project_path:
-        description: 'Project directory relative to packages/ (e.g. robocar/unified)'
+        description: 'Project directory relative to packages/ (e.g. robotics/robocar)'
         required: true
         type: string
       target:
@@ -179,7 +179,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          # Directory convention differs by project (issue #482): robocar-unified
+          # Directory convention differs by project (issue #482): robocar
           # uses test/, the Pico reusable workflow's own convention is
           # tests/host/ — probe both rather than moving either layout.
           if [ -f test/CMakeLists.txt ] || [ -f tests/host/CMakeLists.txt ]; then
@@ -236,7 +236,7 @@ jobs:
         # smallest app partition of THIS project's partition table — not a byte
         # count typed in here. The step this replaces compared
         # build/<project>.bin against a hardcoded 1.75 MB: wrong for every
-        # table that is not 1.81 MB (robocar-unified's is 3.5 MB), and vacuous
+        # table that is not 1.81 MB (robocar's is 3.5 MB), and vacuous
         # for robocar-main and robocar-camera, whose binaries are not named
         # after the project, so `stat` returned 0 and 0 bytes was "within
         # limits" (issue #556). This step only surfaces the verdict. A missing
