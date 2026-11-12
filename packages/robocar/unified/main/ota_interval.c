@@ -26,3 +26,12 @@ bool ota_interval_ticks_from_minutes(uint32_t minutes, uint32_t tick_rate_hz, ui
     *out_ticks = (uint32_t)ticks;
     return true;
 }
+
+uint32_t ota_interval_next_wait_ticks(bool checked_yet, uint32_t first_delay_ticks,
+                                      uint32_t interval_ticks)
+{
+    if (checked_yet || first_delay_ticks > interval_ticks) {
+        return interval_ticks;
+    }
+    return first_delay_ticks;
+}
