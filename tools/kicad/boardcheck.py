@@ -664,9 +664,9 @@ def _validate_fanout(
     nets = fan.get("nets")
     if not isinstance(nets, list) or not nets:
         return [f"{at} nets must be a non-empty list"]
-    for net in nets:
-        if not _known_net(nl, net):
-            errors.append(f"{at} net {net!r} is not in the netlist")
+    unknown = [net for net in nets if not _known_net(nl, net)]
+    for net in unknown:
+        errors.append(f"{at} net {net!r} is not in the netlist")
     via = fan.get("via_um")
     if not (_numbers(via, 2) and via[0] > via[1] > 0):
         errors.append(
@@ -688,6 +688,8 @@ def _validate_fanout(
         ):
             errors.append(f'{at} {key} must be a list of "REF:PIN" strings')
             continue
+        if unknown:
+            continue  # `pads` lacks the unknown nets' pads; fix the nets first
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
@@ -934,6 +936,9 @@ def validate_config(
     for rect in silk.get("rects", []):
         if not _numbers(rect, 4):
             errors.append(f"{where}: [silk] rects: {rect!r} must be [x0, y0, x1, y1]")
+    cut_lines_ok = all(
+        _numbers(line, 4) and line[:2] != line[2:] for line in silk.get("cut_lines", [])
+    )
     for line in silk.get("cut_lines", []):
         if not _numbers(line, 4):
             errors.append(
@@ -978,7 +983,9 @@ def validate_config(
     keepout_errors = _validate_keepouts(where, data, size)
     errors += keepout_errors
     errors += _validate_route_keepouts(where, data, size)
-    if not keepout_errors:  # panel.build reads each keepout's rect
+    if not keepout_errors and cut_lines_ok:
+        # panel.build reads each keepout's rect and each cut line's four numbers,
+        # and divides by each cut line's length
         errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
@@ -1015,14 +1022,18 @@ def validate_config(
     classes = data["net_classes"]
     for cls in [*classes, data["signal"]]:
         name = cls.get("name", "signal")
-        if cls is not data["signal"] and (
-            not isinstance(name, str)
-            or not isinstance(cls.get("nets"), list)
-            or not cls["nets"]
-            or not all(isinstance(n, str) for n in cls["nets"])
-        ):
+        nets = cls.get("nets")
+        if cls is data["signal"]:
+            pass
+        elif not isinstance(name, str) or not isinstance(nets, list) or not nets:
             errors.append(
                 f"{where}: [[net_classes]] needs a name and a non-empty nets list"
+            )
+        elif not all(isinstance(n, str) for n in nets):
+            bad = [n for n in nets if not isinstance(n, str)]
+            errors.append(
+                f"{where}: [[net_classes]] {name!r}: nets must be net names or "
+                f"patterns, got {bad!r}"
             )
         if not all(_positive(cls.get(k)) for k in ("track_um", "clearance_um")):
             errors.append(
@@ -1044,9 +1055,17 @@ def validate_config(
     except KicadError as e:
         errors.append(str(e))
     pour = data["pour"]
-    errors += _validate_pour(where, pour, nl, size)
-    if not isinstance(pour.get("layers"), list) or not pour["layers"]:
-        errors.append(f"{where}: [pour] layers must be a non-empty list")
+    layers = pour.get("layers")
+    if (
+        not isinstance(layers, list)
+        or not layers
+        or not all(isinstance(layer, str) for layer in layers)
+    ):
+        # Before _validate_pour: its region check `layer not in board_layers`
+        # is a substring test on a string, and raises on a non-string layer.
+        errors.append(f"{where}: [pour] layers must be a non-empty list of layer names")
+    else:
+        errors += _validate_pour(where, pour, nl, size)
     for k in ("clearance_mm", "min_thickness_mm", "thermal_gap_mm", "spoke_mm"):
         if not _positive(pour.get(k)):
             errors.append(f"{where}: [pour] {k} must be > 0")
