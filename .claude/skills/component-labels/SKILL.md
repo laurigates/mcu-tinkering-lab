@@ -187,9 +187,11 @@ pairing is required was not tested.
    omits but its macOS import needs (`brew install libusb` too), and `bleak`
    for Bluetooth LE. A venv set up before `bleak` was added needs
    `just labels::setup` again, or the scan reports the package missing.
-5. **Spec lines from memory.** Some lines in the first data file were written
-   from memory, not read from a listing; they carry a `# from memory` comment.
-   Check those against a datasheet before reprinting them.
+5. **Spec lines from memory.** Some lines in the data files were written from
+   memory, not read from a listing; they carry a `# from memory` comment.
+   Check those against a datasheet before reprinting them. The lines in
+   `drawers-2026-10.toml` were checked on 2026-11-12 (its header lists the
+   datasheets); the 2026-11 files still carry theirs.
 6. **Kits hide their values.** The film-capacitor kit's value list is only in
    the listing's images and was never read; its label shows one example code.
 7. **A new sticker kind starts a new row.** Labels, then lids, then strips,

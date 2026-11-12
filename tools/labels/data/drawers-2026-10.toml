@@ -2,9 +2,12 @@
 # AliExpress order history, typed in by hand. Build with
 #   just labels::build tools/labels/data/drawers-2026-10.toml
 #
-# Spec lines marked "from memory" were not read from the listing and want
-# checking against a datasheet before the next print: the I²C addresses, the
-# TB6612FNG ratings, the VS1838B pinout and the NTAG215 memory size.
+# The spec lines first written from memory were checked against datasheets on
+# 2026-11-12: the I²C addresses (MCP23017 DS20001952C §3.3.1, PCA9685 Rev. 4
+# §7.1.1, TCA9548A SCPS207H Table 7-1), the TB6612FNG ratings (Toshiba
+# 2007-06-30, p. 3), the NTAG215 memory size (NXP Rev. 3.2 §2.1) and the film
+# capacitor code (Meritek MPEM part numbering). Two lines are still open and
+# say so where they stand: the VS1838B and the film kit's value list.
 schema = 1
 title = "Parts drawers 2026-10"
 
@@ -159,7 +162,7 @@ cat = "IR receiver"
 color = "opto"
 value = "VS1838B"
 stock = "ir-receiver-vs1838b-module"
-spec = ["38 kHz IR receiver · 2.7–5.5 V", "Front: OUT · GND · VCC"]  # pinout from memory
+spec = ["38 kHz IR receiver · 2.7–5.5 V", "Front: OUT · GND · VCC"]  # matches OS-OPTO's OS-1838B sheet; no sheet found under the VS1838B name
 foot = "10 pcs · AliExpress 07/2024"
 render = { kind = "irrx" }
 
@@ -260,7 +263,7 @@ cat = "Module · I²C"
 color = "mod-indigo"
 value = "MCP23017"
 stock = "mcp23017-module"
-spec = ["16-bit I²C GPIO expander", "Addr 0x20–0x27 (A0–A2)"]  # address from memory
+spec = ["16-bit I²C GPIO expander", "Addr 0x20–0x27 (A0–A2)"]
 foot = "2 pcs · AliExpress 06/2025"
 render = { kind = "module", l = 30, w = 20, pins = 8, pcb = "#1d4f91" }
 
@@ -269,7 +272,8 @@ cat = "Module · motor"
 color = "mod-indigo"
 value = "TB6612FNG"
 stock = "tb6612fng-module"
-spec = ["Dual H-bridge · 1.2 A/ch cont.", "VM ≤ 15 V · logic 2.7–5.5 V"]  # ratings from memory
+# Operating range, not the absolute maximums (15 V, 1.2 A average, 3.2 A peak).
+spec = ["Dual H-bridge · 1 A/ch (1.2 A max)", "VM 4.5–13.5 V · logic 2.7–5.5 V"]
 foot = "2 pcs · AliExpress 01/2025"
 render = { kind = "module", l = 20, w = 20, pins = 8, pcb = "#7e22ce" }
 
@@ -278,7 +282,7 @@ cat = "Module · I²C"
 color = "mod-indigo"
 value = "PCA9685"
 stock = "pca9685-module"
-spec = ["16-ch 12-bit PWM / servo", "I²C, default addr 0x40"]  # address from memory
+spec = ["16-ch 12-bit PWM / servo", "I²C, default addr 0x40"]
 foot = "2 orders · AliExpress 04/2025"
 render = { kind = "module", l = 62, w = 25, pins = 6, pcb = "#1d4f91" }
 
@@ -287,7 +291,7 @@ cat = "Module · I²C"
 color = "mod-indigo"
 value = "TCA9548A"
 stock = "tca9548a-module"
-spec = ["1 → 8 I²C multiplexer", "Addr 0x70–0x77 (A0–A2)"]  # address from memory
+spec = ["1 → 8 I²C multiplexer", "Addr 0x70–0x77 (A0–A2)"]
 foot = "2 orders · AliExpress 12/2025"
 render = { kind = "module", l = 30, w = 21, pins = 8, pcb = "#1d4f91" }
 
@@ -436,7 +440,7 @@ cat = "NFC"
 color = "rf-red"
 value = "NTAG215"
 stock = "nfc-ntag215-cards"
-spec = ["NFC cards · 13.56 MHz", "504 bytes user memory"]  # memory size from memory
+spec = ["NFC cards · 13.56 MHz", "504 bytes user memory"]
 foot = "5 pcs · AliExpress 03/2026"
 render = { kind = "card" }
 
