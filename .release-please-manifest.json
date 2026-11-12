@@ -1,5 +1,5 @@
 {
-  "packages/robocar/unified": "0.2.22",
+  "packages/robocar/unified": "0.2.23",
   "packages/audio/audiobook-player": "0.1.2",
   "packages/camera-vision/cam-i2s-audio": "0.1.6",
   "packages/camera-vision/cam-webserver": "0.1.8",

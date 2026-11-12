@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.23](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.22...robocar-unified-v0.2.23) (2026-11-12)
+
+
+### Features
+
+* **robocar-unified:** add motors standby and exercise console commands ([#1112](https://github.com/laurigates/mcu-tinkering-lab/issues/1112)) ([321da7f](https://github.com/laurigates/mcu-tinkering-lab/commit/321da7ff26ab6527ccf9a8e356ff20afca6033c5)), closes [#944](https://github.com/laurigates/mcu-tinkering-lab/issues/944)
+
+
+### Bug Fixes
+
+* **robocar-unified:** create the MQTT client at boot so OTA's subscription lands ([#1115](https://github.com/laurigates/mcu-tinkering-lab/issues/1115)) ([335b798](https://github.com/laurigates/mcu-tinkering-lab/commit/335b7985caea4e94822b0bc791c2b03c672e9a6f)), closes [#1054](https://github.com/laurigates/mcu-tinkering-lab/issues/1054)
+* **robocar-unified:** run the first OTA check 15 s after the task starts ([#1116](https://github.com/laurigates/mcu-tinkering-lab/issues/1116)) ([7b7220a](https://github.com/laurigates/mcu-tinkering-lab/commit/7b7220acbb2104aa36d56282449bd2b533b53b7b)), closes [#1055](https://github.com/laurigates/mcu-tinkering-lab/issues/1055)
+* **robocar-unified:** serialise servo writes against servo off ([#1117](https://github.com/laurigates/mcu-tinkering-lab/issues/1117)) ([b576572](https://github.com/laurigates/mcu-tinkering-lab/commit/b57657228efbac09ed3be4be8b00f87eee6caad0)), closes [#1058](https://github.com/laurigates/mcu-tinkering-lab/issues/1058)
+
 ## [0.2.22](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.21...robocar-unified-v0.2.22) (2026-11-11)
 
 
