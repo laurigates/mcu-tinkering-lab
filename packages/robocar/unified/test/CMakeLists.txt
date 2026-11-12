@@ -660,7 +660,9 @@ add_test(NAME pca9685_phase COMMAND test_pca9685_phase)
 # i2c_bus.h drags in; the i2c_bus itself is a recording stub in the test. The
 # case it pins is init centring the servos through a setter that refuses until
 # init has finished — a failure with no bus traffic to show for it, which on the
-# device read as "Failed to center servos" and a reboot.
+# device read as "Failed to center servos" and a reboot. The write-vs-release
+# cases (issue #1058) run two writers on pthreads; the test supplies its own
+# pthread-backed semaphore shim so the module's lock really contends.
 # -----------------------------------------------------------------------------
 add_executable(test_servo_controller
     "${MAIN_SRC_DIR}/servo_controller.c"

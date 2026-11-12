@@ -13,11 +13,49 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "i2c_bus.h"
 #include "pin_config.h"
 
 static const char *TAG = "servo_controller";
+
+/* Serialises every write and the state it decides on (issue #1058).
+ *
+ * The executor (reactive_controller, ~30 Hz) and the console task both write the
+ * servos. servo_set_angle() checks the enable flag, then writes; servo_disable()
+ * writes 0, then clears the flag. Without a lock a `servo off` could land
+ * between the executor's check and its write, or between the release write and
+ * the flag, and the head stayed driven while it read as off — and the executor,
+ * seeing it off, never refreshed or released it again.
+ *
+ * A mutex, not a spinlock: the critical section is an I2C transaction that
+ * blocks on the bus lock, which a critical section must not do. Priority
+ * inheritance keeps the executor from waiting behind a preempted lower-priority
+ * holder. The wait is bounded so a wedged bus surfaces as ESP_ERR_TIMEOUT.
+ *
+ * Created by servo_controller_init(). Before that only the boot task runs and
+ * the only callers are servo_set_limits() and servo_set_pwm_frequency(), so a
+ * NULL handle skips the lock. Held across one write sequence and never across
+ * a delay: servo_move_smooth() and servo_exercise() take it once per step. */
+#define SERVO_LOCK_TIMEOUT_MS 100u
+
+static SemaphoreHandle_t s_lock;
+
+static bool servo_lock(void)
+{
+    return s_lock == NULL || xSemaphoreTake(s_lock, pdMS_TO_TICKS(SERVO_LOCK_TIMEOUT_MS)) == pdTRUE;
+}
+
+static void servo_unlock(void)
+{
+    if (s_lock != NULL) {
+        xSemaphoreGive(s_lock);
+    }
+}
+
+static esp_err_t set_limits_locked(servo_id_t servo_id, int16_t min_deg, int16_t max_deg);
+static esp_err_t set_pwm_frequency_locked(uint16_t hz);
 
 /* The angles at which the pulse reaches the datasheet range: the widest travel
  * limits servo_set_limits() accepts. -90 and +81 with the shipped constants. */
@@ -143,6 +181,14 @@ esp_err_t servo_controller_init(void)
     ESP_LOGI(TAG, "Initializing servo controller (PCA9685 @ %uHz)",
              (unsigned)i2c_bus_pca9685_frequency());
 
+    if (s_lock == NULL) {
+        s_lock = xSemaphoreCreateMutex();
+        if (s_lock == NULL) {
+            ESP_LOGE(TAG, "No memory for the servo lock");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
     servo_state.pan_angle = SERVO_PAN_CENTER;
     servo_state.tilt_angle = SERVO_TILT_CENTER;
     servo_state.pan_enabled = true;
@@ -167,7 +213,9 @@ esp_err_t servo_controller_init(void)
     return ESP_OK;
 }
 
-esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle)
+/* servo_set_angle() with s_lock already held, so the enable check, the write
+ * and the angle update are one step against servo_disable(). */
+static esp_err_t set_angle_locked(servo_id_t servo_id, int16_t angle)
 {
     if (!servo_state.initialized)
         return ESP_ERR_INVALID_STATE;
@@ -205,6 +253,15 @@ esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle)
         *current_angle = angle;
         ESP_LOGD(TAG, "Servo %d -> %d° (count=%d)", servo_id, angle, count);
     }
+    return ret;
+}
+
+esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle)
+{
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
+    const esp_err_t ret = set_angle_locked(servo_id, angle);
+    servo_unlock();
     return ret;
 }
 
@@ -267,6 +324,8 @@ esp_err_t servo_disable(servo_id_t servo_id)
         return ESP_ERR_INVALID_STATE;
 
     uint8_t channel = (servo_id == SERVO_PAN) ? SERVO_PAN_CHANNEL : SERVO_TILT_CHANNEL;
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
     esp_err_t ret = i2c_bus_pca9685_set(channel, 0);
 
     if (ret == ESP_OK) {
@@ -275,6 +334,7 @@ esp_err_t servo_disable(servo_id_t servo_id)
         else
             servo_state.tilt_enabled = false;
     }
+    servo_unlock();
     return ret;
 }
 
@@ -291,14 +351,19 @@ esp_err_t servo_enable(servo_id_t servo_id)
     if (!servo_state.initialized)
         return ESP_ERR_INVALID_STATE;
 
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
     note_motion(); /* re-energising a released servo can twitch it */
+    esp_err_t ret;
     if (servo_id == SERVO_PAN) {
         servo_state.pan_enabled = true;
-        return servo_set_angle(SERVO_PAN, servo_state.pan_angle);
+        ret = set_angle_locked(SERVO_PAN, servo_state.pan_angle);
     } else {
         servo_state.tilt_enabled = true;
-        return servo_set_angle(SERVO_TILT, servo_state.tilt_angle);
+        ret = set_angle_locked(SERVO_TILT, servo_state.tilt_angle);
     }
+    servo_unlock();
+    return ret;
 }
 
 esp_err_t servo_enable_all(void)
@@ -369,6 +434,18 @@ esp_err_t servo_set_limits(servo_id_t servo_id, int16_t min_deg, int16_t max_deg
         min_deg > center || max_deg < center)
         return ESP_ERR_INVALID_ARG;
 
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
+    const esp_err_t ret = set_limits_locked(servo_id, min_deg, max_deg);
+    servo_unlock();
+    return ret;
+}
+
+/* The limit update and the corrective move, as one step against the other
+ * writers: a move between them could otherwise park the servo outside the new
+ * range, and a release between them be undone by the correction. */
+static esp_err_t set_limits_locked(servo_id_t servo_id, int16_t min_deg, int16_t max_deg)
+{
     int16_t *current;
     bool enabled;
     if (servo_id == SERVO_PAN) {
@@ -398,10 +475,22 @@ esp_err_t servo_set_limits(servo_id_t servo_id, int16_t min_deg, int16_t max_deg
         *current = inside;
         return ESP_OK;
     }
-    return servo_set_angle(servo_id, inside);
+    return set_angle_locked(servo_id, inside);
 }
 
 esp_err_t servo_set_pwm_frequency(uint16_t hz)
+{
+    /* Whole sequence under the lock: a move between the release and the
+     * re-send would put a count from the old period back on the output, and a
+     * release in the same gap would be undone by the re-send. */
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
+    const esp_err_t ret = set_pwm_frequency_locked(hz);
+    servo_unlock();
+    return ret;
+}
+
+static esp_err_t set_pwm_frequency_locked(uint16_t hz)
 {
     const bool pan_live = servo_state.initialized && servo_state.pan_enabled;
     const bool tilt_live = servo_state.initialized && servo_state.tilt_enabled;
