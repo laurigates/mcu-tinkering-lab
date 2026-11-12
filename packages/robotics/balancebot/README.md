@@ -72,7 +72,25 @@ arm | disarm         # start/stop balancing (or hold upright 3 s to auto-arm)
 rate l 800           # open-loop motor bench test (disarmed only)
 cal                  # gyro bias calibration (keep the robot still)
 save                 # persist gains to flash (survives power cycle)
+load                 # reload the saved params, gains and mount from flash (disarmed only)
 ```
+
+`arm`, `mount` and `load` judge the state after the commands typed before them
+have reached core 1 (a pasted `disarm` first is waited for, a few control ticks
+at most), and refuse rather than print `OK` when core 1 would ignore them:
+
+- `arm` in FAULT: `ERR: state FAULT — 'disarm' to clear it, or hold upright …`.
+  If the IMU is not responding, holding upright cannot clear the FAULT, so the
+  refusal offers only `disarm`.
+- `arm` that core 1 takes but faults on in the same tick, because the robot
+  lies past the 45° tilt cutoff or the IMU does not read:
+  `ERR: armed, then FAULT — …` instead of `OK`.
+- `mount` and `load` while armed: `ERR: disarm first …`. Core 1 keeps the
+  mount while armed. If the hold-upright gesture arms it before a `mount` (or
+  the mount in `load`) arrives, the CLI says the mount stays where it was and
+  `get` shows the mount core 1 applies.
+- Any of them while core 1 is still busy with earlier commands (a `save`
+  stalls it ~45 ms): `ERR: core 1 busy …`; nothing is sent, so repeat it.
 
 CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m`
 (`ctrl` 0 = PID, 1 = LQR; `pos_m` = commanded wheel travel since arming).
