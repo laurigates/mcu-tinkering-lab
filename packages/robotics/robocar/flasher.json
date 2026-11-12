@@ -1,0 +1,15 @@
+{
+  "name": "RoboCar",
+  "description": "Single-board robocar consolidation — camera, motor control, and AI vision on one board",
+  "chipFamily": "ESP32-S3",
+  "board": "Seeed XIAO ESP32-S3 Sense",
+  "appBinaryName": "robocar.bin",
+  "otaAssetName": "robocar.bin",
+  "elfAssetName": "robocar.elf",
+  "releaseFlashParts": true,
+  "otaNotifyTopic": "robocar/ota/notify",
+  "category": "robocar",
+  "flashMode": "usb",
+  "improv": true,
+  "embedsBuildSha": true
+}

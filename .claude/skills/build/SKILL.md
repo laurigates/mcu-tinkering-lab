@@ -13,7 +13,7 @@ Build an ESP32 project in a Docker container and analyze the output for errors.
 
 If $ARGUMENTS is empty, show the user the available build targets:
 
-- `robocar` - Robocar firmware (XIAO ESP32-S3 Sense, robocar-unified)
+- `robocar` - Robocar firmware (XIAO ESP32-S3 Sense)
 - `robocar-bringup` - Robocar hardware self-test
 - `webserver` - ESP32-CAM webserver
 - `i2s-audio` - ESP32-CAM I2S audio
@@ -26,7 +26,7 @@ If $ARGUMENTS is empty, show the user the available build targets:
 
 Based on $ARGUMENTS, run the appropriate build command:
 
-- `robocar` or `robocar-unified`: `just robocar-unified::build`
+- `robocar`: `just robocar::build`
 - `robocar-bringup` or `bringup`: `just robocar-bringup::build`
 - `webserver`: `just webserver::build`
 - `i2s-audio` or `audio`: `just i2s-audio::build`

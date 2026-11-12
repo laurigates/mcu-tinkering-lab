@@ -1,8 +1,9 @@
 # Shared ESP-IDF containerized build recipes
 # Import this from ESP-IDF project justfiles: import '../../../tools/esp32-idf.just'
+# (a project nested one level deeper, packages/<domain>/<name>/<sub>/, adds one '../')
 #
 # Requires these variables defined in your project justfile:
-#   project_dir  — relative path from repo root (e.g., "packages/robocar/unified")
+#   project_dir  — relative path from repo root (e.g., "packages/robotics/robocar")
 #   target       — ESP32 chip target (e.g., "esp32", "esp32s3")
 #
 # Provides (all private — compose into public recipes in your project justfile):
@@ -132,7 +133,7 @@ _idf-build-checked bin:
 # Fail any one and either compose _s3-argfile-flash (ESP32-S3; it writes what
 # the build's flash_args lists, so all four follow the table) or keep the
 # flash recipe INLINE with explicit offsets;
-# packages/robocar/unified/justfile is the worked example. Three of the four
+# packages/robotics/robocar/justfile is the worked example. Three of the four
 # fail silently, which is why "does this look like a standard layout?" is the
 # wrong test — run the mechanical one:
 #

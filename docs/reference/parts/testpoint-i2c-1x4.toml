@@ -1,4 +1,4 @@
-# robocar-unified's I2C test header (J12): a 1x4 pin header on the main board
+# robocar's I2C test header (J12): a 1x4 pin header on the main board
 # for a logic analyser on the upstream I2C bus and the mux reset, on the main
 # board's side of the head ribbon. Through-hole, hand-soldered, so no LCSC
 # number.

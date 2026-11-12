@@ -1,8 +1,8 @@
 # MG90D — Micro Metal Gear Servo, Double Ball Bearing
 
 **Manufacturer:** TowerPro
-**Used in:** Robocar-unified pan/tilt head, in the printed harness
-(`packages/robocar/unified/hardware/pan-tilt/print/`). It does **not** fit
+**Used in:** Robocar pan/tilt head, in the printed harness
+(`packages/robotics/robocar/hardware/pan-tilt/print/`). It does **not** fit
 the generic 9 g pan-tilt kits (Lauri, 2026-10-24). The likely reason: F (base
 to tab underside) is 19.8 mm against the SG90's ~15.9, so it reaches about
 4 mm deeper below its tabs.

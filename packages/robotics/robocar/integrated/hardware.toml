@@ -1,0 +1,1213 @@
+# The robocar carrier with every breakout's chip on the main board
+# itself: the integrated variant of ../hardware.toml, kept as a subproject of
+# the firmware project to compare the two approaches (board area, part count,
+# assembly). The firmware, the pin header and the head board are robocar's;
+# this file holds no pin numbers, and every `role` resolves against
+# ../main/pin_config.h.
+#
+# What differs from ../hardware.toml's carrier view:
+#
+# - The five breakout sockets (A1-A5) are bare chips (U5-U9) with the
+#   passives each breakout carried that the circuit still needs: decoupling,
+#   the mux's upstream pull-ups and reset pull-up, the PCA9685's output series
+#   resistors on the servo and LED channels.
+# - The MAX98357A takes 5V through a ferrite bead (FB1) as its own net, AMP_5V.
+# - The LM2596 module and its lead (J4) are a TPS563208 buck converter (U10)
+#   on the board, 3 A like the module, with its inductor, capacitors and
+#   feedback divider.
+# - The servos, the RGB LEDs and the speaker plug into the board (J19-J23),
+#   where the socketed carrier uses the breakouts' own columns and terminal.
+# - The same three head boards as the socketed carrier (U1/J2, and the spares
+#   U3/J16 and U4/J17 on nets HEAD2_* and HEAD3_*), so both PCBs carry the
+#   same set of parts outside the main board.
+#
+# Every other part keeps its reference and its role: the connectors, test
+# headers, bulk capacitors, LDO, pull-ups, buzzer and mounting holes. No entry
+# carries `build`, except the cable, so the harness view is this carrier
+# without its ribbon. Nothing generates documentation from that view: the
+# project has no WIRING.md and no build guide.
+#
+# Every SMD part has an LCSC number (#808), on its registry entry for the
+# chips and the inductor, here for the passives, so JLCPCB can assemble the
+# whole front side; only the through-hole connectors, sockets and headers are
+# left to solder. Passives are JLCPCB Basic parts where one exists (stock and
+# library type checked 2026-10-19); each Extended part costs a loading fee per
+# order. Every LCSC number has a checked placement rotation in
+# docs/reference/jlcpcb-rotations.toml. Three fiducials (FID1-FID3) mark the
+# main board for the pick-and-place camera.
+
+[source]
+convention = "robocar"
+header = "../main/pin_config.h"
+board = "docs/reference/boards/xiao-esp32s3.md"
+mcu = "XIAO ESP32-S3 Sense"
+part = "seeed-xiao-esp32s3-socket"
+ref = "U1"
+
+# --- The breakout chips, on the board ----------------------------------------
+
+# A0-A2 to GND: address 0x70 (TCA9548A_ADDR). RESET is pulled up here (R16),
+# as the breakout does, and still driven by the XIAO's D2.
+[parts.mux]
+name = "TCA9548A"
+kind = "i2c-mux"
+part = "tca9548a-tssop24"
+ref = "U5"
+
+# A0-A5, OE and EXTCLK to GND: address 0x40 (PCA9685_ADDR), outputs always
+# enabled, the internal oscillator. The breakout pulls OE low through a
+# resistor and A0-A5 low the same way; tied straight to GND here.
+[parts.pwm]
+name = "PCA9685"
+kind = "pwm-driver"
+part = "pca9685-tssop28"
+ref = "U6"
+
+[parts.motor_driver]
+name = "TB6612FNG"
+kind = "motor-driver"
+part = "tb6612fng-ssop24"
+ref = "U7"
+
+# SD_MODE strapped to VDD (left channel) and GAIN_SLOT to GND (12 dB), as on
+# the socketed carrier.
+[parts.amp]
+name = "MAX98357A"
+kind = "i2s-amp"
+part = "max98357a-tqfn16"
+ref = "U8"
+
+# A0-A2 to GND: address 0x20 (MCP23017_ADDR); RESET tied to 3V3.
+[parts.expander]
+name = "MCP23017"
+kind = "gpio-expander"
+note = "optional in firmware; always fitted here"
+part = "mcp23017-ssop28"
+ref = "U9"
+
+# --- 5 V buck converter (replaces the LM2596 module) ------------------------
+# The TPS563208 stage is the `tps563208-5v` block (docs/reference/blocks/): the
+# datasheet reasoning for every value is there. What is this board's:
+#
+# - fb_top (R12) is 56 kΩ: 5.07 V typical, 4.94-5.19 V over VFB's tolerance.
+#   At typical VFB, less the trunk's roughly 50 mV at 2 A, VM stays in the
+#   TB6612FNG's VM >= 5 V operating row (1.0 A per channel; 0.4 A below 5 V);
+#   at VFB's minimum it does not. It stays under the MAX98357A's 5.5 V.
+# - The bulk capacitors on 5V (C1, C2, C3 below) are MnO2 tantalums, as the
+#   block requires; the input side carries the electrolytic bulk (C19, below).
+# - The forced-continuous part matters here: the TB6612FNG's body diodes push
+#   a braking motor's energy back into 5V.
+# - The EN divider cuts out at about 4.0-4.6 V; the pack's external 2S BMS is
+#   the undervoltage protection.
+[blocks.buck]
+block = "tps563208-5v"
+net_prefix = "BUCK"
+
+[blocks.buck.refs]
+ic = "U10"
+l = "L1"
+en_top = "R25"
+en_bot = "R26"
+cin1 = "C9"
+cin2 = "C11"
+cin_hf = "C10"
+boot = "C12"
+cout1 = "C13"
+cout2 = "C14"
+cout3 = "C20"
+fb_top = "R12"
+fb_bot = "R13"
+
+# Pack input protection is the `pack-input-pfet-ptc` block: XT30 + -> Q1 -> F1
+# -> VBAT (sixth pre-fab layout review, N9). The block carries the DMP3013SFV
+# and fuse reasoning. Sized for this board: about 2.5-3 A on VBAT near the end
+# of discharge, and up to about 5.5 A while the buck sits in its current limit.
+# Q1 sits before F1 here, where balancebot's sits after it; the order keeps
+# PACK_IN, PACK_RP and VBAT running one way across the board.
+#
+# Power-stage checklist (.claude/rules/power-stage-checklist.md) for the input
+# stage: 3 (input protection) is F1 and Q1; 11 (input path) is the fixed
+# tracks in board.toml, PACK_IN 1.2 mm over 3.48 mm and PACK_RP 1.5 mm over
+# 2.30 mm, no via (`carrier-measure path`; about 1.5 and 0.5 mohm by
+# `carrier-measure resistance`, estimates). The rest belong to the buck above.
+[blocks.input]
+block = "pack-input-pfet-ptc"
+net_prefix = "PACK"
+net_names = { GATE = "PFET_GATE" }
+refs = { fet = "Q1", gate = "R27", fuse = "F1" }
+
+# The input's bulk capacitor. On VBAT, where it does not touch the buck's loop,
+# and an aluminium electrolytic for its ESR: it damps the ringing between the
+# battery leads' inductance and the ceramic input capacitors when the XT30 is
+# plugged in, which a polymer or MnO2 tantalum would not (and a tantalum takes
+# that surge badly). C2836437 (100 µF 35 V, 6.3 x 7.7 mm), the balancebot's
+# input capacitor: 35 V costs nothing over 25 V in this case size.
+[parts.bulk_in]
+name = "100 µF 35 V bulk capacitor, buck input"
+kind = "capacitor"
+part = "cp-elec-6.3x7.7"
+ref = "C19"
+value = "100uF 35V"
+lcsc = "C2836437"
+
+# --- Passives the breakouts carried -----------------------------------------
+
+[parts.decouple_exp]
+name = "100 nF decoupling, MCP23017 VDD"
+kind = "capacitor"
+part = "c0805"
+ref = "C6"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.motor_vcc_c]
+name = "100 nF decoupling, TB6612FNG VCC"
+kind = "capacitor"
+part = "c0805"
+ref = "C15"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.motor_vm_c]
+name = "10 µF ceramic, TB6612FNG VM"
+kind = "capacitor"
+part = "c0805"
+ref = "C16"
+value = "10uF 25V"
+lcsc = "C15850"
+
+# VM1 (pin 24) is at the other end of the package from VM2/VM3 (pins 13/14),
+# 11.6 mm of track from C16: its own 10 µF beside it (pre-fab layout review, m3).
+# The XIAO's 5V pad is its USB-C VBUS (docs/reference/boards/xiao-esp32s3.md;
+# Seeed asks for a diode between an external supply and it). Without one, a
+# USB cable on the head's XIAO and the buck feed each other: the PC's port
+# carries motor and servo current, or the buck back-drives the PC. A B5819W
+# from 5V to the ribbon's 5V conductors, as the balancebot carrier's D1: USB
+# then reverse-biases it, and the XIAO sees 5V less about 0.4 V (pre-fab
+# review of the socketed carrier, BL-2).
+[parts.xiao_diode]
+name = "B5819W Schottky, 5V to the XIAO's 5V pad"
+kind = "diode"
+part = "b5819w"
+ref = "D1"
+
+[parts.motor_vm1_c]
+name = "10 µF ceramic, TB6612FNG VM1"
+kind = "capacitor"
+part = "c0805"
+ref = "C21"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.amp_c10u]
+name = "10 µF ceramic, MAX98357A VDD"
+kind = "capacitor"
+part = "c0805"
+ref = "C17"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.amp_c100n]
+name = "100 nF decoupling, MAX98357A VDD"
+kind = "capacitor"
+part = "c0805"
+ref = "C18"
+value = "100nF"
+lcsc = "C49678"
+
+# The XIAO has no I2C pull-ups; the TCA9548A breakout pulled up its upstream
+# SDA and SCL, and its RESET. 2.2 kΩ, not the breakout's 10 kΩ, for the
+# 400 kHz rise time (the socketed carrier's reasoning, #810): the upstream bus
+# carries the XIAO, the mux, the PCA9685 and the MCP23017. R16 (RESET) stays
+# 10 kΩ.
+[parts.pull_up_sda]
+name = "2.2 kΩ pull-up, upstream I2C SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R14"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_up_scl]
+name = "2.2 kΩ pull-up, upstream I2C SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R15"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_rst]
+name = "10 kΩ pull-up, TCA9548A RESET"
+kind = "resistor"
+part = "r0805"
+ref = "R16"
+value = "10k"
+lcsc = "C17414"
+
+# The PCA9685 breakout's 220 Ω series resistor on every output, kept on the
+# channels that leave the board (LEDs and servos). The six motor-driver
+# channels stay on the board and go straight to the TB6612FNG. Green and blue
+# take 47 Ω instead: the anode is 3V3 and their forward voltage is 2.9-3.2 V,
+# which leaves next to nothing across 220 Ω (about 4-6 mA through 47 Ω; red
+# keeps 220 Ω, about 6 mA at 2 V).
+[parts.res_led_l_r]
+name = "220 Ω series, left LED red"
+kind = "resistor"
+part = "r0805"
+ref = "R17"
+value = "220"
+lcsc = "C17557"
+
+[parts.res_led_l_g]
+name = "47 Ω series, left LED green"
+kind = "resistor"
+part = "r0805"
+ref = "R18"
+value = "47"
+lcsc = "C17714"
+
+[parts.res_led_l_b]
+name = "47 Ω series, left LED blue"
+kind = "resistor"
+part = "r0805"
+ref = "R19"
+value = "47"
+lcsc = "C17714"
+
+[parts.res_led_r_r]
+name = "220 Ω series, right LED red"
+kind = "resistor"
+part = "r0805"
+ref = "R20"
+value = "220"
+lcsc = "C17557"
+
+[parts.res_led_r_g]
+name = "47 Ω series, right LED green"
+kind = "resistor"
+part = "r0805"
+ref = "R21"
+value = "47"
+lcsc = "C17714"
+
+[parts.res_led_r_b]
+name = "47 Ω series, right LED blue"
+kind = "resistor"
+part = "r0805"
+ref = "R22"
+value = "47"
+lcsc = "C17714"
+
+[parts.res_servo_pan]
+name = "220 Ω series, pan servo signal"
+kind = "resistor"
+part = "r0805"
+ref = "R23"
+value = "220"
+lcsc = "C17557"
+
+[parts.res_servo_tilt]
+name = "220 Ω series, tilt servo signal"
+kind = "resistor"
+part = "r0805"
+ref = "R24"
+value = "220"
+lcsc = "C17557"
+
+# The amplifier's own supply, AMP_5V, through a ferrite bead from 5V: it keeps
+# the class-D switching off the motor and logic rail, and it lets the autorouter
+# give 5V tracks wider than the MAX98357A's 0.5 mm-pitch pins allow (one width
+# per net). Murata BLM21PG221SN1D (C85840): 220 Ω at 100 MHz, 2 A, 45 mΩ DCR
+# (JLCPCB's listing, 2026-10-19). The amplifier's 1 A peaks drop about 45 mV.
+[parts.amp_fb]
+name = "Ferrite bead, MAX98357A supply"
+kind = "ferrite-bead"
+part = "ferrite-bead-0805"
+ref = "FB1"
+value = "220R@100MHz 2A"
+lcsc = "C85840"
+
+# --- Off-board loads that plugged into the breakouts ------------------------
+
+[parts.speaker]
+name = "Speaker"
+kind = "speaker"
+note = "4–8 Ω"
+part = "speaker-jst-xh2"
+ref = "J19"
+
+[parts.servo_pan]
+name = "Pan servo (SG90)"
+kind = "servo"
+part = "servo-header-1x03"
+ref = "J20"
+
+[parts.servo_tilt]
+name = "Tilt servo (SG90)"
+kind = "servo"
+part = "servo-header-1x03"
+ref = "J21"
+
+# Common anode on 3V3, the PCA9685's own supply: an output driven high then
+# leaves no forward voltage across the LED, which a 5 V anode would not.
+[parts.led_left]
+name = "Left RGB LED"
+kind = "rgb-led"
+note = "common-anode"
+part = "rgb-led-header-1x04"
+ref = "J22"
+
+[parts.led_right]
+name = "Right RGB LED"
+kind = "rgb-led"
+note = "common-anode"
+part = "rgb-led-header-1x04"
+ref = "J23"
+
+# --- Unchanged from the socketed carrier -------------------------------------
+# References, values and LCSC numbers as in ../hardware.toml, which
+# carries the reasons, except the bulk capacitors C1-C3 (their own comment).
+
+[parts.ranger_front]
+name = "RCWL-1601 (front)"
+kind = "ultrasonic"
+part = "rcwl-1601-i2c-cable"
+ref = "J7"
+value = "RCWL-1601 front"
+
+[parts.ranger_rear]
+name = "RCWL-1601 (rear)"
+kind = "ultrasonic"
+part = "rcwl-1601-i2c-cable"
+ref = "J8"
+value = "RCWL-1601 rear"
+
+[parts.oled]
+name = "SSD1306 OLED"
+kind = "display"
+part = "ssd1306-091-cable"
+ref = "J9"
+value = "SSD1306 0.91in"
+
+[parts.buzzer]
+name = "Piezo buzzer"
+kind = "piezo"
+part = "piezo-buzzer-12mm"
+ref = "BZ1"
+value = "Buzzer 12mm"
+
+[parts.piezo_r]
+name = "100 Ω piezo series resistor"
+kind = "resistor"
+part = "r0805"
+ref = "R1"
+value = "100"
+lcsc = "C17408"
+
+[parts.pack]
+name = "2x 18650 in series"
+kind = "battery"
+note = "7.4 V nominal, 8.4 V charged"
+part = "battery-xt30"
+ref = "J3"
+value = "XT30 pack in"
+
+[parts.motor_left]
+name = "Left motor"
+kind = "dc-motor"
+part = "dc-motor-jst-xh2"
+ref = "J5"
+value = "Motor left"
+
+[parts.motor_right]
+name = "Right motor"
+kind = "dc-motor"
+part = "dc-motor-jst-xh2"
+ref = "J6"
+value = "Motor right"
+
+[parts.uart_tap]
+name = "UART0 TX tap"
+kind = "test-header"
+part = "uart0-tap-1x2"
+ref = "J15"
+
+[parts.exp_header]
+name = "MCP23017 GPIO mirror header"
+kind = "pin-header"
+part = "mcp23017-mirror-header-2x10"
+ref = "J18"
+
+[parts.tp_power]
+name = "Supply test header"
+kind = "test-header"
+part = "testpoint-power-1x4"
+ref = "J11"
+
+[parts.tp_i2c]
+name = "I2C and mux reset test header"
+kind = "test-header"
+part = "testpoint-i2c-1x4"
+ref = "J12"
+
+[parts.gnd_post_amp]
+name = "Ground post beside the MAX98357A"
+kind = "test-header"
+part = "gnd-post-1x2"
+ref = "J13"
+
+[parts.gnd_post_ldo]
+name = "Ground post beside the LDO"
+kind = "test-header"
+part = "gnd-post-1x2"
+ref = "J14"
+
+[parts.ldo]
+name = "AMS1117-3.3 LDO, main-board 3V3"
+kind = "regulator"
+part = "ams1117-3.3"
+ref = "U2"
+
+# The socketed carrier's 470 µF electrolytics (WIRING.md § Suggested
+# capacitors) made up for an LM2596 module at the end of a lead; here the buck
+# is millimetres away, and TI caps the low-ESR capacitance on its output
+# (above). These are the LDO's 22 µF tantalum, part for part: their ESR keeps
+# them out of the buck's loop, and on AMP_5V it damps FB1 against C17, a
+# ferrite and a ceramic alone being a resonant LC.
+[parts.bulk_pwm]
+name = "22 µF tantalum, servo V+"
+kind = "capacitor"
+part = "cp-tantalum-3528"
+ref = "C1"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.bulk_motor]
+name = "22 µF tantalum, TB6612FNG VM"
+kind = "capacitor"
+part = "cp-tantalum-3528"
+ref = "C2"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.bulk_amp]
+name = "22 µF tantalum, MAX98357A Vin"
+kind = "capacitor"
+part = "cp-tantalum-3528"
+ref = "C3"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.decouple_pwm]
+name = "100 nF decoupling, PCA9685 VDD"
+kind = "capacitor"
+part = "c0805"
+ref = "C4"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.decouple_mux]
+name = "100 nF decoupling, TCA9548A VCC"
+kind = "capacitor"
+part = "c0805"
+ref = "C5"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.ldo_in]
+name = "22 µF tantalum, LDO input"
+kind = "capacitor"
+part = "cp-tantalum-3528"
+ref = "C7"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.ldo_out]
+name = "22 µF tantalum, LDO output"
+kind = "capacitor"
+part = "cp-tantalum-3528"
+ref = "C8"
+value = "22uF 16V"
+lcsc = "C8020"
+
+# Every downstream mux channel has its own 2.2 kΩ pull-ups to 3V3, as on the
+# socketed carrier (#810: the 400 kHz rise time over a rangefinder lead).
+[parts.pull_ch0_sda]
+name = "2.2 kΩ pull-up, mux channel 0 SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R2"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch0_scl]
+name = "2.2 kΩ pull-up, mux channel 0 SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R3"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch1_sda]
+name = "2.2 kΩ pull-up, mux channel 1 SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R4"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch1_scl]
+name = "2.2 kΩ pull-up, mux channel 1 SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R5"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch2_sda]
+name = "2.2 kΩ pull-up, mux channel 2 SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R10"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch2_scl]
+name = "2.2 kΩ pull-up, mux channel 2 SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R11"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch3_sda]
+name = "2.2 kΩ pull-up, mux channel 3 SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R6"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch3_scl]
+name = "2.2 kΩ pull-up, mux channel 3 SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R7"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch4_sda]
+name = "2.2 kΩ pull-up, mux channel 4 SDA"
+kind = "resistor"
+part = "r0805"
+ref = "R8"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_ch4_scl]
+name = "2.2 kΩ pull-up, mux channel 4 SCL"
+kind = "resistor"
+part = "r0805"
+ref = "R9"
+value = "2.2k"
+lcsc = "C17520"
+
+# Mounting holes: M3 at the main board's corners, M2 on the head.
+[parts.hole_main_1]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+part = "m3-mounting-hole"
+ref = "H1"
+
+[parts.hole_main_2]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+part = "m3-mounting-hole"
+ref = "H2"
+
+[parts.hole_main_3]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+part = "m3-mounting-hole"
+ref = "H3"
+
+[parts.hole_main_4]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+part = "m3-mounting-hole"
+ref = "H4"
+
+[parts.hole_head_1]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H5"
+
+[parts.hole_head_2]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H6"
+
+# Fiducials for JLCPCB assembly, three on the main board in an asymmetric
+# triangle (top-left, top-right, bottom-left), each at least 2 mm from every
+# courtyard and 3.5 mm from the board edge. No nets, no BOM line.
+[parts.fiducial_1]
+name = "Fiducial, main board top-left"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID1"
+
+[parts.fiducial_2]
+name = "Fiducial, main board top-right"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID2"
+
+[parts.fiducial_3]
+name = "Fiducial, main board bottom-left"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID3"
+
+# The same two holes on head 2 (H7, H8) and head 3 (H9, H10).
+[parts.hole_head2_1]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H7"
+
+[parts.hole_head2_2]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H8"
+
+[parts.hole_head3_1]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H9"
+
+[parts.hole_head3_2]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H10"
+
+# --- The head boards and the ribbon ------------------------------------------
+# As on the socketed carrier: the XIAO on the head, a 2x7 IDC ribbon to the
+# main board's J1. 3V3, D3 and D7 stay open on the head. Three heads, three
+# ways of mounting the ribbon header (the socketed carrier's, 2026-10-16):
+# head 1 is U1 with J2, the spares U3 with J16 (head 2) and U4 with J17
+# (head 3), on nets HEAD2_* and HEAD3_*. Only one is fitted at a time.
+[[cables]]
+part = "idc-2x07-xiao-cable"
+head_ref = "J2"
+main_ref = "J1"
+head_no_connect = ["3V3", "D3", "D7"]
+spare_heads = [
+    { mcu_ref = "U3", head_ref = "J16" },
+    { mcu_ref = "U4", head_ref = "J17" },
+]
+build = "carrier"
+
+# --- MCU signals --------------------------------------------------------------
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "mux.SDA"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "pull_up_sda.B"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "tp_i2c.SDA"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "mux.SCL"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "pull_up_scl.B"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "tp_i2c.SCL"
+
+[[nets]]
+role = "MOTOR_STBY_PIN"
+to = "motor_driver.STBY"
+
+[[nets]]
+role = "TCA9548A_RST_PIN"
+to = "mux.RST"
+
+[[nets]]
+role = "TCA9548A_RST_PIN"
+to = "pull_rst.B"
+
+[[nets]]
+role = "TCA9548A_RST_PIN"
+to = "tp_i2c.RST"
+
+[[nets]]
+role = "PIEZO_PIN"
+to = "piezo_r.A"
+
+[[nets]]
+role = "I2S_BCLK_PIN"
+to = "amp.BCLK"
+
+[[nets]]
+role = "I2S_LRCLK_PIN"
+to = "amp.LRC"
+
+[[nets]]
+role = "I2S_DIN_PIN"
+to = "amp.DIN"
+
+[[nets]]
+role = "UART0_TX_PIN"
+to = "uart_tap.TX"
+note = "ROM boot log, 115200 baud"
+
+[[undrawn]]
+role = "MIC_PDM_CLK_PIN"
+why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
+
+[[undrawn]]
+role = "MIC_PDM_DATA_PIN"
+why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
+
+[[undrawn]]
+role = "UART0_RX_PIN"
+why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+
+# --- PCA9685 channels ---------------------------------------------------------
+# Every channel role in pin_config.h is wired: the LEDs and servos through
+# their series resistors, the motor driver directly.
+
+[[channel_nets]]
+role = "LED_LEFT_R_CHANNEL"
+from = "pwm"
+to = "res_led_l_r.A"
+
+[[channel_nets]]
+role = "LED_LEFT_G_CHANNEL"
+from = "pwm"
+to = "res_led_l_g.A"
+
+[[channel_nets]]
+role = "LED_LEFT_B_CHANNEL"
+from = "pwm"
+to = "res_led_l_b.A"
+
+[[channel_nets]]
+role = "LED_RIGHT_R_CHANNEL"
+from = "pwm"
+to = "res_led_r_r.A"
+
+[[channel_nets]]
+role = "LED_RIGHT_G_CHANNEL"
+from = "pwm"
+to = "res_led_r_g.A"
+
+[[channel_nets]]
+role = "LED_RIGHT_B_CHANNEL"
+from = "pwm"
+to = "res_led_r_b.A"
+
+[[channel_nets]]
+role = "SERVO_PAN_CHANNEL"
+from = "pwm"
+to = "res_servo_pan.A"
+
+[[channel_nets]]
+role = "SERVO_TILT_CHANNEL"
+from = "pwm"
+to = "res_servo_tilt.A"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_PWM_CHANNEL"
+from = "pwm"
+to = "motor_driver.PWMA"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_IN2_CHANNEL"
+from = "pwm"
+to = "motor_driver.AIN2"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_IN1_CHANNEL"
+from = "pwm"
+to = "motor_driver.AIN1"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_IN1_CHANNEL"
+from = "pwm"
+to = "motor_driver.BIN1"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_IN2_CHANNEL"
+from = "pwm"
+to = "motor_driver.BIN2"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_PWM_CHANNEL"
+from = "pwm"
+to = "motor_driver.PWMB"
+
+# --- TCA9548A channels --------------------------------------------------------
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pwm"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pull_ch0_sda.B"
+line = "SDA"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pull_ch0_scl.B"
+line = "SCL"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "oled"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "pull_ch1_sda.B"
+line = "SDA"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "pull_ch1_scl.B"
+line = "SCL"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "expander"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "pull_ch2_sda.B"
+line = "SDA"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "pull_ch2_scl.B"
+line = "SCL"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "ranger_front"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "pull_ch3_sda.B"
+line = "SDA"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "pull_ch3_scl.B"
+line = "SCL"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "ranger_rear"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "pull_ch4_sda.B"
+line = "SDA"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "pull_ch4_scl.B"
+line = "SCL"
+
+# --- Power --------------------------------------------------------------------
+
+[[rails]]
+name = "PACK_IN"
+from = "pack.+"
+to = ["input.IN"]
+
+[[rails]]
+name = "VBAT"
+from = "input.OUT"
+to = [
+    "buck.VIN",
+    "bulk_in.+",
+    "tp_power.VBAT",
+]
+
+# The buck's output. The servo headers' V+ is this rail, as the PCA9685
+# breakout's V+ was; the amplifier takes it through FB1 (AMP_5V, above).
+[[rails]]
+name = "5V"
+from = "buck.VOUT"
+to = [
+    "xiao_diode.A",
+    "motor_driver.VM",
+    "motor_vm_c.A",
+    "motor_vm1_c.A",
+    "amp_fb.1",
+    "servo_pan.V+",
+    "servo_tilt.V+",
+    "bulk_pwm.+",
+    "bulk_motor.+",
+    "ldo.VI",
+    "ldo_in.+",
+    "tp_power.5V",
+]
+
+# The ribbon's 5V, behind D1 (above).
+[[rails]]
+name = "XIAO_5V"
+from = "xiao_diode.K"
+to = ["mcu.5V"]
+
+# SD_MODE strapped to the amplifier's VDD (left channel), as on the socketed
+# carrier.
+[[rails]]
+name = "AMP_5V"
+from = "amp_fb.2"
+to = ["amp.Vin", "amp.SD", "amp_c10u.A", "amp_c100n.A", "bulk_amp.+"]
+
+[[rails]]
+name = "3V3"
+from = "ldo.VO"
+to = [
+    "motor_driver.VCC",
+    "motor_vcc_c.A",
+    "pwm.VCC",
+    "decouple_pwm.A",
+    "mux.VIN",
+    "decouple_mux.A",
+    "expander.VCC",
+    "expander.RESET",
+    "decouple_exp.A",
+    "exp_header.3V3",
+    "ranger_front.VCC",
+    "ranger_rear.VCC",
+    "oled.VCC",
+    "led_left.ANODE",
+    "led_right.ANODE",
+    "ldo_out.+",
+    "pull_up_sda.A",
+    "pull_up_scl.A",
+    "pull_rst.A",
+    "pull_ch0_sda.A",
+    "pull_ch0_scl.A",
+    "pull_ch1_sda.A",
+    "pull_ch1_scl.A",
+    "pull_ch2_sda.A",
+    "pull_ch2_scl.A",
+    "pull_ch3_sda.A",
+    "pull_ch3_scl.A",
+    "pull_ch4_sda.A",
+    "pull_ch4_scl.A",
+    "tp_power.3V3",
+]
+
+[[rails]]
+name = "PIEZO_DRV"
+from = "piezo_r.B"
+to = ["buzzer.+"]
+
+# The series resistors' far ends to the LED and servo headers.
+[[rails]]
+name = "LED_L_R"
+from = "res_led_l_r.B"
+to = ["led_left.R"]
+
+[[rails]]
+name = "LED_L_G"
+from = "res_led_l_g.B"
+to = ["led_left.G"]
+
+[[rails]]
+name = "LED_L_B"
+from = "res_led_l_b.B"
+to = ["led_left.B"]
+
+[[rails]]
+name = "LED_R_R"
+from = "res_led_r_r.B"
+to = ["led_right.R"]
+
+[[rails]]
+name = "LED_R_G"
+from = "res_led_r_g.B"
+to = ["led_right.G"]
+
+[[rails]]
+name = "LED_R_B"
+from = "res_led_r_b.B"
+to = ["led_right.B"]
+
+[[rails]]
+name = "SERVO_PAN"
+from = "res_servo_pan.B"
+to = ["servo_pan.PWM"]
+
+[[rails]]
+name = "SERVO_TILT"
+from = "res_servo_tilt.B"
+to = ["servo_tilt.PWM"]
+
+# One ground. The strapping pins sit here too: the address pins of the mux,
+# the PWM driver and the expander, the PCA9685's OE and EXTCLK, and the
+# MAX98357A's GAIN_SLOT (12 dB).
+[[rails]]
+name = "GND"
+from = "pack.-"
+to = [
+    "mcu.GND",
+    "buck.GND",
+    "bulk_in.-",
+    "input.GND",
+    "motor_driver.GND",
+    "motor_driver.PGND1",
+    "motor_driver.PGND2",
+    "motor_vcc_c.B",
+    "motor_vm_c.B",
+    "motor_vm1_c.B",
+    "pwm.GND",
+    "pwm.A0",
+    "pwm.A1",
+    "pwm.A2",
+    "pwm.A3",
+    "pwm.A4",
+    "pwm.A5",
+    "pwm.OE",
+    "pwm.EXTCLK",
+    "decouple_pwm.B",
+    "mux.GND",
+    "mux.A0",
+    "mux.A1",
+    "mux.A2",
+    "decouple_mux.B",
+    "amp.GND",
+    "amp.PAD",
+    "amp.GAIN",
+    "amp_c10u.B",
+    "amp_c100n.B",
+    "expander.GND",
+    "expander.A0",
+    "expander.A1",
+    "expander.A2",
+    "decouple_exp.B",
+    "exp_header.GND",
+    "servo_pan.GND",
+    "servo_tilt.GND",
+    "ranger_front.GND",
+    "ranger_rear.GND",
+    "oled.GND",
+    "buzzer.-",
+    "ldo.GND",
+    "bulk_pwm.-",
+    "bulk_motor.-",
+    "bulk_amp.-",
+    "ldo_in.-",
+    "ldo_out.-",
+    "uart_tap.GND",
+    "tp_power.GND",
+    "tp_i2c.GND",
+    "gnd_post_amp.GND",
+    "gnd_post_ldo.GND",
+]
+
+[[outputs]]
+from = "motor_driver"
+to = ["motor_left", "motor_right"]
+pins = ["A01", "A02", "B01", "B02"]
+net = "MOT_{pin}"
+load_pins.motor_right = { A01 = "1", A02 = "2" }
+load_pins.motor_left = { B01 = "1", B02 = "2" }
+
+[[outputs]]
+from = "amp"
+to = ["speaker"]
+pins = ["VO-", "VO+"]
+net = "SPK_{pin}"
+
+[[outputs]]
+from = "expander"
+to = ["exp_header"]
+pins = [
+    "INTA",
+    "INTB",
+    "GPA0",
+    "GPA1",
+    "GPA2",
+    "GPA3",
+    "GPA4",
+    "GPA5",
+    "GPA6",
+    "GPA7",
+    "GPB0",
+    "GPB1",
+    "GPB2",
+    "GPB3",
+    "GPB4",
+    "GPB5",
+    "GPB6",
+    "GPB7",
+]
+net = "EXP_{pin}"
+
+# Net names as on the socketed carrier, so the two netlists compare by name.
+[net_names]
+I2C_SDA_PIN = "I2C_SDA"
+I2C_SCL_PIN = "I2C_SCL"
+MOTOR_STBY_PIN = "MOTOR_STBY"
+TCA9548A_RST_PIN = "MUX_RST"
+UART0_TX_PIN = "UART0_TX"
+PIEZO_PIN = "PIEZO"
+I2S_BCLK_PIN = "I2S_BCLK"
+I2S_LRCLK_PIN = "I2S_LRCLK"
+I2S_DIN_PIN = "I2S_DIN"
+LED_LEFT_R_CHANNEL = "PWM_LED_L_R"
+LED_LEFT_G_CHANNEL = "PWM_LED_L_G"
+LED_LEFT_B_CHANNEL = "PWM_LED_L_B"
+LED_RIGHT_R_CHANNEL = "PWM_LED_R_R"
+LED_RIGHT_G_CHANNEL = "PWM_LED_R_G"
+LED_RIGHT_B_CHANNEL = "PWM_LED_R_B"
+SERVO_PAN_CHANNEL = "PWM_SERVO_PAN"
+SERVO_TILT_CHANNEL = "PWM_SERVO_TILT"
+MOTOR_RIGHT_PWM_CHANNEL = "PWMA"
+MOTOR_RIGHT_IN2_CHANNEL = "AIN2"
+MOTOR_RIGHT_IN1_CHANNEL = "AIN1"
+MOTOR_LEFT_IN1_CHANNEL = "BIN1"
+MOTOR_LEFT_IN2_CHANNEL = "BIN2"
+MOTOR_LEFT_PWM_CHANNEL = "PWMB"
+I2C_BUS_CHANNEL_PCA9685 = "CH0"
+I2C_BUS_CHANNEL_OLED = "CH1"
+I2C_BUS_CHANNEL_MCP23017 = "CH2"
+I2C_BUS_CHANNEL_RANGER_FRONT = "CH3"
+I2C_BUS_CHANNEL_RANGER_REAR = "CH4"
+5V = "+5V"
+3V3 = "+3V3"

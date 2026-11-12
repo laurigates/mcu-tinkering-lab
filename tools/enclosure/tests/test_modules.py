@@ -9,7 +9,7 @@ from kicad.paths import REPO_ROOT
 
 PROJECTS = [
     REPO_ROOT / "packages" / "robotics" / "balancebot",
-    REPO_ROOT / "packages" / "robocar" / "unified",
+    REPO_ROOT / "packages" / "robotics" / "robocar",
 ]
 
 

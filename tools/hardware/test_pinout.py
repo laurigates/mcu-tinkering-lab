@@ -37,7 +37,7 @@ from hardware.pinout import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UNIFIED = REPO_ROOT / "packages/robocar/unified"
+ROBOCAR = REPO_ROOT / "packages/robotics/robocar"
 SVG = "{http://www.w3.org/2000/svg}"
 
 BREAKOUT_MD = """\
@@ -167,11 +167,11 @@ class RenderSvgTest(unittest.TestCase):
 
 
 class LabelsFromJoinTest(unittest.TestCase):
-    """Labels for robocar-unified, against its committed hardware.toml."""
+    """Labels for robocar, against its committed hardware.toml."""
 
     @classmethod
     def setUpClass(cls):
-        cls.model = join(UNIFIED)
+        cls.model = join(ROBOCAR)
 
     def test_mcu_pads_carry_gpio_role_and_destination(self):
         layout = parse_layout(self.model.board.path)
@@ -305,16 +305,20 @@ class CommittedImagesTest(unittest.TestCase):
     def copy_project(self) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        dest = Path(tmp.name) / "unified"
+        dest = Path(tmp.name) / "robocar"
+        # The simulation and twin subprojects sit inside robocar; their
+        # virtualenvs are local state this copy has no use for.
         shutil.copytree(
-            UNIFIED, dest, ignore=shutil.ignore_patterns("build*", "managed_components")
+            ROBOCAR,
+            dest,
+            ignore=shutil.ignore_patterns("build*", "managed_components", ".venv"),
         )
         return dest
 
     def test_committed_images_are_up_to_date(self):
         # The build guide embeds these; a board reference or hardware.toml
         # change that skipped `just hardware::gen` fails here, not in print.
-        self.assertEqual(check_project(UNIFIED), [])
+        self.assertEqual(check_project(ROBOCAR), [])
 
     def test_a_board_reference_change_makes_the_image_stale(self):
         proj = self.copy_project()

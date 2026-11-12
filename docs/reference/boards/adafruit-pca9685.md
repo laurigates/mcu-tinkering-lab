@@ -1,11 +1,11 @@
 # Adafruit 16-Channel 12-bit PWM/Servo Driver — PCA9685 (#815)
 
-Breakout for the PCA9685 PWM driver that runs robocar-unified's motor-driver
+Breakout for the PCA9685 PWM driver that runs robocar's motor-driver
 inputs, servos and LEDs. Two identical 6-pin headers on the short edges, sixteen
 3-pin servo columns along one long edge and a two-way power terminal on the
 other. For the silicon itself see
 [`driver--pca9685.md`](../datasheets/driver--pca9685.md); the motor wiring card
-(`packages/robocar/unified/docs/wiring-card-motors.typ`) draws this board too.
+(`packages/robotics/robocar/docs/wiring-card-motors.typ`) draws this board too.
 
 ## Physical layout
 

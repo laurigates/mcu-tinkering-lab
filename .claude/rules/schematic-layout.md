@@ -15,7 +15,7 @@ router and its tests are in `docs/schematics/README.md`.
 
 Symbol geometry in `docs/schematics/components.py` (size, pin positions,
 padding) is coupled to the test fixtures in `test_routing.py` and to the
-`total_length` pin on `robocar_unified` in the same file. After touching
+`total_length` pin on `robocar` in the same file. After touching
 `components.py`, run both:
 
 ```sh

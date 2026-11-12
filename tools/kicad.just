@@ -1,5 +1,6 @@
 # Shared KiCad carrier-PCB recipes (tools/kicad, ADR-027).
 # Import from a project justfile:  import '../../../tools/kicad.just'
+# (a project nested one level deeper, packages/<domain>/<name>/<sub>/, adds one '../')
 #
 # Every recipe takes the repo-relative project path as its argument; the
 # project's public recipes pass their own project_dir. Recipes cd to the repo
@@ -92,6 +93,12 @@ _carrier-review project:
 # measures the board as committed at that ref, read with `git show` (never a
 # checkout: the clone may be shared), placed with today's board.toml origin
 # and filtered with today's [fanout] in_pad and [pour] regions.
+# A ref from before a project moved has the board at its old path, and
+# `git show` fails on it. robocar's boards were, before the move to
+# packages/robotics/robocar,
+# packages/robocar/unified/hardware/carrier/robocar-unified-carrier/ and
+# packages/robocar/unified-integrated/hardware/carrier/robocar-unified-integrated-carrier/.
+# Measure such a board from a checkout of that ref.
 # `resistance` runs under `uv run --with numpy --with scipy`; the rest is
 # stdlib, as in every other kicad recipe.
 [positional-arguments]

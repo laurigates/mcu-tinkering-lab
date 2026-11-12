@@ -16,7 +16,7 @@
   "features": [
     {
       "id": "FR-001",
-      "name": "Robocar firmware on one XIAO ESP32-S3 Sense (robocar-unified)",
+      "name": "Robocar firmware on one XIAO ESP32-S3 Sense (robocar)",
       "prd": "PRD-001",
       "status": "active",
       "priority": "P0",
@@ -132,7 +132,7 @@
       "prd": null,
       "status": "active",
       "priority": "P2",
-      "notes": "Host suites under packages/robocar/unified/test, run by just robocar-unified::test (54 ctest suites on 2026-11-09) and in CI"
+      "notes": "Host suites under packages/robotics/robocar/test, run by just robocar::test (54 ctest suites on 2026-11-09) and in CI"
     },
     {
       "id": "FR-016",

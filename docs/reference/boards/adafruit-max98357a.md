@@ -1,6 +1,6 @@
 # Adafruit MAX98357A I2S Class-D Mono Amp Breakout (#3006)
 
-Breakout for the MAX98357A I2S amplifier that gives robocar-unified its voice
+Breakout for the MAX98357A I2S amplifier that gives robocar its voice
 (ADR-019). A 7-pin header along one edge and a two-way speaker terminal block on
 the opposite edge.
 

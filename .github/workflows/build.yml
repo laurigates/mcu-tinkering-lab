@@ -149,24 +149,33 @@ jobs:
           # --- Emit one matrix per build system ------------------------------
           for sys in esp32 esphome pico; do
             if [ "$CHANGED" = "__ALL__" ]; then
-              # del(.extra_paths) here too: it is a discovery input, not a
-              # matrix field, and leaving it in puts the path list into every
-              # job's display name on a full-matrix run.
-              inc=$(jq -c --arg s "$sys" '[.[] | select(.system == $s) | del(.extra_paths)]' "$MANIFEST")
+              # del(.extra_paths, .exclude_paths) here too: they are discovery
+              # inputs, not matrix fields, and leaving them in puts the path
+              # lists into every job's display name on a full-matrix run.
+              inc=$(jq -c --arg s "$sys" '[.[] | select(.system == $s) | del(.extra_paths, .exclude_paths)]' "$MANIFEST")
             else
               # A project is rebuilt when its own directory changed, or when any
               # directory it names in `extra_paths` did. robocar-bringup compiles
-              # robocar-unified's drivers straight out of ../unified/main, so a
-              # unified-only PR used to leave it unbuilt — and it sat broken for
+              # the robocar firmware's drivers straight out of ../main, so a
+              # firmware-only PR used to leave it unbuilt — and it sat broken for
               # four merged PRs with a green matrix every time (#529 deleted the
               # component tree its CMakeLists still named).
+              #
+              # A changed file under one of the entry's `exclude_paths` does not
+              # count for that entry. The robocar firmware's directory holds
+              # four separate projects (bringup, integrated, simulation, twin);
+              # without the exclude, a change to one of them alone would
+              # rebuild the firmware, which compiles nothing from them.
               inc=$(jq -c --arg s "$sys" --arg ch "$CHANGED" '
                 ($ch | split("\n") | map(select(length > 0))) as $files
                 | [ .[]
                     | select(.system == $s)
-                    | select(([.path] + (.extra_paths // []))
-                             | any(. as $d | $files | any(startswith("packages/" + $d + "/"))))
-                    | del(.extra_paths) ]
+                    | select(. as $e | $files | any(. as $f
+                        | (([$e.path] + ($e.extra_paths // []))
+                           | any(. as $d | $f | startswith("packages/" + $d + "/")))
+                          and (($e.exclude_paths // [])
+                               | any(. as $x | $f | startswith("packages/" + $x + "/")) | not)))
+                    | del(.extra_paths, .exclude_paths) ]
               ' "$MANIFEST")
             fi
             n=$(printf '%s' "$inc" | jq 'length')

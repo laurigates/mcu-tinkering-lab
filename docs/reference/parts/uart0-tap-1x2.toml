@@ -1,4 +1,4 @@
-# robocar-unified's UART0 tap (J15): a 1x2 pin header on the main board for a
+# robocar's UART0 tap (J15): a 1x2 pin header on the main board for a
 # USB-serial adapter's ground and RX lead. Through-hole, hand-soldered, so no
 # LCSC number.
 [part]

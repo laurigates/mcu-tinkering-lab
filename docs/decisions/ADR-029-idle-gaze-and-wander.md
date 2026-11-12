@@ -41,7 +41,7 @@ looks around without deciding to:
 Three existing rulings shape how:
 
 1. **The executor is the only writer of the servos and motors** (ADR-025, and
-   the Motors and Pan/tilt rules in `packages/robocar/unified/CLAUDE.md`).
+   the Motors and Pan/tilt rules in `packages/robotics/robocar/CLAUDE.md`).
 2. **The planner gets no aiming primitive.** The `head-aiming.md` rule forbids
    a `look`/`aim` tool or a `GOAL_KIND_LOOK`, because a planner consulted every
    15–300 s cannot follow anything. `track` stays the only aiming primitive.
@@ -216,7 +216,7 @@ Each step is a PR, testable before the next:
 
 ## Related
 
-- [`packages/robocar/unified/docs/firmware/head-aiming.md`](../../packages/robocar/unified/docs/firmware/head-aiming.md)
-- [`packages/robocar/unified/docs/firmware/planner.md`](../../packages/robocar/unified/docs/firmware/planner.md)
+- [`packages/robotics/robocar/docs/firmware/head-aiming.md`](../../packages/robotics/robocar/docs/firmware/head-aiming.md)
+- [`packages/robotics/robocar/docs/firmware/planner.md`](../../packages/robotics/robocar/docs/firmware/planner.md)
 - Issues #944 (rangefinders drop out while the motors run; matters for
   wander's clear-range check) and #947 (voice turns promise actions)

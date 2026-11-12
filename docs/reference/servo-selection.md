@@ -1,6 +1,6 @@
 # Servo Selection: Frame Rate, Analog vs Digital, and Size
 
-What was learned in 2026-09 while diagnosing the robocar-unified pan/tilt head,
+What was learned in 2026-09 while diagnosing the robocar pan/tilt head,
 whose SG90 servos at first did not move. Frame rate was suspected; the actual
 cause was a loose 3.3 V lead to the PCA9685's VCC (logic) pin, and once it was
 reconnected the servos moved at the firmware's shipped 200 Hz. Per-part
@@ -99,12 +99,12 @@ a micro servo a drop-in. The MG90S was not tried; its F is not recorded here.
 
 The printed MG90D harness that replaces the kit, and the four other designs
 it was chosen from, are in
-[`packages/robocar/unified/hardware/pan-tilt/`](../../packages/robocar/unified/hardware/pan-tilt/README.md).
+[`packages/robotics/robocar/hardware/pan-tilt/`](../../packages/robotics/robocar/hardware/pan-tilt/README.md).
 
-## What this means for robocar-unified
+## What this means for robocar
 
 - The PCA9685 has **one frequency for all 16 outputs** (`PCA9685_FREQ_HZ` in
-  `packages/robocar/unified/main/pin_config.h`, shipped at 200 Hz), so the
+  `packages/robotics/robocar/main/pin_config.h`, shipped at 200 Hz), so the
   servos share it with the motor PWM and the RGB LEDs. See
   [`driver--pca9685.md`](datasheets/driver--pca9685.md).
 - **Check wiring before frame rate.** If `servo exercise` logs `ESP_OK` for

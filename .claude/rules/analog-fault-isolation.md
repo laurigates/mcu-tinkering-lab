@@ -8,7 +8,7 @@ paths:
   - 'docs/reference/**'
   - '**/WIRING.md'
   - '**/hardware.toml'
-  - 'packages/robocar/bringup/**'
+  - 'packages/robotics/robocar/bringup/**'
 ---
 # A Working Circuit Is Not a Correctly Connected One
 

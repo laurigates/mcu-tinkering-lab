@@ -94,7 +94,7 @@ the blog and the repo disagree. Fit: skill / reviewer item / tool check / refere
   (`.claude/rules/power-stage-checklist.md:30`, row 11). `review.py` reports the
   narrowest track per class (`tools/kicad/pcb/review.py:13-14`) but takes no
   current. `board.toml` `[[net_classes]]` has no current field
-  (`packages/robocar/unified-integrated/hardware/carrier/board.toml:541-580`).
+  (`packages/robotics/robocar/integrated/hardware/carrier/board.toml:541-580`).
   There is no via-per-amp rule anywhere (grep for "per via" and "ampac" finds nothing).
 - Fit: add an optional `current_a` to `[[net_classes]]`. `review.py`, or
   `kicad.measure path`, then flags (a) the narrowest track below the IPC-2221 width
@@ -189,7 +189,7 @@ the blog and the repo disagree. Fit: skill / reviewer item / tool check / refere
 - Rule: MnO2 tantalum is derated to 50 % of its rated voltage; ceramic and polymer to 80 %.
 - Source: https://jlcpcb.com/blog/how-to-choose-capacitor-voltage-rating
 - Status: the integrated carrier's 22 µF 16 V tantalums sit on 5 V and 3V3 rails
-  (`packages/robocar/unified-integrated/hardware.toml:631-683`), which is 31 % or less,
+  (`packages/robotics/robocar/integrated/hardware.toml:632-684`), which is 31 % or less,
   so they comply. Add a reviewer §1 bullet: "capacitor working voltage against its
   dielectric's derating, especially MnO2 tantalum on VBAT (8.4 V on 16 V is 52 %, which
   fails the rule)". There is currently no check.
@@ -202,7 +202,7 @@ the blog and the repo disagree. Fit: skill / reviewer item / tool check / refere
   https://jlcpcb.com/blog/understanding-dc-5v-input-in-pcb-design,
   https://jlcpcb.com/blog/pcb-layout-guidelines-for-usb-type-c
 - Status: the PTC and reverse-polarity P-FET are covered (power-stage checklist row 3;
-  `packages/robocar/unified-integrated/hardware.toml:155-201`;
+  `packages/robotics/robocar/integrated/hardware.toml:156-202`;
   `packages/robotics/balancebot/hardware.toml:232-260`). Neither carrier has a TVS
   on the pack input. There is no reviewer item for transient or ESD clamping, or for its
   distance to the connector.
@@ -231,7 +231,7 @@ the blog and the repo disagree. Fit: skill / reviewer item / tool check / refere
 - Status: `.claude/skills/audio-static-debugging/SKILL.md:132-140` (Step 4) only
   covers SD-pin pops. A supply-coupled whine that follows motor PWM is not listed as a symptom.
   The carrier has a ferrite bead on the amplifier supply
-  (`packages/robocar/unified-integrated/hardware.toml:476-480`).
+  (`packages/robotics/robocar/integrated/hardware.toml:477-481`).
 - Fit: add a symptom row to the skill's Step 1 and Step 4: a whine that tracks motor
   PWM or servo moves means the supply or ground path, so scope the amplifier's VDD
   during a motor step.
@@ -248,7 +248,7 @@ the blog and the repo disagree. Fit: skill / reviewer item / tool check / refere
 - The S3 dev-board post puts a 10 µF ceramic on the AMS1117-3.3 output
   (https://jlcpcb.com/blog/how-to-design-an-esp32-s3-development-board). The
   regulator post (https://jlcpcb.com/blog/voltage-regulator-pcb-practical-design-guide)
-  and the repo (`packages/robocar/unified/hardware.toml:701-703`, citing the AMS1117
+  and the repo (`packages/robotics/robocar/hardware.toml:701-703`, citing the AMS1117
   datasheet) call for 22 µF tantalum and warn that a low-ESR X7R can oscillate. The repo
   follows the datasheet, so no change. If a pcb-reviewer bullet is added: "the LDO output
   cap's ESR range is part of the stability spec; do not copy blog reference designs."

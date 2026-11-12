@@ -57,7 +57,7 @@ jobs:
             all:
               - '**'
             python:
-              - 'packages/robocar/simulation/**'
+              - 'packages/robotics/robocar/simulation/**'
             c-code:
               - 'packages/**/main/**'
               - 'packages/**/components/**'
@@ -206,7 +206,7 @@ jobs:
       # making the gate a no-op in CI while it is RED for a developer with the
       # sim deps installed (local<->CI parity gap, issue #369).
       - name: Sync simulation dev dependencies (for ty pre-commit hook)
-        working-directory: packages/robocar/simulation
+        working-directory: packages/robotics/robocar/simulation
         # --locked: install the committed uv.lock and fail if pyproject.toml
         # has moved past it, rather than resolving fresh on every run. A fresh
         # resolve picked up vtk 9.7.2 before its Linux x86_64 wheels existed.
@@ -244,11 +244,11 @@ jobs:
           cache-suffix: simulation
 
       - name: Install dependencies
-        working-directory: packages/robocar/simulation
+        working-directory: packages/robotics/robocar/simulation
         run: uv sync --locked --extra dev  # committed uv.lock; see the ty-hook sync above
 
       - name: Run tests with coverage
-        working-directory: packages/robocar/simulation
+        working-directory: packages/robotics/robocar/simulation
         run: |
           uv run --locked pytest tests/ \
             --cov=src \
@@ -263,15 +263,15 @@ jobs:
         with:
           name: coverage-reports-${{ github.sha }}
           path: |
-            packages/robocar/simulation/coverage.xml
-            packages/robocar/simulation/htmlcov/
+            packages/robotics/robocar/simulation/coverage.xml
+            packages/robotics/robocar/simulation/htmlcov/
           retention-days: 30
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7.1.1
         if: always()
         with:
-          files: packages/robocar/simulation/coverage.xml
+          files: packages/robotics/robocar/simulation/coverage.xml
           flags: simulation
           name: robocar-simulation
         continue-on-error: true

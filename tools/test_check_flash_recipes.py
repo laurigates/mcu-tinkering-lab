@@ -1266,10 +1266,10 @@ class AttributePlacementTests(TempRepo):
         self.assertEqual(self.codes(), {"tools/esp32-idf.just": ["ORPHANED_ATTRIBUTE"]})
 
     def test_package_and_root_justfiles_are_checked_too(self):
-        self.write("packages/robocar/unified/justfile", self.ORPHANED)
+        self.write("packages/robotics/robocar/justfile", self.ORPHANED)
         self.write("justfile", self.ORPHANED)
         self.assertEqual(
-            sorted(self.codes()), ["justfile", "packages/robocar/unified/justfile"]
+            sorted(self.codes()), ["justfile", "packages/robotics/robocar/justfile"]
         )
 
     def test_a_comment_after_a_blank_line_is_still_reported(self):
@@ -1418,14 +1418,14 @@ class SharedRecipeTests(TempRepo):
         self.assertEqual(self.findings(), ["FLASH_SIZE"])
 
     def test_prose_naming_a_shared_recipe_is_not_a_consumer(self):
-        # robocar/unified explains in a comment why it stayed inline.
+        # packages/robotics/robocar explains in a comment why it stayed inline.
         self.write(
-            "packages/robocar/unified/justfile",
+            "packages/robotics/robocar/justfile",
             "# Not `flash: (_s3-flash bin_name)`: this is an 8 MB part.\n"
             "flash:\n    esptool write-flash @flash_args\n",
         )
         self.write(
-            "packages/robocar/unified/sdkconfig.defaults",
+            "packages/robotics/robocar/sdkconfig.defaults",
             'CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n',
         )
         self.assertEqual(cfr.collect(), [])

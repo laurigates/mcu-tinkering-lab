@@ -229,7 +229,7 @@ The number the old gate hardcoded was wrong twice over:
 | Project | Smallest app partition | Old gate (1887436) would have |
 |---|---|---|
 | robocar-main, robocar-camera | `0x1D0000` = 1900544 B | rejected a binary that fits, from 1887437 B up |
-| robocar-unified, melody-detector | `0x380000` = 3.5 MB | rejected everything past 1.8 MB, with 1.7 MB still free |
+| robocar, melody-detector | `0x380000` = 3.5 MB | rejected everything past 1.8 MB, with 1.7 MB still free |
 | factory-only tables (switch-usb-proxy, xbox-switch-bridge, facedancer, bringup) | 2–3 MB | same, wrongly |
 | the 9 flasher projects with no `partitions.csv` | 1 MB `CONFIG_PARTITION_TABLE_SINGLE_APP` default | passed a 1.5 MB binary that cannot flash |
 
@@ -243,7 +243,7 @@ silently stop running if a future ESP-IDF detaches the target.
 
 Verified with a negative control against the fetched v5.4 tool: exit 0 at
 exactly 0x1D0000 bytes on robocar-main's table, exit 1 at one byte more, and
-the same pair at 0x380000 on robocar-unified's.
+the same pair at 0x380000 on robocar's.
 
 Two pre-existing defects in `_ci-build-esp32.yml` fell out of reading it for
 this: its "Check binary size limits" step compared `build/<project>.bin`

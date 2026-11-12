@@ -1,18 +1,18 @@
 ---
 reviewed: 2026-11-04
 paths:
-  - 'packages/robocar/unified/main/main.c'
-  - 'packages/robocar/unified/main/i2c_bus*'
-  - 'packages/robocar/unified/main/*_controller*'
-  - 'packages/robocar/unified/main/self_report*'
-  - 'packages/robocar/unified/test/test_{pca9685,servo_controller,motor_controller,self_report}*'
+  - 'packages/robotics/robocar/main/main.c'
+  - 'packages/robotics/robocar/main/i2c_bus*'
+  - 'packages/robotics/robocar/main/*_controller*'
+  - 'packages/robotics/robocar/main/self_report*'
+  - 'packages/robotics/robocar/test/test_{pca9685,servo_controller,motor_controller,self_report}*'
   - '**/*pca9685*'
   - '**/*i2c*'
   - '.claude/skills/esp32-debugging/**'
 ---
 # A Code Path Gated on Peripheral Presence Is Unrun Until the Peripheral Is Fitted
 
-`init_hardware()` in robocar-unified returns early when the I2C bus does not
+`init_hardware()` in robocar returns early when the I2C bus does not
 answer, so on a bare board **every line after that gate has never executed**:
 motor, LED, servo and buzzer init, and the vendored drivers under them. The
 firmware had booted cleanly for months. The first boot with the TCA9548A and

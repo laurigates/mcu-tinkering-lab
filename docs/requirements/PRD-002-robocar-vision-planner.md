@@ -96,7 +96,7 @@ XIAO ESP32-S3 Sense (ADR-013).
 ADR-016 (planner and executor), ADR-020 (speech gates), ADR-022 (dormancy and spend
 fuse), ADR-025 (head aiming), ADR-029 (idle gaze, bounded motion), ADR-030 (behaviour
 twin), ADR-033 (planner notes), ADR-034 (enrolment); PRD-001; `.claude/rules/stateless-model-gating.md`,
-`.claude/rules/gemini-api.md`; `packages/robocar/unified/docs/firmware/planner.md` and
+`.claude/rules/gemini-api.md`; `packages/robotics/robocar/docs/firmware/planner.md` and
 `camera-and-log.md`.
 
 ## History

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assert that a firmware binary embeds the build commit SHA it is published under.
 
-robocar-unified compiles the commit it was built from into the app
+robocar compiles the commit it was built from into the app
 (ROBOCAR_BUILD_SHA, resolved from git at CMake configure time) and its OTA
 compares that string against the "buildSha" the web-flasher manifest declares
 (issue #627). The two are produced independently -- one by CMake inside the
@@ -57,7 +57,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(
         f"ERROR: {binary} does not embed build SHA {sha} -- check the configure log's "
-        "'robocar-unified build SHA:' line; 'unknown' means git could not read the "
+        "'robocar build SHA:' line; 'unknown' means git could not read the "
         "checkout, a different SHA means the build and the manifest saw different commits",
         file=sys.stderr,
     )

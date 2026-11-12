@@ -87,8 +87,8 @@ SIZE_TO_BYTES = {
 
 # `flash: (_s3-flash bin_name)`, with optional dependencies before the group.
 # Anchored at column 0 because that is where a just recipe header lives, which is
-# also what keeps a COMMENT mentioning the recipe from matching — robocar/unified
-# explains in prose why it stayed inline, and counting
+# also what keeps a COMMENT mentioning the recipe from matching —
+# packages/robotics/robocar explains in prose why it stayed inline, and counting
 # it as a consumer would report the exact project that got this right. Those
 # inline recipes are not unchecked: check_flash_recipe_outputs audits them.
 RECIPE_RE = re.compile(
@@ -953,7 +953,7 @@ def main() -> int:
             "A shared flash recipe bakes in a bootloader offset, a flash-size\n"
             "value, an app offset, and the absence of ota_data. When a project\n"
             "does not fit, keep its flash recipe INLINE with explicit offsets --\n"
-            "see packages/robocar/unified/justfile for the worked example.\n"
+            "see packages/robotics/robocar/justfile for the worked example.\n"
             "Any flash recipe must name only files the build writes: the app is\n"
             "build/<CMake project() name>.bin, and a full flash on a table with\n"
             "an otadata row writes build/ota_data_initial.bin too, and each file\n"

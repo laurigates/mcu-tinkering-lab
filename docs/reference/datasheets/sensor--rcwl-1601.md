@@ -4,9 +4,9 @@
 datasheet for the module, or for the ranging chip fitted to it, was found from
 the maker; the facts below come from the sources listed under
 [Datasheets & References](#datasheets--references), each cited where used.
-**Used in:** robocar-unified — two of them, front and rear, both in I2C mode
+**Used in:** robocar — two of them, front and rear, both in I2C mode
 (see [I2C mode](#i2c-mode)) on TCA9548A channels 3 and 4. The front one drives
-the obstacle reflex in `packages/robocar/unified/main/reactive_controller.c`;
+the obstacle reflex in `packages/robotics/robocar/main/reactive_controller.c`;
 the driver is `main/ultrasonic.c` over the two-phase read in
 `main/ultrasonic_core.c`, which waits `ULTRASONIC_CONVERSION_MS` (120 ms) between
 trigger and read. Physical header layout:
@@ -86,7 +86,7 @@ labels (`M1`/`M2`); treat it as a hint, not as this board's behaviour.
 Adafruit's I2C-mode RCWL-1601 (#4742) is the same PCB with 10 kΩ (marked
 `103`) on `R4` and `R5` empty; see the board page.
 
-**For robocar-unified: fit 10 kΩ on R4, leave R5 empty (I2C mode).** Each
+**For robocar: fit 10 kΩ on R4, leave R5 empty (I2C mode).** Each
 rangefinder sits alone on its own TCA9548A channel (3 and 4).
 
 ## I2C mode
@@ -111,7 +111,7 @@ agree on everything except the conversion wait.
   think it gets confused by other commands and can lock up the bus". Give it
   a bus, or a mux channel, of its own.
 - **Clock: run it at 100 kHz.** None of the sources above states a maximum.
-  Measured on robocar-unified's carrier (2026-11-04, both modules with 10 kΩ
+  Measured on robocar's carrier (2026-11-04, both modules with 10 kΩ
   on R4, each alone on a TCA9548A channel with 2.2 kΩ pull-ups): at 400 kHz
   both ACK their address, so a bare probe passes, and then NACK the trigger
   and the read. The bringup sweep got 0/5 readings from each. At 100 kHz, with

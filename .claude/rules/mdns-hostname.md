@@ -36,7 +36,7 @@ All ESP32 projects that connect to WiFi in STA mode MUST configure mDNS so the d
 
 ## Hostname Convention
 
-Use the project directory name as the hostname (e.g., `esp32-cam-webserver`, `robocar-unified`, `it-troubleshooter`). This keeps hostnames predictable and consistent.
+Use the project directory name as the hostname (e.g., `esp32-cam-webserver`, `robocar`, `it-troubleshooter`). This keeps hostnames predictable and consistent.
 
 ## Placement
 
@@ -48,6 +48,6 @@ Initialize mDNS **after** WiFi has connected (after `IP_EVENT_STA_GOT_IP` or equ
 |---------|----------|-----|
 | esp32-cam-webserver | `esp32-cam` | `http://esp32-cam.local` |
 | esp32cam-llm-telegram | `esp32cam-llm-telegram` | `esp32cam-llm-telegram.local` |
-| robocar-unified | `robocar-unified` | `robocar-unified.local` |
+| robocar | `robocar` | `robocar.local` |
 | nfc-scavenger-hunt | `nfc-scavenger-hunt` | `nfc-scavenger-hunt.local` |
 | it-troubleshooter | `it-troubleshooter` | `it-troubleshooter.local` |

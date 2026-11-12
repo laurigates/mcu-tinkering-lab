@@ -17,7 +17,7 @@ def yoke_rim() -> tuple[trimesh.Trimesh, np.ndarray]:
     top. The sample point is the one seed 1 drew (rounded to 0.01 µm), 0.4 µm
     from the rim vertex. Its ray down runs along the side facet and hits it
     after 5 µm; the wall there is 1.0 mm. Coordinates are print/yoke.stl's
-    (packages/robocar/unified/hardware/pan-tilt), rounded to 0.1 µm.
+    (packages/robotics/robocar/hardware/pan-tilt), rounded to 0.1 µm.
     """
     v = np.array(
         [

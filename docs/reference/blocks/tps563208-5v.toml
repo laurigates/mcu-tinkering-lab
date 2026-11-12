@@ -1,5 +1,5 @@
 # TPS563208 synchronous buck, 5 V at up to 3 A, from a 2S pack or any
-# 6.7-17 V input. First used on robocar-unified-integrated (U10); the values
+# 6.7-17 V input. First used on robocar-integrated (U10); the values
 # are TI SLVSD90B Table 7-2's 5 V row.
 #
 # Output: Table 7-2 gives R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so 4.98 V).
@@ -41,7 +41,7 @@
 
 [block]
 name = "TPS563208 5 V synchronous buck, 3 A"
-source = "TI SLVSD90B Table 7-2 (5 V row), §7.3, 5.5, Figures 5-3/5-4; robocar-unified-integrated U10 and its pre-fab layout reviews"
+source = "TI SLVSD90B Table 7-2 (5 V row), §7.3, 5.5, Figures 5-3/5-4; robocar-integrated U10 and its pre-fab layout reviews"
 
 [ports]
 VIN = ["ic.VIN", "en_top.A", "cin1.A", "cin2.A", "cin_hf.A"]

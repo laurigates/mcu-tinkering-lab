@@ -25,17 +25,17 @@ from components import gpio_anchor, max98357a, xiao_esp32s3_sense
 from hardware import HardwareError, Net, join
 from hardware_nets import JoinedNets
 
-UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
+ROBOCAR = FsPath(__file__).resolve().parents[2] / "packages/robotics/robocar"
 
 
 @pytest.fixture(scope="module")
 def model():
-    return join(UNIFIED)
+    return join(ROBOCAR)
 
 
 @pytest.fixture
 def drawn():
-    """A placed XIAO and amplifier, the two ends of robocar-unified's I2S nets."""
+    """A placed XIAO and amplifier, the two ends of robocar's I2S nets."""
     d = schemdraw.Drawing(show=False)
     xiao = d.add(xiao_esp32s3_sense(layout="physical"))
     amp = d.add(max98357a(layout="physical").at((10, 0)))
@@ -45,7 +45,7 @@ def drawn():
 def _only_i2s(model, **changes):
     """``model`` reduced to its three I2S nets, with ``changes`` applied."""
     nets = tuple(n for n in model.nets if n.part == "amp")
-    assert len(nets) == 3, "robocar-unified's join should wire three amp pins"
+    assert len(nets) == 3, "robocar's join should wire three amp pins"
     return dataclasses.replace(model, nets=nets, bus_nets=(), outputs=(), **changes)
 
 
@@ -140,13 +140,13 @@ def test_check_passes_once_every_net_is_drawn(model, drawn):
     nets.check_all_drawn()
 
 
-def test_robocar_unified_fails_to_render_a_net_it_does_not_draw(model):
+def test_robocar_fails_to_render_a_net_it_does_not_draw(model):
     # A [[nets]] entry added to hardware.toml with no wire in the circuit must
     # stop the render, not ship a drawing that silently lacks it. UART0 TX is
     # a real header pad (D6) that the circuit draws nothing to.
     from render import ROOT, load_circuit
 
-    mod = load_circuit(ROOT / "circuits" / "robocar_unified.py")
+    mod = load_circuit(ROOT / "circuits" / "robocar.py")
     extra = Net(role="UART0_TX_PIN", part="amp", pin="GAIN", note="")
     with pytest.raises(HardwareError, match="UART0_TX_PIN"):
         mod.draw(dataclasses.replace(model, nets=(*model.nets, extra)))
@@ -300,7 +300,7 @@ def test_balancebot_tags_the_driver_straps_from_the_rails(bb_model):
         mod.draw(dataclasses.replace(bb_model, rails=rails))
 
 
-# --- Mux channel buses: robocar-unified (#768) ---------------------------------
+# --- Mux channel buses: robocar (#768) ---------------------------------
 # The TCA9548A's downstream SDn/SCn pairs used to be hand-drawn by channel macro;
 # [[bus_nets]] now says which part each channel reaches.
 
@@ -400,19 +400,19 @@ def test_check_names_a_bus_the_drawing_left_out(model, mux_drawn):
     assert "OLED" not in str(err.value)
 
 
-def test_robocar_unified_fails_to_render_a_bus_it_does_not_draw(model):
+def test_robocar_fails_to_render_a_bus_it_does_not_draw(model):
     # A [[bus_nets]] entry for a channel the circuit never draws must stop the
     # render, as an MCU net does.
     from hardware import BusNet
     from render import ROOT, load_circuit
 
-    mod = load_circuit(ROOT / "circuits" / "robocar_unified.py")
+    mod = load_circuit(ROOT / "circuits" / "robocar.py")
     extra = BusNet("I2C_BUS_CHANNEL_SPARE", 3, "mux", "oled", "")
     with pytest.raises(HardwareError, match="I2C_BUS_CHANNEL_SPARE"):
         mod.draw(dataclasses.replace(model, bus_nets=(*model.bus_nets, extra)))
 
 
-# --- One driver, two loads: robocar-unified's motors (#769) ---------------------
+# --- One driver, two loads: robocar's motors (#769) ---------------------
 # The TB6612FNG's A pair drives the right motor and its B pair the left, each on
 # the motor's own terminals 1 and 2: [[outputs]] load_pins, read by
 # output_ends() instead of four hand-written wires.
@@ -524,13 +524,13 @@ def test_check_names_an_output_the_drawing_left_out(model, motors_drawn):
     assert "motor_driver" not in str(err.value)
 
 
-def test_robocar_unified_draws_the_motors_from_the_join(model):
+def test_robocar_draws_the_motors_from_the_join(model):
     # Swapping which motor channel A drives moves the motor leads, with
     # nothing in the circuit edited.
     from render import ROOT, load_circuit
     from routing import Path as Wire
 
-    mod = load_circuit(ROOT / "circuits" / "robocar_unified.py")
+    mod = load_circuit(ROOT / "circuits" / "robocar.py")
 
     def wire_ends(model):
         return {

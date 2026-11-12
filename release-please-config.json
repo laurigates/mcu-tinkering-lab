@@ -1,13 +1,19 @@
 {
   "packages": {
-    "packages/robocar/unified": {
+    "packages/robotics/robocar": {
       "release-type": "simple",
-      "component": "robocar-unified",
-      "package-name": "robocar-unified",
+      "component": "robocar",
+      "package-name": "robocar",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true
+      "bump-patch-for-minor-pre-major": true,
+      "exclude-paths": [
+        "packages/robotics/robocar/bringup",
+        "packages/robotics/robocar/integrated",
+        "packages/robotics/robocar/simulation",
+        "packages/robotics/robocar/twin"
+      ]
     },
     "packages/audio/audiobook-player": {
       "release-type": "simple",
@@ -90,7 +96,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/robocar/simulation": {
+    "packages/robotics/robocar/simulation": {
       "release-type": "simple",
       "component": "robocar-simulation",
       "package-name": "robocar-simulation",

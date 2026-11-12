@@ -1,0 +1,406 @@
+/**
+ * @file pin_config.h
+ * @brief XIAO ESP32-S3 Sense pin definitions for robocar
+ *
+ * GPIO Budget (11 available on XIAO headers):
+ *   D4/D5 (GPIO5/6)  = I2C SDA/SCL to TCA9548A
+ *   D0 (GPIO1)       = TB6612FNG STBY (motor enable)
+ *   D1 (GPIO2)       = Piezo buzzer
+ *   D2 (GPIO3)       = TCA9548A RESET (active low)
+ *   D3 (GPIO4)       = unused (the rangefinders moved to I2C)
+ *   D6 (GPIO43)      = UART0 TX: log mirror to carrier J15 (console is USB-C)
+ *   D7 (GPIO44)      = UART0 RX, unused
+ *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
+ *
+ * Two spare pads remain: D3 (GPIO4) and D7 (GPIO44, UART0 RX). D6 (GPIO43)
+ * carries the ROM bootloader's boot log at every reset and, from app_main on,
+ * a copy of every ESP_LOG line (log_mirror.c, issue #798), so it is an output
+ * now and not free for a peripheral. Beyond those, digital I/O goes through the
+ * MCP23017 on TCA9548A ch2.
+ *
+ * Camera uses internal GPIOs on the Sense module — no conflict with D0-D10.
+ */
+
+#ifndef PIN_CONFIG_H
+#define PIN_CONFIG_H
+
+#include "driver/gpio.h"
+
+// ========================================
+// I2C Bus (to TCA9548A multiplexer)
+// ========================================
+#define I2C_SDA_PIN GPIO_NUM_5  // XIAO D4/SDA
+#define I2C_SCL_PIN GPIO_NUM_6  // XIAO D5/SCL
+// 100 kHz, not 400: the RCWL-1601 rangefinders ACK their address at 400 kHz
+// and then NACK every trigger and read (bringup sweep, 2026-11-04: 0/5 readings
+// each at 400 kHz, 5/5 at 100 kHz). Giving only their handle 100 kHz was not
+// enough, because the mux selects that open and close their channel still ran
+// at 400 kHz; see docs/reference/datasheets/sensor--rcwl-1601.md.
+#define I2C_MASTER_FREQ_HZ 100000
+
+// ========================================
+// TCA9548A I2C Multiplexer
+// ========================================
+#define TCA9548A_ADDR 0x70  // Default address (A0=A1=A2=GND)
+
+// Active-low RESET, XIAO D2. Configured as an output driven high at
+// i2c_bus_init(); i2c_bus_reset_mux() pulses it low to free a stuck segment.
+// The breakout pulls RESET up, which also holds GPIO3 (a strapping pin, sampled
+// only for JTAG source selection when that eFuse is burned) high across reset.
+#define TCA9548A_RST_PIN GPIO_NUM_3  // XIAO D2
+
+// TCA9548A channel assignments
+#define I2C_BUS_CHANNEL_PCA9685 0       // Channel 0: PCA9685 PWM driver
+#define I2C_BUS_CHANNEL_OLED 1          // Channel 1: SSD1306 OLED display
+#define I2C_BUS_CHANNEL_MCP23017 2      // Channel 2: MCP23017 GPIO expander
+#define I2C_BUS_CHANNEL_RANGER_FRONT 3  // Channel 3: front RCWL-1601 (fixed)
+#define I2C_BUS_CHANNEL_RANGER_REAR 4   // Channel 4: rear RCWL-1601
+// Channels 5-7: reserved for future sensors (IMU, ToF, etc.)
+
+// ========================================
+// PCA9685 PWM Driver (via TCA9548A ch0)
+// ========================================
+#define PCA9685_ADDR 0x40  // Default PCA9685 address
+// 100 Hz, chosen from a measurement rather than a guess (2026-09-18 bench,
+// robocar-bringup's servo rate ladder). The SG90s fitted here track cleanly at
+// 50, 100 and 125 Hz and BUZZ at 200 — they stall against the pulse train
+// instead of following it, which is what made a freshly booted robot sweep its
+// head and then sit humming at an end stop.
+//
+// One rung below the highest rate that worked, deliberately. 125 Hz passed with
+// no margin left above it, and the bench test was the optimistic case: the
+// servos were unloaded and off the camera mount, while a loaded servo draws
+// more current, sags the shared rail, and degrades exactly the timing that is
+// already marginal.
+//
+// The prescaler is CHIP-WIDE, so this is a three-way compromise and not a servo
+// setting. LEDs flicker more the lower it goes (100 Hz is above the ~60-90 Hz
+// fusion threshold, but a moving robot can still show stroboscopic artefacts),
+// and motor PWM is audible at any rate in this range — a TB6612FNG would rather
+// have kilohertz. Raise to 125 if the LEDs look bad; `servo freq <hz>` changes
+// it at runtime without a reflash, so try before editing.
+#define PCA9685_FREQ_HZ 100
+
+// LED channels (2x RGB)
+#define LED_LEFT_R_CHANNEL 0
+#define LED_LEFT_G_CHANNEL 1
+#define LED_LEFT_B_CHANNEL 2
+#define LED_RIGHT_R_CHANNEL 3
+#define LED_RIGHT_G_CHANNEL 4
+#define LED_RIGHT_B_CHANNEL 5
+
+// Servo channels
+#define SERVO_PAN_CHANNEL 6
+#define SERVO_TILT_CHANNEL 7
+
+// Motor channels (TB6612FNG via PCA9685 digital/PWM outputs).
+//
+// The order follows the TB6612FNG's control header read top to bottom — PWMA,
+// AIN2, AIN1, then, across STBY, BIN1, BIN2, PWMB — so the six jumpers run
+// straight across with no crossings. STBY is skipped because it comes from the
+// MCU (MOTOR_STBY_PIN), not from the PCA9685.
+//
+// That header is symmetric about STBY rather than repeated, which is why the A
+// side reads PWM-then-direction and the B side direction-then-PWM. It looks
+// like an inconsistency in this list and is the opposite: it is what makes the
+// physical wiring consistent.
+//
+// The six are one consecutive block so both motors can be set in a single I2C
+// transaction. motor_controller.c places each value by its channel and
+// static-asserts the block property, so renumbering here is a safe edit —
+// but it is a REWIRING, not a refactor.
+#define MOTOR_FIRST_CHANNEL 8       // Base of the block; keep in step with the six below
+#define MOTOR_RIGHT_PWM_CHANNEL 8   // -> PWMA. Speed: PWM 0-4095
+#define MOTOR_RIGHT_IN2_CHANNEL 9   // -> AIN2. Direction: digital 0 or 4096
+#define MOTOR_RIGHT_IN1_CHANNEL 10  // -> AIN1. Direction: digital 0 or 4096
+#define MOTOR_LEFT_IN1_CHANNEL 11   // -> BIN1. Direction: digital 0 or 4096
+#define MOTOR_LEFT_IN2_CHANNEL 12   // -> BIN2. Direction: digital 0 or 4096
+#define MOTOR_LEFT_PWM_CHANNEL 13   // -> PWMB. Speed: PWM 0-4095
+// Channels 14-15: reserved for future expansion
+
+// PCA9685 digital output values (for direction pins)
+#define PCA9685_FULL_ON 4096  // Bit 12 set = full-on
+#define PCA9685_FULL_OFF 0    // All bits clear = full-off
+
+// PCA9685 PWM resolution
+#define PCA9685_PWM_MAX 4095  // 12-bit resolution
+
+// ========================================
+// Motor Control (TB6612FNG)
+// ========================================
+#define MOTOR_STBY_PIN GPIO_NUM_1  // XIAO D0: HIGH = motors enabled
+#define DEFAULT_SPEED 3200         // Default motor speed (~78% of 4095)
+
+// ========================================
+// MCP23017 GPIO Expander (via TCA9548A ch2)
+// 16 extra GPIOs (pins 0-7 = PORTA, 8-15 = PORTB). No role assigned yet —
+// generic expansion, direction configurable per pin at runtime, except GPA7
+// (pin 7) and GPB7 (pin 15): output-only on the MCP23017 Rev D (DS20001952D
+// p. 11), so init drives them low as outputs and refuses in/up on them.
+// The address is A0-A2 (0x20-0x27). Both carriers tie them to GND; a module
+// on a harness biases them itself (#781), so init tries this address first,
+// then the rest of 0x20-0x27, and warns if another one answers.
+// ========================================
+#define MCP23017_ADDR 0x20  // A0=A1=A2=GND, as both carriers strap them
+
+// Downward floor sensors for the cliff reflex (cliff_sensor.c): salvaged
+// TCRT5000-style reflective sensors, phototransistor collector on the pin,
+// emitter to GND, the MCP23017's internal pull-up enabled. Low = floor seen.
+// Interim until the VL53L4CD pair of issue #1010. Not GPA7/GPB7 (output-only).
+#define CLIFF_FRONT_EXPANDER_PIN 0  // GPA0
+#define CLIFF_REAR_EXPANDER_PIN 1   // GPA1
+
+// ========================================
+// SSD1306 OLED Display (via TCA9548A ch1)
+// 0.91-inch 128x32 module (docs/reference/boards/ssd1306-091in-128x32.md).
+// The height is the panel's, not the controller's: a driver derives its text
+// rows, multiplex ratio (A8h) and COM pin layout (DAh) from it, so a 64-row init
+// cannot be sent to this 32-row glass (issue #780).
+// ========================================
+#define OLED_I2C_ADDR 0x3C  // SSD1306 default; 0x3C vs 0x3D unconfirmed until a bench scan
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 32
+
+// ========================================
+// RCWL-1601 Ultrasonic Rangefinders, front and rear (via TCA9548A ch3 / ch4)
+// Both run in I2C mode: 10 kΩ fitted on R4 (IIC), R5 empty. The address is
+// fixed, so the two cannot share a segment, and the module "doesn't like to
+// share the I2C bus" (Adafruit #4742) — each has a mux channel to itself. It
+// has no pull-ups of its own. See docs/reference/boards/rcwl-1601.md.
+// ========================================
+#define RCWL1601_I2C_ADDR 0x57  // 7-bit, fixed
+
+// ========================================
+// Piezo Buzzer
+// ========================================
+#define PIEZO_PIN GPIO_NUM_2  // XIAO D1
+
+// ========================================
+// UART0 header pads (XIAO D6/D7)
+//
+// The serial console is the ESP32-S3's USB-Serial-JTAG on the USB-C connector
+// (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG), which uses the internal USB pins, not
+// D6/D7 — the XIAO has no USB-UART bridge.
+//
+// D6 is UART0 TX and is driven: the ROM bootloader prints its boot log there
+// at every reset, and log_mirror.c then installs the UART0 driver TX-only and
+// copies every ESP_LOG line to it at LOG_MIRROR_UART0_BAUD (config.h, issue
+// #798). The carrier's ribbon takes it to test header J15. Console input,
+// command replies and Improv packets stay on USB.
+//
+// D7 is UART0 RX and is not used: log_mirror.c leaves it unclaimed
+// (UART_PIN_NO_CHANGE) with the RX interrupt off, and the carrier does not
+// wire it. Both are defined so the hardware join (tools/hardware/, ADR-021)
+// and the documents generated from it name these pads from the header rather
+// than from a hand-typed GPIO number.
+//
+// The improv-wifi component's default writer is UART_NUM_0 too (issue #644);
+// main.c always hands it improv_console_write() instead, so Improv replies
+// never reach D6.
+// ========================================
+#define UART0_TX_PIN GPIO_NUM_43  // XIAO D6
+#define UART0_RX_PIN GPIO_NUM_44  // XIAO D7
+
+// ========================================
+// MAX98357A I2S Class-D Amplifier (voice output)
+//
+// HARDWARE TRADE-OFF: on the XIAO ESP32-S3 Sense expansion board these three
+// headers are the microSD slot's SPI bus. Wiring the amplifier here gives up
+// the SD card permanently. There is no alternative pin set — I2S needs a real
+// peripheral, so it cannot be moved behind the PCA9685 or the MCP23017.
+//
+// POWER: the MAX98357A draws ~1 A peaks into a 4 ohm load. CONFIG_ESP_BROWNOUT_DET
+// is already disabled because of motor inrush; do not share a thin 5 V rail
+// with the motor driver. See WIRING.md for the decoupling requirement.
+//
+// SD_MODE (amp side) selects the channel: tie to GND to shut down, leave
+// floating for (L+R)/2, or pull to VDD for right-channel-only.
+// ========================================
+#define I2S_BCLK_PIN GPIO_NUM_7   // XIAO D8  — bit clock
+#define I2S_LRCLK_PIN GPIO_NUM_8  // XIAO D9  — word select / LRC
+#define I2S_DIN_PIN GPIO_NUM_9    // XIAO D10 — serial data to amp
+
+/** Gemini TTS emits 24 kHz mono PCM. Running I2S natively at 24 kHz avoids a
+ *  resampling stage entirely — do not "normalise" this to 16 kHz. */
+#define AUDIO_SAMPLE_RATE_HZ 24000
+
+/** Boot output gain, percent of full scale. The amplifier has no volume
+ *  control, so attenuation happens in software before the samples reach the
+ *  DMA — this scales the PCM linearly.
+ *
+ *  Linear percent is not loudness: halving this is -6 dB, which is clearly
+ *  quieter but not "half as loud" to an ear (roughly -10 dB). Judge it in the
+ *  room, not from the number.
+ *
+ *  Adjustable at runtime with `voice volume <pct>`, and deliberately NOT
+ *  persisted: a boot comes up at this documented default rather than at
+ *  whatever last night's experiment left behind — same convention as
+ *  `cam gainceiling` and the `voice` gate thresholds.
+ *
+ *  30, chosen by ear on the bench (2026-11-05): 70 was too loud in the room.
+ *  About -7 dB from 70. */
+#define AUDIO_VOLUME_PCT 30
+
+/** Ceiling for `voice volume`. 100 is full scale, and above it the int16 cast
+ *  in audio_player.c's mono_to_stereo() wraps rather than clips — see the
+ *  clamp in audio_player_set_volume_pct(). */
+#define AUDIO_VOLUME_PCT_MAX 100
+
+/** PSRAM ring between the TTS download and the I2S writer, in bytes.
+ *
+ *  512 kB ~= 10.6 s of 24 kHz mono. Sized from measurement, not from comfort:
+ *  captured TTS streams (2026-07, 7 live utterances) showed Gemini generating
+ *  audio SLOWER than the 48 kB/s playback rate in 3 of 7 cases — real-time
+ *  factors 0.55 / 0.79 / 0.84 — with a worst cumulative deficit of 2855 ms.
+ *  The starving cases are all SHORT lines, because a fixed 0.9-2.7 s
+ *  time-to-first-byte is amortised over less audio. At this size a short
+ *  utterance buffers whole before a sample is played, so it cannot underrun at
+ *  all. The old 96 kB could not hold even one of the observed deficits. */
+#define AUDIO_RING_BYTES (512 * 1024)
+
+/** Playback starts once this much audio has buffered — 1 s at 24 kHz mono.
+ *
+ *  Was defined but never referenced (dead since the original voice PR), so
+ *  playback actually began on the first ~2 bytes with only the DMA buffers as
+ *  runway. See audio_player.c player_task() for the gate that now uses it, and
+ *  note the OR-condition: an utterance whose download completes before the
+ *  threshold plays immediately rather than waiting for audio that will never
+ *  arrive. */
+#define AUDIO_PREROLL_BYTES (AUDIO_SAMPLE_RATE_HZ * (int)sizeof(int16_t))
+
+// ========================================
+// Onboard PDM microphone (XIAO ESP32-S3 Sense expansion board)
+//
+// These two pins are wired to the MSM261D PDM mic on the Sense board itself —
+// they are not brought out to a header, so there is nothing to rewire and no
+// alternative pin set. Neither collides with the camera DVP group
+// (GPIO 10-18, 38-40, 47-48) nor with the D0-D10 headers (GPIO 1-9, 43-44).
+//
+// The mic is 16 kHz / 16-bit / MONO. PDM has no other mode here, and on the
+// ESP32-S3 PDM RX exists only on I2S0 — the same controller audio_player.c
+// already holds for the amplifier. See the allocation comment in mic_pdm.c for
+// why the RX channel must be a separate i2s_new_channel() call.
+// ========================================
+#define MIC_PDM_CLK_PIN GPIO_NUM_42   // PDM clock, driven by the ESP32-S3
+#define MIC_PDM_DATA_PIN GPIO_NUM_41  // PDM data, input
+
+/** Capture rate. A firmware choice, not the microphone's: the MSM261D fixes no
+ *  sample rate. 16 kHz is what Gemini expects for inline audio, so there is no
+ *  resampling stage anywhere in the path. With ESP-IDF's default down-sampling
+ *  (I2S_PDM_DSR_8S) it drives 16000 x 64 = 1.024 MHz on MIC_PDM_CLK_PIN, between
+ *  the datasheet's Low-Power (150-900 kHz) and Standard (1.1-4.0 MHz) ranges;
+ *  see docs/reference/datasheets/sensor--msm261d.md. */
+#define MIC_SAMPLE_RATE_HZ 16000
+
+// ========================================
+// Servo Configuration (SG90)
+// ========================================
+// An angle is a real servo angle about centre:
+//   pulse_us = SERVO_CENTER_PULSE_US + angle * SERVO_PULSE_US_PER_90_DEG / 90
+// and every pulse is clamped to the SG90 datasheet range (500-2400 us), so
+// -90 deg is 500 us and +81 deg already reaches the 2400 us ceiling.
+// SERVO_PERIOD_US is only the fallback if the frequency reads back as zero.
+// Kept in step with PCA9685_FREQ_HZ so the fallback is not itself a wrong
+// answer: 1000000 / 100 Hz.
+#define SERVO_PERIOD_US 10000
+#define SERVO_MIN_PULSE_US 500      // SG90 datasheet minimum
+#define SERVO_MAX_PULSE_US 2400     // SG90 datasheet maximum
+#define SERVO_CENTER_PULSE_US 1500  // 0 deg
+#define SERVO_PULSE_US_PER_90_DEG 1000
+
+// The pan servo is mounted mirrored in the gimbal: a longer pulse turns the
+// head LEFT. Measured on the bench 2026-11-05: with both horns re-seated
+// straight at 1500 us, `servo pan 20` pointed left and `servo tilt 20` up.
+// Every angle above servo_controller.c stays + = right, + = up (head_aim,
+// idle_gaze, the scene poses, the console), so the mirror is applied only
+// where an angle becomes a pulse. A rebuild with the servo mounted the other
+// way sets this to 0.
+#define SERVO_PAN_INVERTED 1
+#define SERVO_TILT_INVERTED 0
+
+// Pulse width -> PCA9685 count lives in servo_controller.c now, because it
+// depends on the frequency the chip is ACTUALLY running at. The macro that used
+// to sit here divided by SERVO_PERIOD_US unconditionally, which made it correct
+// at one frequency only and silently wrong at any other — a second copy of a fact the
+// PCA9685's prescaler already owns. Use servo_angle_to_count().
+
+// Servo travel limits are live: boot defaults are SERVO_PAN_LIMIT_*_DEFAULT /
+// SERVO_TILT_LIMIT_*_DEFAULT in servo_controller.h, changed at runtime with
+// `servo limit pan|tilt <min> <max>`. servo_controller.c enforces them.
+
+// ========================================
+// FreeRTOS Task Configuration
+// ========================================
+#define MOTOR_TASK_STACK_SIZE 4096
+#define MOTOR_TASK_PRIORITY 6
+#define MOTOR_TASK_CORE 0
+
+#define PERIPHERAL_TASK_STACK_SIZE 4096
+#define PERIPHERAL_TASK_PRIORITY 4
+#define PERIPHERAL_TASK_CORE 0
+
+#define CAMERA_TASK_STACK_SIZE 16384
+#define CAMERA_TASK_PRIORITY 5
+#define CAMERA_TASK_CORE 1
+
+#define AI_TASK_STACK_SIZE 16384
+#define AI_TASK_PRIORITY 3
+#define AI_TASK_CORE 1
+
+#define NETWORK_TASK_STACK_SIZE 8192
+#define NETWORK_TASK_PRIORITY 4
+#define NETWORK_TASK_CORE 1
+
+#define COMMAND_TASK_STACK_SIZE 8192
+#define COMMAND_TASK_PRIORITY 5
+#define COMMAND_TASK_CORE 0
+
+/* The ambient listener samples the microphone continuously so the speech gate has
+ * evidence between planner cycles. Core 1 with the other I/O work, never Core 0.
+ *
+ * 4 KB is ample and deliberately not 8 KB: this task makes no HTTPS call, so the
+ * mbedTLS handshake depth that forces 8 KB elsewhere in this firmware does not
+ * apply. Its one large buffer (a 2 KB PCM frame) is at file scope in
+ * ambient_listener.c rather than on this stack, for exactly that reason.
+ *
+ * Priority 3 matches AI_TASK_PRIORITY: background evidence-gathering that must
+ * never preempt the peripheral or command tasks, let alone motor control. */
+#define AMBIENT_LISTENER_TASK_STACK_SIZE 4096
+#define AMBIENT_LISTENER_TASK_PRIORITY 3
+#define AMBIENT_LISTENER_TASK_CORE 1
+
+/* Audio lives on Core 1 with the other bursty I/O work (camera, planner,
+ * network). Keeping it off Core 0 preserves the motor-PWM timing guarantee
+ * that ADR-016 pins the reactive controller to.
+ *
+ * Two tasks, because esp_http_client_perform() blocks for the whole TTS
+ * download: the fetch task fills the ring, the player task drains it into
+ * I2S, and playback overlaps the download instead of waiting for it.
+ *
+ * The fetch task sits ABOVE the planner (3) and BELOW the player (5). It is
+ * the only thing draining the TLS socket and feeding the ring, so leaving it
+ * at the bottom of the core-1 set meant the producer lost the CPU to the
+ * planner's own Gemini call exactly when it needed to get ahead of real time.
+ * It must stay below the player: the player is what the DMA deadline belongs
+ * to, and it blocks on I2S rather than spinning. */
+#define TTS_FETCH_TASK_STACK_SIZE 8192
+#define TTS_FETCH_TASK_PRIORITY 4
+#define TTS_FETCH_TASK_CORE 1
+
+#define AUDIO_PLAYER_TASK_STACK_SIZE 4096
+#define AUDIO_PLAYER_TASK_PRIORITY 5
+#define AUDIO_PLAYER_TASK_CORE 1
+
+// ========================================
+// Queue Configuration
+// ========================================
+#define MOTOR_CMD_QUEUE_DEPTH 8
+#define PERIPHERAL_CMD_QUEUE_DEPTH 16
+
+// ========================================
+// Timing
+// ========================================
+#define COMMAND_TIMEOUT_MS 1000   // Stop motors if no command for this long
+#define CAPTURE_INTERVAL_MS 5000  // AI capture interval
+
+#endif  // PIN_CONFIG_H

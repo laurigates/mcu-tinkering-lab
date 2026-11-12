@@ -1,5 +1,5 @@
 {
-  "packages/robocar/unified": "0.2.23",
+  "packages/robotics/robocar": "0.2.23",
   "packages/audio/audiobook-player": "0.1.2",
   "packages/camera-vision/cam-i2s-audio": "0.1.6",
   "packages/camera-vision/cam-webserver": "0.1.8",
@@ -9,7 +9,7 @@
   "packages/networking/it-troubleshooter": "0.1.10",
   "packages/audio/kids-audio-toy": "0.1.6",
   "packages/games/nfc-scavenger-hunt": "0.1.7",
-  "packages/robocar/simulation": "0.1.12",
+  "packages/robotics/robocar/simulation": "0.1.12",
   "packages/input-gaming/switch-usb-proxy": "0.1.6",
   "packages/input-gaming/xbox-switch-bridge": "0.1.5",
   "packages/audio/gamepad-synth": "0.1.13",

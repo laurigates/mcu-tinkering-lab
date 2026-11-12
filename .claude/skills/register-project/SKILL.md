@@ -14,7 +14,9 @@ Register the project `$1` in the monorepo infrastructure.
 
 ### 1. Verify Project Exists
 
-Check that `packages/<domain>/$1/` exists and has the basic structure:
+Check that the project directory exists (`packages/<domain>/$1/`, or
+`packages/<domain>/<parent>/$1/` for a subproject of an existing project) and
+has the basic structure:
 - `CMakeLists.txt` or ESPHome `.yaml` file
 - `main/` directory (for ESP-IDF projects)
 - `justfile`
@@ -45,6 +47,13 @@ python3 tools/check-component-extra-paths.py
 It fails on a `packages/` module the root justfile registers with neither an
 entry nor an exclusion, and on a missing `extra_paths` component. Build the
 project once in the container before adding the entry.
+
+For a subproject nested in another project's directory, also add its directory
+to the parent entry's `exclude_paths` in `.github/project-matrix.json`
+(relative to `packages/`) and to the parent's `exclude-paths` in
+`release-please-config.json` (relative to the repo root). Without them the
+parent is rebuilt and released on every change to the subproject; the same
+check fails until both lists name it. See CONTRIBUTING.md § Adding a project.
 
 ### 4. Check Standard File Inventory
 

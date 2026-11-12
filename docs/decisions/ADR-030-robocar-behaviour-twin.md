@@ -20,7 +20,7 @@ Teuvo's behaviour comes from the interaction of the planner loop
 `speech_budget`), the dormancy ladder (`plan_activity`), the voice turn
 (`voice_turn.c`, `ambient_listener.c`, `speech_trigger`) and the executor
 (`reactive_controller.c`, `idle_gaze`, `head_aim`). Most of these modules
-already compile on the host: `packages/robocar/unified/test/` builds over
+already compile on the host: `packages/robotics/robocar/test/` builds over
 forty suites against shims for FreeRTOS, `esp_timer`, `esp_random`, NVS and the
 PCA9685 (`test/include/`). What does not compile on the host is the glue
 that sequences them: the planner task body, the voice-turn task, and
@@ -55,7 +55,7 @@ scenario.yaml ──► orchestrator (Python, uv, pytest)
 Every decision the twin makes is a call into a function that also ships in
 the firmware: the shared-core pattern in `.claude/rules/testing.md`. A
 Python reimplementation of the gates would drift from the C within weeks; the
-removed dual-ESP32 simulation (`packages/robocar/simulation`) is an example
+removed dual-ESP32 simulation (`packages/robotics/robocar/simulation`) is an example
 of a parallel model that outlived the design it described.
 
 ### 2. Firmware seams (behaviour-preserving extractions)
@@ -134,7 +134,7 @@ rather than a second format.
 | Tier | What | Where | Gate |
 |------|------|-------|------|
 | T0 | Host unit tests (existing) | CI | must pass |
-| T1 | D-oracle scenarios, replay cassettes | CI, every PR touching `unified/` | must pass |
+| T1 | D-oracle scenarios, replay cassettes | CI, every PR touching the firmware (`packages/robotics/robocar/main/`) | must pass |
 | T2 | Same scenarios, live model, records cassettes | local / manual workflow | advisory |
 | T3 | J-rubrics over T2 traces; judge model pinned, rubric versioned, N=3 repeats, mean and spread reported | local / manual workflow | advisory |
 | T4 | Bench (HIL) | Lauri | final |
@@ -147,8 +147,8 @@ scenarios → scorecard diff against `main`'s last scorecard → PR.
 ### 7. Layout
 
 ```
-packages/robocar/twin/
-├── CMakeLists.txt        # builds robocar-twin from ../unified/main + ../unified/test/include
+packages/robotics/robocar/twin/
+├── CMakeLists.txt        # builds robocar-twin from ../main + ../test/include
 ├── src/twin_main.c       # virtual clock, event loop, JSONL in/out
 ├── harness/              # uv project: orchestrator, model port, checks, judge, scorecard
 ├── scenarios/*.yaml
@@ -160,7 +160,7 @@ packages/robocar/twin/
 
 ## Alternatives considered
 
-- **Extend `packages/robocar/simulation`**: built for the removed dual-ESP32
+- **Extend `packages/robotics/robocar/simulation`**: built for the removed dual-ESP32
   design, its AI path is Claude/Ollama over an I2C protocol that no longer
   exists. Reusing it means rewriting the parts that matter here.
 - **Reimplement the behaviour in Python**: fastest to start, drifts from the
@@ -176,7 +176,7 @@ packages/robocar/twin/
 - Four extractions in `main/` before the twin is useful; each is reviewed and
   tested on its own, and the firmware build must stay byte-for-byte
   equivalent in behaviour (existing host tests plus a bench smoke test).
-- A new rule for `unified/`: decision logic added to a task body belongs in
+- A new rule for the firmware: decision logic added to a task body belongs in
   its `*_core.c`, or the twin cannot see it.
 - Cassettes become reviewable artefacts: a prompt change shows up as a
   cassette diff in the PR.
@@ -191,4 +191,4 @@ packages/robocar/twin/
    locally.
 3. Speech fixtures for live voice turns: record real utterances, or synthesise
    them once with Gemini TTS and commit the WAVs.
-4. Whether `packages/robocar/simulation` is retired once the twin exists.
+4. Whether `packages/robotics/robocar/simulation` is retired once the twin exists.

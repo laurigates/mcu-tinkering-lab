@@ -10,7 +10,7 @@
 
 ## Context
 
-`robocar-unified` (Teuvo) was built for one robot on one network. Read from
+`robocar` (Teuvo) was built for one robot on one network. Read from
 source on 2026-10-23, not run on hardware:
 
 **One network.** NVS namespace `wifi_config` holds a single `ssid`/`password`
@@ -66,7 +66,7 @@ link is back.
 - Nothing decodes a QR code or reads text on the device.
 - The 960 KB `spiffs` partition is allocated but unused (`partitions.csv:18`).
   The app image is 1.34 MB of a 3.5 MB OTA slot (v0.2.13).
-- The 128x32 OLED is wired (`config.h:158`), but `robocar-unified` has no OLED
+- The 128x32 OLED is wired (`config.h:158`), but `robocar` has no OLED
   code. `robocar/bringup/main/oled.c` drives the same panel; #780 tracks its
   geometry.
 - MQTT is plaintext to a bare private IP (`config.h:82`), and the broker
@@ -148,7 +148,7 @@ provisioning stacks.
   Scan (0x04) follows later. CI rebuilds every project that lists
   `components/improv-wifi` in `extra_paths`: seven, per
   `.github/project-matrix.json`, since #670 was fixed. CI compiles the protocol
-  but never runs it, so bench-test Improv on `robocar-unified` and on at least
+  but never runs it, so bench-test Improv on `robocar` and on at least
   one other consumer.
 
 ### 3. Hold the Gemini credential in NVS
@@ -392,7 +392,7 @@ work waits on which step here, is the sequenced plan in PRD-014 § Phases.
   Options: keep it VAD-gated, which never plays to an empty room but may never
   reach the owner; play a short clip on a timer, not VAD-gated, which reaches a
   lone owner but repeats to an empty room; or rely on the owner card (PRD-015
-  FR-035) plus an OLED prompt, which adds OLED code to `robocar-unified`.
+  FR-035) plus an OLED prompt, which adds OLED code to `robocar`.
 
 ## Related
 

@@ -8,6 +8,10 @@ supersedes: ADR-002
 
 # ADR-013: Single-Board Robot Car with XIAO ESP32-S3 Sense
 
+> **Renamed (2026-11).** `robocar-unified` in `packages/robocar/unified` is now
+> `robocar` in `packages/robotics/robocar`. Releases up to 0.2.23 keep their
+> `robocar-unified-v*` tags.
+
 ## Context
 
 ADR-002 established a dual-board architecture (Heltec WiFi LoRa 32 V1 + ESP32-CAM)
@@ -29,7 +33,7 @@ that motivated the original dual-board split.
 
 ## Decision
 
-Consolidate the robot car onto a single XIAO ESP32-S3 Sense board (`robocar-unified`),
+Consolidate the robot car onto a single XIAO ESP32-S3 Sense board (`robocar`),
 using the TCA9548A to multiplex I2C peripherals and the PCA9685 for all PWM outputs.
 
 ### Hardware Architecture

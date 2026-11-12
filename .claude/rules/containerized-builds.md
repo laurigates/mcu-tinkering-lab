@@ -51,7 +51,7 @@ All ESP-IDF project justfiles import either `tools/esp32.just` (directly) or `to
 | Symbol | Purpose |
 |--------|---------|
 | `container_cmd` | `docker` or `podman` via `CONTAINER_CMD` env var |
-| `compose_file` | Path to shared `docker-compose.yml` |
+| `compose_file` | Absolute path to the shared `docker-compose.yml`, built from `tools/`'s own directory, so it is the same at any project depth |
 | `_detected_serial` | Auto-detected USB-serial adapter (`/dev/cu.usbserial-*`) |
 | `_detected_s3` | Auto-detected ESP32-S3 USB-Serial-JTAG by VID `0x303a` |
 | `_detected_uart` | Auto-detected CP2102/FTDI UART adapter |
@@ -112,6 +112,8 @@ file's other imports.
 ```just
 # Standard ESP-IDF project (gets build, clean, menuconfig, shell, monitor, flash-monitor):
 import '../../../tools/esp32-idf.just'
+# A project nested inside another (packages/robotics/robocar/bringup) is one
+# level deeper and imports '../../../../tools/esp32-idf.just'.
 
 project_dir := "packages/<domain>/my-project"
 port := env("PORT", _detected_serial)  # USB-serial adapter boards
@@ -209,7 +211,7 @@ writes `flash: (_s3-flash bin_name)` and inherits all four silently.
 Fail any one and, on an ESP32-S3, compose `flash: _s3-argfile-flash`, which
 hands esptool the build's own `flash_args` and so follows any table; or keep the
 flash recipe **inline** with explicit offsets, as
-`packages/robocar/unified/justfile` does.
+`packages/robotics/robocar/justfile` does.
 
 **Do not judge this by eye.** The previous wording here asked whether the layout
 looked "exotic" and listed offsets and argfiles as the tell — flash *size* was
@@ -343,7 +345,13 @@ that the host suite, which lists its own sources, could not.
    derives the set from the CMakeLists and fails on a miss (issue #670). The same check
    fails on a `packages/` project the root justfile registers with no matrix entry; a
    project that cannot build in CI needs a `NOT_IN_MATRIX` exclusion with its reason in
-   that script instead (issues #697, #709)
+   that script instead (issues #697, #709). A project whose directory holds other
+   projects (robocar holds `bringup/`, `integrated/`, `simulation/` and `twin/`) lists
+   them in `exclude_paths`, relative to `packages/`: `build.yml` drops a changed file
+   under one of them from that project's triggers, and the same check fails on an entry
+   that is not a directory inside the project's `path`, on a nested project the list
+   leaves out, and when the project's release-please `exclude-paths` name other
+   directories
 
 ## Do Not
 

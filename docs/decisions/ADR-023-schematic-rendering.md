@@ -102,7 +102,7 @@ commits, and `schematics-check.yml` diffs the result.
 scheme reassigns arbitrary colours when an unrelated net moves, which turns
 every render into a large diff and makes the byte-comparison gate useless as a
 review signal. Class colouring is stable under unrelated edits. Of the 21
-`router.wire()` calls in `circuits/robocar_unified.py`, 15 pass `steelblue`
+`router.wire()` calls in `circuits/robocar.py`, 15 pass `steelblue`
 explicitly and 6 pass no colour at all.
 
 ## Alternatives considered

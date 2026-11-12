@@ -1,0 +1,24 @@
+## IDF Component Manager Manifest File
+dependencies:
+  ## Required IDF version
+  idf:
+    version: '>=5.4'
+  # ESP32 Camera component
+  espressif/esp32-camera: '^2.0.0'
+  # mDNS component
+  espressif/mdns: '^1.8.0'
+  # ---------------------------------------------------------------------------
+  # esp-idf-lib drivers (previously vendored under packages/robocar/main, the
+  # dual-board main controller since removed, as a ~95-component snapshot of the
+  # now-archived UncleRus monorepo, shared by symlink).
+  # ---------------------------------------------------------------------------
+  esp-idf-lib/i2cdev: '^2.0.0'
+  esp-idf-lib/tca9548: '^1.0.0'
+  esp-idf-lib/mcp23x17: '^1.1.7'
+  # pca9685: floor at 1.0.8, the first release carrying esp-idf-lib/pca9685#2.
+  # Earlier releases index the stack buffer in pca9685_set_pwm_values() by the
+  # ABSOLUTE channel number while sizing it for `channels` entries, so
+  # motor_stop()'s (first_ch = 8, count = 6) writes 32 bytes past a 24-byte VLA
+  # and double-faults the board. Do not lower this floor.
+  esp-idf-lib/pca9685: '^1.0.8'
+  # Note: MQTT is built-in to ESP-IDF 6.0, no external dependency needed

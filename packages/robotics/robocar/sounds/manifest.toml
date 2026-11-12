@@ -1,0 +1,59 @@
+# Prebuilt sound clips the robot can play: `[tag]` in a spoken line, the
+# planner's `sound` tool, or the obstacle reflex (see docs/firmware/voice.md,
+# "Sound clips").
+#
+# Each entry names a Suno Sounds clip by id and the slice of it that ships.
+# `just robocar::sounds <raw dir>` reads <raw dir>/<suno_id>.wav (the
+# WAV download from suno.com, 48 kHz stereo) and writes main/sounds/<tag>.pcm:
+# 24 kHz mono int16 little-endian, the audio player's format, peak-normalised
+# to `peak_dbfs` with a short fade at both ends. The raw downloads are not in
+# git; the .pcm files are, so a build never needs Suno.
+#
+# The trims were read off a 10 ms loudness envelope. `alt_suno_id` is the other
+# variant from the same generation, kept so a swap is one edit away.
+#
+# Generated 2026-11-08 with Suno Sounds (mcp sounds-create).
+
+[[sound]]
+tag = "horn"
+what = "polite little car horn, two soft toots"
+suno_id = "6a011192-4f31-4232-82b0-7557bf0221df"
+alt_suno_id = "033806dd-8b41-4f31-bb1f-ea44cb99a164"
+start_s = 0.00
+end_s = 0.90
+fade_out_ms = 60
+peak_dbfs = -3.0
+
+[[sound]]
+tag = "aoogah"
+what = "vintage klaxon, a-oo-gah"
+suno_id = "bc469bd2-e212-4866-9339-4a2f257e9890"
+alt_suno_id = "1b5e525a-1ec2-4b14-a642-a1e7e8bbd4a1"
+# Two honk segments; the clip repeats them for 11 s, and the dip at 0.78 s is
+# the cut before the third.
+start_s = 0.00
+end_s = 0.80
+fade_out_ms = 40
+peak_dbfs = -3.0
+
+[[sound]]
+tag = "bell"
+what = "bicycle bell, ring-ring"
+suno_id = "9fba6aea-2725-4d96-b141-d2ed419d2f4c"
+alt_suno_id = "0aa3c8e1-d4be-4863-bd7e-f80e1f8ea967"
+# Strikes at 0.00 and 0.30 s; the third lands at 0.87 s, so fade out before it.
+start_s = 0.00
+end_s = 0.85
+fade_out_ms = 150
+peak_dbfs = -4.0
+
+[[sound]]
+tag = "boing"
+what = "cartoon spring boing, startled"
+suno_id = "50e9bf43-4f7d-4035-ad60-5445700071b0"
+alt_suno_id = "b199eb62-0878-488c-872c-6455d5e20200"
+# The first boing stands alone (0.05-0.45 s) before 0.3 s of silence.
+start_s = 0.00
+end_s = 0.70
+fade_out_ms = 80
+peak_dbfs = -3.0

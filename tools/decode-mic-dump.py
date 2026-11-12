@@ -3,9 +3,9 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Recover microphone frames from a robocar-unified serial log.
+"""Recover microphone frames from a robocar serial log.
 
-The firmware (packages/robocar/unified/main/mic_dump.c) emits the exact PCM the
+The firmware (packages/robotics/robocar/main/mic_dump.c) emits the exact PCM the
 ambient gate measured, base64-framed, interleaved with ordinary ESP_LOG output:
 
     MICBEGIN seq=1 len=2048 crc=5276e4c6 rate=16000 bits=16 ch=1

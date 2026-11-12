@@ -7,7 +7,7 @@ Configuration (environment):
   GLITCHTIP_DSN_ROBOCAR_AI  DSN of the `robocar-ai` project  (source=planner)
   ELF_DIR                   directory of <build-sha>.elf     (default ./elf)
   ELF_RELEASE_URL           release ELF URL, {version} filled in; empty disables
-                            (default: this repo's robocar-unified-v{version} release)
+                            (default: this repo's robocar-v{version} release)
 
 The MQTT session is persistent (clean_session=False, fixed client id), so the
 broker queues QoS 1 events while the bridge is down.

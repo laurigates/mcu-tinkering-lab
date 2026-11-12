@@ -136,9 +136,10 @@ _MOD = re.compile(r"""mod\??\s+([A-Za-z_][A-Za-z0-9_-]*)(?:\s+(['"])(.+?)\2)?\s*
 def just_module(project: Path, repo_root: Path = REPO_ROOT) -> str:
     """The root justfile's module name for `project`, for `just <module>::` hints.
 
-    Read from the `mod` lines, never the directory name: packages/robocar/unified
-    is `mod robocar-unified`. A `mod` path may name the module's justfile rather
-    than its directory; with no path, the module is the directory `name`.
+    Read from the `mod` lines, never the directory name:
+    packages/robotics/robocar/integrated is `mod robocar-integrated`. A `mod`
+    path may name the module's justfile rather than its directory; with no
+    path, the module is the directory `name`.
     """
     justfile = repo_root / "justfile"
     try:

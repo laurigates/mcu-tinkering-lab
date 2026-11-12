@@ -22,7 +22,7 @@ Teuvo is built as one robot, in one home, on one key:
   baked into the fi-1950 brief and its 8 fallback lines (`voice_persona.c:76-88`,
   `:181-188`). NVS stores only the selected slug and a voice override.
 - **Identity is fixed.** Every board has the same MQTT client id
-  `robocar_unified`, the same topics and the mDNS name `robocar-unified`
+  `robocar`, the same topics and the mDNS name `robocar`
   (`config.h:84-87`, `main.c:1949`). Two robots on one broker would knock each
   other off (MQTT 3.1.1 §3.1.4).
 - **The Gemini key is compile-time only.** It is dropped after Improv, and
@@ -194,7 +194,7 @@ sends is then informational. The Mosquitto ACL:
     to `<log_topic>/<level>`), `teuvo/%u/ota/status` and
     `teuvo/%u/upgrade/request`;
   - `pattern read teuvo/%u/commands`, `teuvo/%u/upgrade/facts`,
-    `teuvo/concierge/status` and `robocar-unified/ota/notify`.
+    `teuvo/concierge/status` and `robocar/ota/notify`.
 
   Pattern lines apply to every user, so the `concierge` user's write on
   `teuvo/concierge/status` comes from the first one.
@@ -211,7 +211,7 @@ sends is then informational. The Mosquitto ACL:
   status grant lets PRD-014 FR-025 republish a robot's facts when it comes
   online.
 - **`user ci-notify`**, the credential for `build-firmware.yml`'s notify step:
-  `topic write robocar-unified/ota/notify`.
+  `topic write robocar/ota/notify`.
 - **Lauri's users**, one per client program (for example `lauri-cli` for
   `mosquitto_pub`, `lauri-watch` for `mosquitto_sub`), each with
   `topic write teuvo/+/commands` and `topic read teuvo/#`. Under
@@ -321,7 +321,7 @@ setup page, written after the ADR-028 §6 bench results. They state:
 The repo has the tooling for most of it:
 
 - the build guide PDF;
-- the carrier fab zip, BOM and CPL, which `just robocar-unified::carrier-fab`
+- the carrier fab zip, BOM and CPL, which `just robocar::carrier-fab`
   generates locally with KiCad 10.0.6 (`output/` is gitignored);
 - the web flasher.
 

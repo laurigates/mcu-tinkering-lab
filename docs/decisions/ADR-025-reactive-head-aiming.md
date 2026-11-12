@@ -10,7 +10,7 @@
 
 ## Context
 
-`robocar-unified` has a pan/tilt head on PCA9685 channels 6 and 7, and nothing under autonomous control moves it. Gemini declares five tools (`drive`, `track`, `rotate`, `stop`, `speak`); `track(box_2d)` visually servos toward a target by steering the whole robot. Turning the body to look at something costs a heading change, motor current and floor space, where turning the head costs none of those. Following a target that crosses the frame while the robot holds position cannot be expressed at all.
+`robocar` has a pan/tilt head on PCA9685 channels 6 and 7, and nothing under autonomous control moves it. Gemini declares five tools (`drive`, `track`, `rotate`, `stop`, `speak`); `track(box_2d)` visually servos toward a target by steering the whole robot. Turning the body to look at something costs a heading change, motor current and floor space, where turning the head costs none of those. Following a target that crosses the frame while the robot holds position cannot be expressed at all.
 
 Issue #511 set out three channels for head aiming:
 

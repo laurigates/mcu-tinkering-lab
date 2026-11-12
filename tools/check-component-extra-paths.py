@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assert that CI builds every registered project, and every component each one compiles.
 
-Two checks over `.github/project-matrix.json`, the list `build.yml` builds:
+Five checks over `.github/project-matrix.json`, the list `build.yml` builds:
 
 1. Every project the root justfile registers under packages/ (`mod name
    'packages/...'`) has a matrix entry, or an exclusion in NOT_IN_MATRIX below
@@ -11,6 +11,20 @@ Two checks over `.github/project-matrix.json`, the list `build.yml` builds:
    path, or a project that has since gained an entry, is stale and fails too.
 2. Every shared component an ESP-IDF entry compiles is in its build triggers,
    described below.
+3. Every `exclude_paths` entry is an existing directory inside its entry's
+   `path`. build.yml drops a changed file under one from that entry's
+   triggers, so that a project nested in another's directory (robocar's
+   bringup, integrated, simulation and twin) does not rebuild its parent. An
+   entry that names nothing excludes nothing, and the parent is rebuilt on
+   every nested change with a green matrix.
+4. Every project nested in a matrix entry's `path` (another matrix entry, or
+   a root justfile `mod`) is in that entry's `exclude_paths`, or in
+   NESTED_NOT_EXCLUDED below with a reason. Check 3 only reads the entries
+   that are there; a nested project added without one rebuilds its parent.
+5. An entry's `exclude_paths` and its release-please package's
+   `exclude-paths` (`release-please-config.json`, relative to the repo root)
+   name the same directories. Without the release-please list, a commit that
+   touches only a nested project is released as the parent.
 
 `.github/workflows/build.yml` decides which projects a push or PR rebuilds from
 the changed file paths. A project is selected when a changed file sits under its
@@ -38,7 +52,9 @@ What a project compiles:
   lists thinkpack-mesh among its build components although nothing requires it.
 * When the build is trimmed, only the `REQUIRES` / `PRIV_REQUIRES` closure is
   built, starting from the project's own components (main/ and any component
-  inside the project directory).
+  inside the project directory). A component inside a nested ESP-IDF project
+  (a subdirectory whose CMakeLists.txt includes ESP-IDF's project.cmake, such
+  as robocar's bringup) belongs to that project, not to the one around it.
 
 An `extra_paths` entry covers a component directory when it equals it or is an
 ancestor of it, which is the same prefix test build.yml's jq filter applies.
@@ -46,8 +62,10 @@ ancestor of it, which is the same prefix test build.yml's jq filter applies.
 Run: python3 tools/check-component-extra-paths.py [--verbose]
 Exit: 0 clean; 1 on any finding (a registered project with no entry or
 exclusion, a stale or reasonless exclusion, a missed component, an
-unresolvable `EXTRA_COMPONENT_DIRS` entry, or an out-of-tree entry that does
-not exist).
+unresolvable `EXTRA_COMPONENT_DIRS` entry, an out-of-tree entry that does
+not exist, an `exclude_paths` entry that is not a directory inside the
+project, a nested project with no exclude, or a release-please `exclude-paths`
+list that differs from the entry's).
 Tests: uv run --no-project --with pytest==9.1.1 python -m pytest -q
        tools/test_check_component_extra_paths.py
 """
@@ -64,6 +82,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MATRIX = Path(".github/project-matrix.json")
 JUSTFILE = Path("justfile")
+RELEASE_CONFIG = Path("release-please-config.json")
 
 # Projects the root justfile registers under packages/ that build.yml does not
 # build, keyed by path relative to packages/ (the matrix's `path`). Each needs
@@ -74,15 +93,15 @@ NOT_IN_MATRIX: dict[str, str] = {
         "them build them, and the module only runs their host suites "
         "(`just components::test`, the `components` entry of python-suites.json)"
     ),
-    "robocar/unified-integrated": (
-        "carrier PCB only; it runs packages/robocar/unified's firmware, and "
+    "robotics/robocar/integrated": (
+        "carrier PCB only; it runs packages/robotics/robocar's firmware, and "
         "carrier-check.yml checks the board"
     ),
-    "robocar/twin": (
+    "robotics/robocar/twin": (
         "host build of the planner C, not firmware; robocar-twin.yml builds "
         "and tests it"
     ),
-    "robocar/simulation": (
+    "robotics/robocar/simulation": (
         "Python simulation, not firmware; test.yml and "
         "build-python-simulation.yml cover it"
     ),
@@ -93,6 +112,17 @@ NOT_IN_MATRIX: dict[str, str] = {
         "Pybricks firmware for the LEGO Move Hub, built from an upstream clone "
         "that `just boost-fw::setup` fetches into a git-ignored external/; no "
         "ESP-IDF, ESPHome or Pico build applies"
+    ),
+}
+
+# Projects nested in a matrix entry's directory that are deliberately not in
+# its `exclude_paths`, keyed by path relative to packages/. Each needs a
+# reason; a change under one rebuilds the entry around it.
+NESTED_NOT_EXCLUDED: dict[str, str] = {
+    "audio/melody-detector/training": (
+        "predates exclude_paths: a change under training/ has always rebuilt "
+        "the melody-detector firmware, which does not read it; left as it was "
+        "when this check was added"
     ),
 }
 
@@ -128,6 +158,8 @@ _TRIMMED_BUILD = re.compile(
     r"\bMINIMAL_BUILD\b|\bset\s*\(\s*COMPONENTS\b", re.IGNORECASE
 )
 _REGISTER_CALL = re.compile(r"\bidf_component_register\s*\(([^)]*)\)", re.IGNORECASE)
+# The include every ESP-IDF project's top-level CMakeLists.txt carries.
+_PROJECT_INCLUDE = "tools/cmake/project.cmake"
 
 
 @dataclass(frozen=True)
@@ -231,8 +263,24 @@ def required_names(cmake_text: str) -> set[str]:
     return names
 
 
+def nested_project_dirs(project_dir: Path) -> list[Path]:
+    """Directories below `project_dir` that are ESP-IDF projects themselves.
+
+    Such a project builds on its own; its components, Kconfig files and
+    manifests are not part of the build of the project around it.
+    """
+    return [
+        cmake.parent
+        for cmake in sorted(project_dir.rglob("CMakeLists.txt"))
+        if cmake.parent != project_dir
+        and _PROJECT_INCLUDE
+        in strip_comments(cmake.read_text(encoding="utf-8", errors="replace"))
+    ]
+
+
 def _local_component_cmakes(project_dir: Path) -> list[Path]:
     """CMakeLists of the project's own components: main/ plus anything inside it."""
+    nested = nested_project_dirs(project_dir)
     found = []
     for cmake in sorted(project_dir.rglob("CMakeLists.txt")):
         rel = cmake.relative_to(project_dir).parts
@@ -240,6 +288,8 @@ def _local_component_cmakes(project_dir: Path) -> list[Path]:
             p in ("build", "managed_components", "external", "test", "tests")
             for p in rel[:-1]
         ):
+            continue
+        if any(_inside(cmake.parent, n) for n in nested):
             continue
         if _REGISTER_CALL.search(cmake.read_text(encoding="utf-8", errors="replace")):
             found.append(cmake)
@@ -331,6 +381,108 @@ def check(root: Path, matrix: list[dict]) -> list[Finding]:
     return findings
 
 
+def check_exclude_paths(root: Path, matrix: list[dict]) -> list[Finding]:
+    """Findings for `exclude_paths` entries that cannot exclude anything."""
+    findings: list[Finding] = []
+    for entry in matrix:
+        path = entry["path"].rstrip("/")
+        for raw in entry.get("exclude_paths", []):
+            rel = raw.rstrip("/")
+            if not rel.startswith(path + "/"):
+                findings.append(
+                    Finding(
+                        entry["project"],
+                        f'exclude_paths entry "{raw}" is not inside its path "{path}"',
+                    )
+                )
+            elif not (root / "packages" / rel).is_dir():
+                findings.append(
+                    Finding(
+                        entry["project"],
+                        f'exclude_paths entry "{raw}" is not a directory under packages/',
+                    )
+                )
+    return findings
+
+
+def _package_paths(modules: dict[str, str]) -> dict[str, str]:
+    """Registered module paths under packages/, relative to it -> module name."""
+    registered: dict[str, str] = {}
+    for name, path in modules.items():
+        parts = Path(path).parts
+        if len(parts) > 1 and parts[0] == "packages":
+            registered[Path(*parts[1:]).as_posix()] = name
+    return registered
+
+
+def check_nested(
+    modules: dict[str, str], matrix: list[dict], allowed: dict[str, str]
+) -> list[Finding]:
+    """Findings for projects nested in a matrix entry that it does not exclude."""
+    projects = set(_package_paths(modules)) | {e["path"].rstrip("/") for e in matrix}
+    findings: list[Finding] = []
+    nested_anywhere: set[str] = set()
+    excluded_anywhere: set[str] = set()
+    for entry in matrix:
+        path = entry["path"].rstrip("/")
+        excluded = {x.rstrip("/") for x in entry.get("exclude_paths", [])}
+        excluded_anywhere |= excluded
+        for nested in sorted(p for p in projects if p.startswith(path + "/")):
+            nested_anywhere.add(nested)
+            if nested not in excluded and nested not in allowed:
+                findings.append(
+                    Finding(
+                        entry["project"],
+                        f'the project at "{nested}" is inside its path but not in '
+                        "its exclude_paths, so a change there rebuilds it",
+                    )
+                )
+    for rel, reason in sorted(allowed.items()):
+        if not reason.strip():
+            findings.append(Finding(rel, "NESTED_NOT_EXCLUDED entry has no reason"))
+        elif rel not in nested_anywhere:
+            findings.append(
+                Finding(
+                    rel,
+                    "NESTED_NOT_EXCLUDED names it, but it is not a project inside "
+                    "a matrix entry's path",
+                )
+            )
+        elif rel in excluded_anywhere:
+            findings.append(
+                Finding(
+                    rel,
+                    "is in an exclude_paths list, so its NESTED_NOT_EXCLUDED entry "
+                    "is stale",
+                )
+            )
+    return findings
+
+
+def check_release_excludes(matrix: list[dict], packages: dict) -> list[Finding]:
+    """Findings where a release-please package's `exclude-paths` differ from
+    its matrix entry's `exclude_paths`. `packages` is release-please-config's
+    `packages` table, keyed by path from the repo root."""
+    findings: list[Finding] = []
+    for entry in matrix:
+        package = packages.get("packages/" + entry["path"].rstrip("/"))
+        if package is None:
+            continue
+        wanted = sorted(
+            "packages/" + x.rstrip("/") for x in entry.get("exclude_paths", [])
+        )
+        got = sorted(x.rstrip("/") for x in package.get("exclude-paths", []))
+        if wanted != got:
+            findings.append(
+                Finding(
+                    entry["project"],
+                    f"{RELEASE_CONFIG} exclude-paths {got} differ from its "
+                    f"exclude_paths, which need {wanted}",
+                )
+            )
+    return findings
+
+
 def registered_modules(justfile_text: str) -> dict[str, str]:
     """`mod` name -> path as written in the justfile (the name when none is given)."""
     modules: dict[str, str] = {}
@@ -347,11 +499,7 @@ def check_registered(
 ) -> list[Finding]:
     """Findings for registered packages/ projects that CI neither builds nor excludes."""
     in_matrix = {e["path"].rstrip("/") for e in matrix}
-    registered: dict[str, str] = {}
-    for name, path in modules.items():
-        parts = Path(path).parts
-        if len(parts) > 1 and parts[0] == "packages":
-            registered[Path(*parts[1:]).as_posix()] = name
+    registered = _package_paths(modules)
 
     findings: list[Finding] = []
     for rel, name in sorted(registered.items(), key=lambda kv: kv[1]):
@@ -423,7 +571,51 @@ def main(argv: list[str] | None = None) -> int:
             f"extra_paths in {MATRIX}.",
             file=sys.stderr,
         )
-    if unbuilt or findings:
+    excludes = check_exclude_paths(REPO_ROOT, matrix)
+    if excludes:
+        print(f"{MATRIX}: exclude_paths entries that exclude nothing:", file=sys.stderr)
+        for f in excludes:
+            print(f"  {f}", file=sys.stderr)
+        print(
+            "Each entry is a directory (relative to packages/) inside the "
+            "project's own path.",
+            file=sys.stderr,
+        )
+    nested = check_nested(modules, matrix, NESTED_NOT_EXCLUDED)
+    if nested:
+        print(
+            f"{MATRIX}: projects nested in another entry's path with no exclude:",
+            file=sys.stderr,
+        )
+        for f in nested:
+            print(f"  {f}", file=sys.stderr)
+        print(
+            "Add the nested directory (relative to packages/) to that entry's "
+            "exclude_paths, or to NESTED_NOT_EXCLUDED with the reason in "
+            "tools/check-component-extra-paths.py.",
+            file=sys.stderr,
+        )
+    release_config = REPO_ROOT / RELEASE_CONFIG
+    packages = (
+        json.loads(release_config.read_text(encoding="utf-8")).get("packages", {})
+        if release_config.is_file()
+        else {}
+    )
+    releases = check_release_excludes(matrix, packages)
+    if releases:
+        print(
+            f"{RELEASE_CONFIG}: exclude-paths that disagree with {MATRIX}:",
+            file=sys.stderr,
+        )
+        for f in releases:
+            print(f"  {f}", file=sys.stderr)
+        print(
+            "A release-please package lists the same nested directories as its "
+            "matrix entry's exclude_paths, each from the repo root "
+            '("packages/<dir>").',
+            file=sys.stderr,
+        )
+    if unbuilt or findings or excludes or nested or releases:
         return 1
     print(
         f"{MATRIX}: every registered project is built or excluded, and every "

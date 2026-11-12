@@ -1,0 +1,421 @@
+# robocar carrier PCB
+
+> **Before paying for an order**, Lauri does the bench checks in
+> [Pre-order checks still owed](#pre-order-checks-still-owed-lauri);
+> [`board.toml`](board.toml) marks every unmeasured dimension (#750).
+
+One 100 × 100 mm, 2-layer PCB that carries four pieces and replaces the
+hand-wired harness in [`WIRING.md`](../../WIRING.md):
+
+- the **main board**, x 0–70.5 mm, screwed to the chassis (no ready-made plate; the chassis is drilled to match H1–H4): the motor driver,
+  the PWM driver, the I2C mux, the GPIO expander and its mirror header, the
+  amplifier, the 3V3 regulator, the power and peripheral connectors, the
+  buzzer and the test headers;
+- three **head boards** in a column on its right, each 29.5 × 29.5 mm, for the
+  pan-tilt kit's top cradle: a XIAO ESP32-S3 Sense socket and the head end of
+  the ribbon. They differ only in where the ribbon header sits (see
+  [The three heads](#the-three-heads)); fit the XIAO to the one that suits the
+  cradle.
+
+Copper-free bands of 3 mm or more under silkscreen saw lines ("CUT", on both
+faces) separate the pieces. JLCPCB makes one rectangle with no V-cuts, tabs or
+slots; the pieces are sawn apart after delivery (see
+[Separating the pieces](#separating-the-pieces)). A 2 × 7, 2.0 mm-pitch IDC
+ribbon joins the main board to the fitted head.
+
+KiCad 10 project: [`robocar-carrier/`](robocar-carrier/). Its
+schematic is generated from [`hardware.toml`](../../hardware.toml) and the parts
+registry ([`docs/reference/parts/`](../../../../../docs/reference/parts/)) by
+`tools/kicad`
+([ADR-027](../../../../../docs/decisions/ADR-027-kicad-carrier-generation.md));
+the board is placed and routed from the same netlist and
+[`board.toml`](board.toml), which holds every position, the bands and the
+silkscreen. Never edit the `.kicad_sch` or `.kicad_pcb` in KiCad; change those
+files and regenerate (see [Regenerate and check](#regenerate-and-check)).
+
+## What is on it
+
+Each module sits in female headers or plugs into a connector, so any of them can
+be swapped without desoldering. The passives and the regulator are SMD on the
+top side; everything else is through-hole.
+
+| Ref | Part | Board | Notes |
+|---|---|---|---|
+| U1, U3, U4 | XIAO ESP32-S3 Sense socket, two 1×7 female headers | heads 1, 2, 3 | USB-C toward the head's top edge; fit one XIAO |
+| J2, J16, J17 | 2×7 pin header, 2.0 mm, unshrouded | heads 1, 2, 3 | The head end of the ribbon; see [The three heads](#the-three-heads) |
+| H5–H10 | M2 holes, 2.2 mm, ISO 7380 courtyard | heads 1, 2, 3 | Through the cradle into heat-set inserts; M2 button heads only |
+| J1 | 2×7 pin header, 2.0 mm, unshrouded | main | The main end of the ribbon, in the front row; its pins are 21–33 mm in from the main board's right edge. Lauri's 10–15 cm ribbon length was for J1's earlier spot beside the head column, so check it still reaches |
+| A1 | SparkFun TB6612FNG, in 2 × 1×8 female headers | main | Motor outputs on its left header |
+| A2 | Adafruit PCA9685, in female headers on its JP3 side header and its channel 8–13 PWM pins | main | Motor control lines; servo and LED columns stay on the module |
+| A3 | Adafruit TCA9548A, or the wider purple TCA9548A/PCA9548A clone, in female headers | main | Every I2C device sits behind it. The clone's rows are one pitch wider, so the upstream (VIN…SC1) side has a second row of holes one pitch toward the rear, each joined to the hole beside it; see [The TCA9548A socket](#the-tca9548a-socket) |
+| A4 | Adafruit MAX98357A, in a 1×7 female header | main | The speaker stays on the module's terminal |
+| A5 | CJMCU-2317 (MCP23017), in female headers under all 30 holes | main | On mux channel 2, address 0x20; see [The GPIO expander](#the-gpio-expander) |
+| J18 | 2×10 pin header, 2.54 mm | main | The expander's GPIOs, in the module's own order; see [The GPIO expander](#the-gpio-expander) |
+| U2 | AMS1117-3.3, SOT-223 | main | The main board's 3V3; the XIAO's 3V3 pad stays open |
+| D1 | B5819W Schottky, SOD-123 | main | Between the main board's 5V and the ribbon's 5V conductors (net `XIAO_5V`), beside J1: the XIAO's 5V pad is its USB-C VBUS |
+| C1–C3 | 470 µF 16 V electrolytic, 8 × 10.5 mm | main | Bulk on the 5V trunk for the PCA9685 V+ and TB6612FNG VM (C1, C2), and beside the MAX98357A Vin (C3) |
+| C4–C6 | 100 nF, 0805 | main | PCA9685 VCC, TCA9548A VIN, MCP23017 VCC (C6, beside the CJMCU-2317's socket) |
+| C7, C8 | 22 µF 16 V tantalum, 3528 | main | AMS1117 input and output |
+| R1 | 100 Ω, 0805 | main | Buzzer series resistor |
+| R2–R11 | 2.2 kΩ, 0805 | main | Pull-ups on mux channels 0–4 (R10, R11 on channel 2); see [Pre-fab review](#pre-fab-review-810) |
+| R12, R13 | 2.2 kΩ, 0805 | main | Pull-ups on the upstream I2C bus (the XIAO's SDA and SCL), beside C5 in the row behind A3 |
+| F1 | 4 A hold PTC fuse, 16 V, 1812 (BSMD1812-400-16V) | main | Between J3 and everything else, beside J3 |
+| J3 | XT30 (AMASS XT30PW-M) | main | Pack in; pad 1 is "−" |
+| J4 | JST VH 4-pin (B4P-VH), 3.96 mm | main | LM2596 module: IN+, IN−, OUT+, OUT−; the silkscreen prints "I+ I- O+ O-" and "SET LM2596 TO 5.0V FIRST" beside it |
+| J5, J6 | JST-XH 2-pin | main | Left and right motor, side by side at A1's motor outputs |
+| J7, J8 | JST-XH 4-pin | main | RCWL-1601 front and rear, I2C mode: VCC, SCL, SDA, GND (silkscreen "V C D G"); side by side at the front edge |
+| J9 | JST-XH 4-pin | main | SSD1306 0.91" OLED: GND, VCC, SCL, SDA (silkscreen "G V C D") |
+| BZ1 | 12 mm buzzer, 7.6 mm pin pitch | main | Soldered to the board; + on pad 1, beside the silkscreen "+" |
+| J11–J15 | 1×4 and 1×2 pin headers | main | Test headers, see [Debug headers](#debug-headers) |
+| H1–H4 | M3 holes | main | Chassis (drilled to match) |
+
+The per-part values, LCSC numbers and the reasons for each are in
+[`hardware.toml`](../../hardware.toml); the pin orders are in the registry entries
+it names.
+
+## The three heads
+
+All three have the same outline, the same two M2 holes in the top corners
+(22.5 mm apart, the positions Lauri confirmed on 2026-10-16), and the XIAO with
+its USB-C toward the top edge, which points the Sense camera forward. The
+cradle's sides carry clips, so the header sits at the top or the bottom edge,
+never at a side (Lauri, 2026-10-16). Only one head gets a XIAO; the other two
+stay spare.
+
+| Head | Refs | Header | XIAO | For |
+|---|---|---|---|---|
+| 1 | U1, J2, H5, H6 | Back face, bottom edge | Between the holes, above the header | The plug and ribbon behind the head, leaving the bottom edge |
+| 2 | U3, J16, H7, H8 | Front face, bottom edge | Between the holes, above the header | The plug in front, below the camera, if nothing behind the head clears it |
+| 3 | U4, J17, H9, H10 | Back face, top edge, between the holes | Below the holes | The ribbon leaving over the top, if the bottom edge is blocked |
+
+The holes use KiCad's ISO 7380 M2 footprint, whose courtyard is a 3.5 mm button
+head: on heads 1 and 2 the XIAO socket sits 0.26 mm from it on each side. Fit
+M2 button-head screws (ISO 7380) or another head no larger than 3.5 mm.
+
+Each head's spare copy of the XIAO socket is wired to its own header (nets
+`HEAD2_*`, `HEAD3_*`); the main board has a single end, J1. Moving the ribbon
+to another head moves the robot to it.
+
+## The ribbon survives a reversed plug
+
+The headers are unshrouded 2.0 mm-pitch pin headers, mated by a 2.0 mm IDC plug
+on 1.0 mm-pitch flat ribbon. The plug fits either way round, which takes
+pin *n* to pin 15 − *n*. The pinout in
+[`idc-2x07-xiao-cable.toml`](../../../../../docs/reference/parts/idc-2x07-xiao-cable.toml)
+pairs each pin with one it can safely swap with: 5 V lands on 5 V, GND on GND,
+SDA on SCL, UART0 TX on the unconnected pin 9, and every other XIAO output on
+another main-board input. **A reversed plug damages nothing and does not work.**
+If the robot is dead after reassembly, check the plug orientation first: every
+header prints a pin-1 mark.
+
+## The GPIO expander
+
+The CJMCU-2317 module (A5) sits in female headers under all 30 of its holes,
+so it plugs in firmly and every pin reaches the board. It is turned 180°: its
+single column (I2C and supply) faces the mux, its double column of GPIOs faces
+the right edge. Hole positions and which column is which are Lauri's
+measurement of the fitted module (2026-10-16), recorded on
+[its board page](../../../../../docs/reference/boards/cjmcu-2317.md).
+It fits upside down too, which shorts 3V3: fit it chip side up (see
+[Assembly notes](#assembly-notes)). The silkscreen inside its socket outline
+names every hole, and "CHIP SIDE UP" is printed below it.
+
+- **Address 0x20, hard-strapped.** A0, A1 and A2 go straight to GND, which is
+  `MCP23017_ADDR` in [`main/pin_config.h`](../../main/pin_config.h). A direct
+  tie overrides whatever bias the module itself puts on those pins.
+- **RESET tied high.** RESET goes straight to 3V3, so the expander always runs;
+  the firmware has no reset line for it.
+- **Bus.** SDA and SCL go to TCA9548A channel 2 (`I2C_BUS_CHANNEL_MCP23017`),
+  pulled up to 3V3 by R10 and R11 like the other channels. The two NC pins stay
+  unconnected.
+- **Mirror header J18.** A 2×10 pin header beside the module repeats its double
+  column in the same physical order and orientation, for jumper wires:
+
+  | Row | Column B (inner) | Column A (outer, board edge) |
+  |---|---|---|
+  | 1 (bottom) | 3V3 | GND |
+  | 2 | INTB | INTA |
+  | 3–10 | GPB0–GPB7 | GPA0–GPA7 |
+
+  The silkscreen prints "B" and "A" over the top end and "3V3" and "GND" under
+  row 1. The nets are `EXP_GPA0`…`EXP_GPB7`, `EXP_INTA` and `EXP_INTB`. GPA7
+  and GPB7 are outputs only (MCP23017 datasheet DS20001952D, p. 11).
+
+## The TCA9548A socket
+
+A3 takes either the Adafruit TCA9548A (#2717) or the purple TCA9548A/PCA9548A
+clone (Lauri, 2026-11-02). The PCA9548A is NXP's pin-compatible part. The
+clone has the same 24 pins in the same order (its top-face silkscreen, on
+[the board page](../../../../../docs/reference/boards/adafruit-tca9548a.md#wider-clone)),
+but its rows are 17.78 mm apart instead of Adafruit's 15.24 mm. The channel
+2–7 row (pads 13–24) stays where it was, and both modules use it. The
+upstream row (VIN…SC1, pads 1–12) has a second row of holes one pitch toward
+the rear, at y 28.24. Each of those holes has the pad number of the hole in
+front of it, so the board joins each pair with copper and the netlist is the
+same for both modules. A 2×12 female header on that side takes either
+module: Adafruit's pins go in the front row, the clone's in the rear row.
+
+- **The clone's outline is a caliper reading, centred by assumption.** 21.8 ×
+  31.2 mm (Lauri, 2026-11-02); the footprint centres it on its holes, because
+  the offsets to the edges were not measured. Its courtyard reaches y 30.5 and
+  x 32.8. The socket moved 0.3 mm toward the front, so J7's and J8's labels
+  are now 0.8 mm. The pull-up row (C5, R12, R13, R2–R9) moved behind it to
+  y 32.45 at a 2.9 mm pitch, with 0.8 mm references, and J11 and J12 moved
+  0.7 mm right.
+- **Nothing on the carrier depends on the clone's own pull-ups or straps.**
+  A0–A2 stay unconnected (address 0x70 needs them pulled down on the module)
+  and RST is driven by the XIAO. The photo shows six 10 kΩ parts on the clone,
+  but which pins they pull has not been traced: see pre-order check 7.
+- **Either module can be fitted turned 180°**, which puts VIN on a channel pin.
+  "VIN" is printed beside pad 1 for Adafruit's and behind its rear-row twin
+  for the clone's.
+
+## Debug headers
+
+Through-hole pin headers on the main board, each pin's net printed beside it.
+
+| Ref | Pins | For |
+|---|---|---|
+| J11 | +3V3, +5V, GND, VBAT | Meter probes. VBAT's only neighbour is GND, so a slipped probe cannot put the pack on a logic rail |
+| J12 | GND, SDA, SCL, MUX_RST | Logic analyser on the upstream I2C bus and the mux reset, on the main board's side of the ribbon |
+| J13 | GND, GND | Scope ground clip, beside the MAX98357A and C3 |
+| J14 | GND, GND | Scope ground clip, beside the AMS1117 |
+| J15 | GND, UART0 TX | USB-serial adapter: its GND to GND, its RX to TX |
+
+**The UART0 tap.** The ribbon carries the XIAO's D6 (GPIO43, UART0 TX) to J15.
+The ESP32-S3 ROM bootloader prints its boot messages there at every reset, at
+115200 baud, with no firmware change: reset reasons and boot mode, readable
+when the USB-C console is unavailable. From the start of `app_main` the
+firmware then mirrors every `ESP_LOG` line there too, at the same 115200 8N1
+([`main/log_mirror.c`](../../main/log_mirror.c), issue #798), so one adapter
+setting reads the boot log and the application log in a single capture. The
+console itself stays on the USB-Serial-JTAG on the USB-C connector: command
+input, command replies, the `snap`/`mic dump` frames and Improv packets go
+there only, because they are written to stdout rather than logged. The mirror
+is best effort: a line that does not fit its queue is dropped and counted, and
+J15 shows `[log_mirror: N line(s) dropped]` where it happened; a line longer
+than `LOG_MIRROR_LINE_MAX` arrives cut, ending in `...`. Nothing on the carrier
+drives or loads the line.
+
+## Pre-order checks still owed (Lauri)
+
+Each is a measurement or a part in hand that no file in this repo can settle.
+Do them before paying for the order (Lauri, 2026-10-21). Correct
+[`board.toml`](board.toml) or the registry entry, then regenerate and
+re-check.
+
+1. **The header behind or in front of the head.** For each head you mean to
+   use, check the IDC plug and the ribbon's bend clear the cradle and the pan
+   servo. On head 2 (header on the front) also fit the XIAO in its socket and
+   push the plug onto J16: the XIAO's edge is 0.58 mm from the header body, the
+   plug is wider than the header and stands about as tall as the socketed
+   XIAO, so it may touch the XIAO or only leave toward the bottom edge. This
+   can wait for the plugs: it does not block ordering, because heads 1 and 3
+   do not depend on it and head 2 is the variant being tried.
+2. **RCWL-1601 mode resistors.** Check each rangefinder has 10 kΩ on R4 (I2C
+   mode) and R5 empty.
+3. **Hold each fitted breakout against the board render** (TB6612FNG,
+   PCA9685, TCA9548A, MAX98357A, CJMCU-2317): headers on the footprints,
+   outline inside its courtyard. The CJMCU-2317's outline (about 21 × 26 mm)
+   is an estimate from a listing photo; its hole positions are measured.
+   With the module seated, push a 2.54 mm jumper housing onto J18's column B
+   (the column next to the module): by the estimated outline the module's
+   edge is about 0.9 mm from the housing, so a larger module stops it.
+4. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
+   "−"), the LM2596 lead (J4 pin 1 IN+, under the silkscreen "I+"), and the
+   buzzer (BZ1 "+" on pad 1).
+   The LM2596 lead is now a JST VH 4 (3.96 mm): crimp it with SVH-41T-P1.1
+   contacts on AWG 18–16 wire into a VHR-4N housing, at least on OUT+ and
+   OUT−.
+5. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
+   margin beside the cut line in a 3 mm band.
+6. **The CJMCU-2317's own bias and pull-ups**
+   ([board page checks 3–5](../../../../../docs/reference/boards/cjmcu-2317.md#check-on-the-physical-board)):
+   what A0–A2 and RESET are tied to on the module, and whether its two 10 kΩ
+   parts are SDA/SCL pull-ups. The carrier's direct ties win either way; the
+   check says whether a tie fights a module pull-up (0.33 mA each at 10 kΩ)
+   and whether channel 2 ends up with two pull-ups in parallel (about 1.8 kΩ
+   with R10 and R11 at 2.2 kΩ, which still sinks under 2 mA).
+   The carrier now fits C6, a 100 nF 0805 beside A5's single-column VCC pin
+   (WIRING.md's C6), whether or not the unmarked part beside the chip is a
+   capacitor (board page check 6), so that check no longer blocks the order.
+7. **The TCA9548A clone, if it is the one fitted.** Measure from its VIN hole
+   to the nearest end and side edges: the footprint assumes 1.63 mm and
+   2.01 mm (its 21.8 × 31.2 mm outline centred on the holes). Check with a
+   meter that A0–A2 read low (pull-downs, address 0x70) and that RST is
+   pulled up to VIN, because the carrier leaves A0–A2 unconnected.
+
+## Pre-fab review (#810)
+
+The integrated carrier's adversarial review (#807) found problems every gate
+passed. Each was checked against this carrier; `just robocar::carrier-review`
+prints the layout figures quoted here.
+
+| # | Finding | Here |
+|---|---|---|
+| 1 | SMD ground pads reach the B.Cu plane only through thin tracks | **Fixed.** The committed board had one GND via. `[fanout]` in [`board.toml`](board.toml) adds a via beside every SMD GND pad and fails the route if C1, C2, C4, C5, C7, C8 or U2's GND pin gets none. C3's GND pad takes a fixed track to J13's through-hole pad instead, so `carrier-review` lists it as having no via (see [Pre-order review](#pre-order-review-2026-10-21)) |
+| 2 | Copper and parts close to the saw cuts | **Fixed for copper:** pours stop 1 mm short of each cut (#811), and head 2's top band now reaches 1 mm past its cut. One head 3 track stays about 0.7 mm from the y 70.5 cut (0.71 mm, HEAD3_UART0_TX, on the committed board; Freerouting picks the net): a wider band there left HEAD3_PIEZO unroutable past J17, and J17 has no room to move. That is above the board's 0.5 mm copper-to-edge clearance, and the saw runs in the waste strip. **Parts:** every SMD part is on the main board, at least 20 mm from a cut. The through-hole parts within 2 mm of a cut, measured from the courtyard, are J17 (0.96 mm from the y 70.5 cut), H7 (1.01 mm, an M2 hole the cradle fixes), J16 (1.56 mm), and A4 and J18 (1.7 mm, socket headers); flex cracks SMD ceramics, and none of these is one |
+| 3 | Silkscreen under 1.0 mm | **Fixed where it fits:** R10, R11 and the HEAD 1 and HEAD 2 labels are now 1.0 mm. J18's labels, HEAD 3, the CJMCU-2317 pin names inside its socket and, since the TCA9548A clone's second row (2026-11-02), C5, R2–R9, R12, R13 and J7's and J8's labels stay at 0.8 mm: at 1.0 mm DRC finds them overlapping a neighbour's outline or pads. Text strokes are 0.15 mm or more, JLCPCB's minimum: 40 footprint texts (references, J3's "−" and "+", BZ1's "+") are 0.15 mm, the resized references and `[silk] texts` 0.16 mm. Footprint silkscreen lines are widened to 0.15 mm since `pcb/silk.py` (some were 0.10–0.127 mm) |
+| 4 | I2C pull-ups too weak for 400 kHz | **Fixed on the channels:** R2–R11 go from 10 kΩ to 2.2 kΩ (the reasoning is on them in `hardware.toml`). **Upstream** of the mux the breakout's 10 kΩ now has R12 and R13 (2.2 kΩ, fitted) in parallel, about 1.8 kΩ, across the 10–15 cm ribbon (N-4 below). Still probe SDA and SCL on J12 with a scope at the first power-up; if the 30–70 % rise time is over 300 ns, set `I2C_MASTER_FREQ_HZ` to 100 kHz (1000 ns allowed) |
+| 5 | No fuse on the pack input | **Fixed:** F1, a 4 A hold, 16 V PTC beside J3 (the 3 A part first fitted derated below the load, SF-4 below), ahead of the LM2596 lead and J11's VBAT pin |
+| 6 | No low-battery cutoff | **Not fixed on the carrier.** The LM2596's ON/OFF pin (pin 5) turns it off above about 1.3 V (TI SNVS124G, § 6), but the common module ties it to ground on its own board, and J4 carries only IN and OUT. Use a pack with a BMS, whose cell undervoltage cutoff ends the discharge; WIRING.md says so |
+| 7 | Buck dropout | **Nothing to build.** WIRING.md's figure stands: the LM2596 needs about 1.25 V of headroom at 3 A (SNVS124G, Figure 7-6), so 5 V sags below about 6.3 V of pack |
+| 8 | RGB green and blue nearly dark | **Not applicable.** The LEDs are harness parts on the PCA9685's own 3-pin columns, not on the carrier. Their common anode goes to the column's V+ (5 V), so 5 V less a 3.0 V forward drop across the breakout's 220 Ω gives about 9 mA. Check brightness on the bench |
+| 9 | Decoupling far from its pins | **Kept.** C4 is 3.6 mm from the PCA9685's VCC pin and C5 5.3 mm from the TCA9548A's VIN (4.5 mm before the clone's second row moved it behind the socket, 2026-11-02), both measured to the socket pin: the breakouts carry their own decoupling at the chip; C6 is 5.5 mm from the CJMCU-2317's VCC pin. C3 is 6.9 mm of track from the MAX98357A's Vin. C1 and C2 are bulk on the 5V trunk, not beside the pins: 52.1 mm of track from the PCA9685's V+ (C1) and 36.8 mm from the TB6612FNG's VM (C2), with no via, because no 8 × 10.5 mm capacitor fits beside either pin (the modules' outlines and J5, J6 surround them). C7 and C8 sit beside U2 |
+| 10 | The 5 V current budget | **Documented, not measured.** The LM2596's current limit is 3.4 A minimum over temperature (SNVS124G, § 7.9). Two stalled motors at the simulation's 1.7 A each reach it before the servos, head and amplifier are counted. Measure the real motors' stall current; WIRING.md records the budget |
+
+## Pre-order review (2026-10-21)
+
+An adversarial review of the board on `main` found the problems below; Lauri
+chose which to fix. Every "before" figure is from that board, every "after"
+from the committed one, measured on the routed copper per layer (only vias and
+through-hole pads join the layers).
+
+| # | Finding | Before | After |
+|---|---|---|---|
+| BL-1 | The board said not to order it | "PROVISIONAL: do not order" on the silkscreen and in `board.toml` | Removed. Lauri's [bench checks](#pre-order-checks-still-owed-lauri) come before paying |
+| BL-2 | The ribbon put +5V straight on the XIAO's 5V pad, its USB-C VBUS: a USB cable and the LM2596 feed each other | J1:1 and J1:14 on +5V | D1, a B5819W (C8598), from +5V to a new `XIAO_5V` net on J1's 5V pins, 3.3 mm from J1:14. The XIAO sees 5V less about 0.4 V; USB reverse-biases D1 |
+| SF-1 | Every 5V path to the motors, servos and head changed layer through one 1.0/0.5 mm via, the LDO and amplifier through another | Via (42.35, 63.40) alone joined J4 to A1:8, A2:1, C1, C2, C7, J11 and J1; via (49.46, 73.75) to U2 and A4; via (36.41, 89.59) to C3. J4:3 to A1:8 76.2 mm, to A2:1 85.0 mm, to U2:3 30.7 mm, to A4:1 49.1 mm (0.6 mm at the narrowest) | A fixed F.Cu trunk ([`board.toml`](board.toml) `[[tracks]]`), no via: J4:3 to C1 to C2 at 1.5 mm, C2 to A1:8 at 2.0 mm, on to A2:1 at 1.5 mm; the LDO and amplifier branch at 1.0 mm from C2 by C7, U2:3, A4:3 and A4:1 to C3. J4:3 to A1:8 74.4 mm, to A2:1 79.9 mm, to U2:3 63.8 mm, to A4:1 85.2 mm, all 0 vias. The +5V vias left (4) are on the routed feed to D1 and J11 |
+| SF-2 | The LM2596 lead was a JST XH, 3 A per contact on AWG 22 (JST XH sheet), under up to about 3.4 A on OUT+ with both motors stalled | XH 4, 2.5 mm | JST VH 4 (B4P-VH, 3.96 mm): 10 A AC/DC on AWG 16, wire AWG 22–16 (JST VH sheet, LCSC C160317's datasheet). Same pin order, registry `lm2596-buck-module-vh4` |
+| SF-3 | The TB6612FNG, MAX98357A and TCA9548A fit their sockets turned 180°, which puts a supply on GND | No pin names at the sockets | 1.0 mm names inside each outline: A1 "VM", "PWMA" (pads 8, 9) and "GND" (pads 1, 16); A4 "Vin", "LRC" (pads 1, 7); A3 "VIN", "SC7" (pads 1, 24) |
+| SF-4 | F1 derated below the load: BSMD1812-300-16V holds 2.55 A at 40 °C and 2.28 A at 50 °C (BHFUSE BSMD1812 datasheet, Thermal Derating Chart) against 2.4–3.1 A into the LM2596 at full load | 3 A hold, 6 A trip, C883162 | BSMD1812-400-16V, C47263807 (Extended, 15,582 in stock on 2026-10-21): 4 A hold, 8 A trip, 16 V; 3.48 A at 40 °C, 3.16 A at 50 °C. Same 1812 footprint, JLCPCB rotation 0. At 50 °C the 3.1 A full load leaves 2 % below the 3.16 A hold, so a hot robot at full load can trip it; not changed |
+| SF-4 (tracks) | F1 guarantees a trip only at 8 A, but PACK_IN and VBAT were routed at 1.0 mm. IPC-2221 puts 1.0 mm of external 1 oz copper at about +32 °C at 4 A and about +155 °C at 8 A (estimates) | PACK_IN J3:2 to F1:1 16.1 mm at 1.0 mm; VBAT F1:2 to J4:1 30.3 mm, 0.75 mm at the narrowest (two segments, 7.2 mm); 0 vias each | Fixed F.Cu `[[tracks]]` at 2.0 mm, no via: PACK_IN from J3:2 down and under the XT30, below its pins, to F1:1 (21.0 mm of centreline); VBAT from F1:2 between A1's GND pins and J3's pads (0.55 mm from each) to J4:1 (32.5 mm). J11's VBAT pin stays on the routed 1.0 mm B.Cu feed from J4:1 (85.7 mm, 1 via), which carries only a meter probe |
+| SF-5 | Four claims in the #810 table did not reproduce | C1–C3 "beside" their pins (41.4, 22.7 and 44.1 mm of track); J17 "1.5 mm" from a cut; strokes "0.16 mm or more"; the CPL "carries KiCad's rotations" | C3 moved beside A4's Vin, 6.9 mm of track. C1 and C2 cannot sit beside their pins (no room); the table now gives their trunk distances, 52.1 and 36.8 mm with no via. J17 0.96 mm, strokes 0.15 mm, and the ordering step, corrected above and below |
+| SF-6 | Silkscreen under JLCPCB's 0.15 mm, polarity marks too small | Footprint lines 0.10–0.127 mm; the CJMCU-2317 warning at 0.8 mm | Footprint lines widened to 0.15 mm by build_board.py; "+" at 1.0 mm beside C1, C2, C3, C7 and C8 pad 1; "CHIP SIDE UP / LABELS FACE DOWN" at 1.0 mm |
+| SF-7 | Off-board leads had no pin names | — | 1.0 mm: J7, J8 "V C D G"; J9 "G V C D"; J4 "I+ I- O+ O-", and "SET LM2596 TO 5.0V FIRST" beside J4 |
+| N-1 | Head 3's ground pour was mostly removed as islands | HEAD3_GND 57.7 mm² on F.Cu, 62.7 mm² on B.Cu | A fixed B.Cu ring round head 3 from U4's GND pin to J17:13 and an F.Cu track down its right side, plus `[pour] stitch`: 95.1 mm² on F.Cu, 452.1 mm² on B.Cu. Stitching put 12 vias on head 1, 13 on head 2, and one on head 3, whose F.Cu outer fill is still fenced off by routed tracks; an F.Cu ring as well left three head 3 signals unroutable |
+| N-4 | Upstream I2C rise time: the breakout's 10 kΩ alone on the bus from the ribbon | No carrier pull-ups; SDA 78.6 mm and SCL 54.6 mm of track, plus the ribbon | R12, R13, 2.2 kΩ (C17520), fitted, beside C5: about 1.8 kΩ with the breakout's. SDA 115.8 mm and SCL 63.7 mm of track, the pull-ups' included, on the board of that review; the 2026-11-02 re-route for the TCA9548A clone has not been re-measured |
+| N-9 | The CJMCU-2317's own decoupling is unverified | None | C6, 100 nF 0805 (C49678), fitted, 5.5 mm from A5's VCC pin |
+
+The repo has no do-not-fit convention: every carrier part is in the BOM and
+CPL, so R12, R13 and C6 are fitted.
+
+`carrier-review` on the committed board (re-routed 2026-11-02 for the
+TCA9548A clone) reports five flags: C4, C5 and C6 are 3.6, 5.3 and 5.5 mm
+from their modules' pins (each module decouples at its chip), a head 3 track
+is 0.71 mm from the y 70.5 cut (row 2 above), and C3:2 has no via within
+2.5 mm; its fixed track to J13's through-hole pad does that job (`[fanout]
+exempt`). The stitching and fanout raised the main board's GND vias from 11 to
+82 (69 before the re-route, 86 before the 2 mm pack-input tracks; the stitching
+grid finds fewer points where both layers' pour holds a via). `carrier-measure
+plane` finds the main GND plane in one piece (three pieces, one over 5 mm²,
+before the re-route); HEAD2_GND is split as before.
+
+## Assembly notes
+
+- **The CJMCU-2317 goes in chip side up.** Solder its male pins so they leave
+  the board on the side away from the chip: the chip faces up, away from the
+  carrier, and the printed pin labels on the module's back face the carrier.
+  Upside down (flipped top to bottom) it still fits the socket, with its rows
+  reversed, and that puts its VCC on GND and SDA and A2 on 3V3: the 3V3 rail
+  then feeds through the MCP23017's protection diodes. Before seating it,
+  compare the carrier's silkscreen inside A5 ("VCC GND" at the end nearest
+  J18's "3V3 GND", "A2" … "VCC" beside the single column) with the labels on
+  the module's back. The silkscreen shows the chip side, so the back's labels
+  read mirrored left to right, but row by row they must match: the
+  `VCC/GND` row at the "VCC GND" end.
+- **Set the LM2596 to 5.0 V on the bench before connecting it to J4.** The
+  module's output is adjustable and arrives set to whatever the factory left.
+- **The heat-set inserts go in the cradle, not the PCB.** H5–H10 are plain
+  2.2 mm clearance holes for M2 button-head screws.
+- The SMD parts carry LCSC numbers, so JLCPCB can place them (see
+  [Ordering](#ordering)); by hand, any 470 µF ≥ 16 V 8 × 10.5 mm SMD
+  electrolytic and 22 µF ≥ 16 V 3528 tantalum fit.
+
+## Separating the pieces
+
+Every cut is straight across the board or across the head column, so no cut
+ends in an inside corner and none needs a relief hole.
+
+1. **Buy a jeweller's saw frame with fine blades** (or a coping saw with a fine
+   blade).
+2. **Clamp the board** flat, the cut line just past the bench edge.
+3. **Cut the head column off** along the vertical line at x 70.5, in the band
+   on the main board's side of the line, the full 100 mm.
+4. **Cut the column into its three heads** along the four horizontal lines.
+   Each head's lines are its own edges; keep the kerf in the waste strips
+   between heads (y 29.5–35.25 and 64.75–70.5), where the "CUT" labels are.
+5. **Sand each head back to its lines, 29.5 × 29.5 mm,** on sandpaper on a flat
+   surface, checking with calipers. The cradle's inner size is 30.0 × 30.0 mm.
+
+FR-4 dust contains glass fibre: wet-sand, and wear a mask.
+
+## Regenerate and check
+
+```sh
+just robocar::carrier-schematic  # schematic + library tables from hardware.toml (no KiCad)
+just robocar::carrier-board      # place from scratch, autoroute (Freerouting), pour
+just robocar::carrier-check      # ERC, DRC + schematic parity, netlist parity, board check,
+                                         # then the check stamp CI verifies
+just robocar::carrier-fab        # carrier-check, then Gerbers, drill, BOM and CPL
+```
+
+The tool requirements, and why the board is built by script, are in
+[the balancebot carrier README](../../../../robotics/balancebot/hardware/carrier/README.md#regenerate-and-check)
+and the `carrier-pcb` skill. Freerouting does not route the same way twice:
+commit the board you checked.
+
+## Ordering
+
+Lauri does the [pre-order checks](#pre-order-checks-still-owed-lauri) before
+paying for the order.
+
+1. **Start from the committed board.** `git status` must show nothing under
+   `hardware/carrier/`.
+2. **Generate the files:** `just robocar::carrier-fab`. It stops if any
+   carrier gate fails or anything that feeds the board has uncommitted
+   changes, and writes `<sha7> <pcb8>` (the commit and the stamp's
+   board-hash prefix) on the silkscreen under the title, on a plotting copy
+   of the board (`board.toml` `[fab] provenance_at`). A
+   `CARRIER_FAB_ALLOW_DIRTY=1` run writes `<sha7>*<pcb8>`, the same width,
+   and `-dirty` in the file names; never order from it. Outputs, under
+   `robocar-carrier/output/`, named for the commit's first 7 hex
+   digits:
+
+   | File | For |
+   |---|---|
+   | `robocar-carrier-fab-<sha7>.zip` | The board: Gerbers and drill files |
+   | `assembly/robocar-carrier-bom-jlc-<sha7>.csv` | Assembly only: the SMD parts with LCSC numbers |
+   | `assembly/robocar-carrier-cpl-jlc-<sha7>.csv` | Assembly only: their positions and rotations |
+   | `robocar-carrier-fab-<sha7>.csv` | The hand-off row: the commit and the zip's sha256 |
+
+3. **Upload the zip** at jlcpcb.com. It should detect 2 layers and
+   100 × 100 mm. FR-4, 1.6 mm, 1 oz copper (the track widths assume it), HASL.
+   In the Gerber preview check the outline, the five "CUT" lines, J2's
+   and J17's outlines on the bottom silkscreen, and the `<sha7> <pcb8>` text
+   under the title (it must match the zip's name).
+4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
+   CSVs. C1–C3 (C96179), C7–C8 (C8020) and F1 (C47263807) are Extended
+   parts, so three feeder fees; the rest, D1 (C8598) and C6, R12, R13
+   included, are Basic. JLCPCB's stock and part status were checked on
+   2026-10-16, the 2.2 kΩ pull-ups (C17520) on 2026-10-18, and F1, D1, C6,
+   R12 and R13 on 2026-10-21 (the comments in `hardware.toml` record the
+   figures). The CPL's rotations already include each LCSC part's offset
+   from [`jlcpcb-rotations.toml`](../../../../../docs/reference/jlcpcb-rotations.toml)
+   (`kicad.jlc`; U2 goes out at 270°, KiCad's 90° plus 180°). **Verify
+   polarity in the placement preview** before confirming: each "+" on the pad
+   marked "+" on the silkscreen (C1–C3, C7, C8), D1's cathode bar on its pad toward the rear edge (pad 1, `XIAO_5V`),
+   and U2's tab toward C7.
+5. **Buy the through-hole parts**, soldered by hand either way:
+
+   | Qty | Part |
+   |---|---|
+   | 2 | 1×7 female header, 2.54 mm (XIAO, for the one head fitted) |
+   | 2 | 1×8 female header (TB6612FNG) |
+   | 1 + 1 | 1×12 and 2×12 female header, 2.54 mm (TCA9548A: the 2×12 on the upstream side takes either module) |
+   | 1 | 1×7 female header (MAX98357A) |
+   | 1 + 1 | 2×10 and 1×10 female header, 2.54 mm, or three 1×10 (the CJMCU-2317's 30 holes) |
+   | 1 | 1×10 male pin header, 2.54 mm (the CJMCU-2317's third column: the module ships with two 1×10 strips) |
+   | 1 | 2×10 male pin header, 2.54 mm (J18) |
+   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 3) |
+   | 2 | 2×7 pin header, 2.0 mm pitch (J1 and the fitted head's J2, J16 or J17) |
+   | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch, 10–15 cm per cable (Lauri, 2026-10-16) |
+   | 2 | 1×4 pin header (J11, J12) |
+   | 3 | 1×2 pin header (J13, J14, J15) |
+   | 1 | XT30 PCB socket (XT30PW-M) |
+   | 1 | JST VH 4-pin header B4P-VH (C160317 at LCSC), a VHR-4N housing and four SVH-41T-P1.1 crimps for AWG 20–16 (J4, the LM2596 lead) |
+   | 2 | JST-XH 2-pin (B2B-XH-A), with housings and crimps (two motors) |
+   | 1 | 12 mm board-mount buzzer, 7.6 mm pin pitch (BZ1) |
+   | 3 | JST-XH 4-pin (B4B-XH-A), with housings and crimps (two RCWL-1601, OLED) |
+   | 4 | M3 screws and standoffs (chassis) |
+   | 2 | M2 button-head screws, ISO 7380 (or any head of 3.5 mm diameter or less), and 2 M2 heat-set inserts (cradle) |

@@ -105,7 +105,7 @@ Include a section only when the project uses it:
    (`docs/auto/pinouts/*.svg`, from `PYTHONPATH=tools python3 -m
    hardware.pinout <project>`); embed them with `#figure(image(...))` and give
    the project a `gen-pinouts` recipe the `build-guide` recipe depends on, as
-   robocar-unified does. Never embed vendor pinout art or photos.
+   robocar does. Never embed vendor pinout art or photos.
 5. **Power** — rails, source, and a `danger` callout for the common-ground rule.
 6. **Assembly Steps** — an ordered `+` list, power-first, ending with a
    pre-power-up continuity check.

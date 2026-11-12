@@ -9,7 +9,7 @@
 
 ## Context
 
-A pin assignment in this repo is written down many times. For `robocar-unified`,
+A pin assignment in this repo is written down many times. For `robocar`,
 the same facts appear in **seven hand-maintained places** on top of the C header
 that defines them:
 
@@ -18,7 +18,7 @@ that defines them:
 | `main/*.c` firmware | `main/pin_config.h` — canonical |
 | `docs/auto/pin_defs.typ` | generated, drift-guarded (#377) |
 | `docs/build-guide.typ` → `.pdf` | interpolates `#I2S_BCLK_PIN` etc. |
-| `docs/schematics/circuits/robocar_unified.py` | hand-transcribed |
+| `docs/schematics/circuits/robocar.py` | hand-transcribed |
 | `WIRING.md` master GPIO table (11 rows) | hand |
 | `WIRING.md` per-peripheral tables (amp, ultrasonic) | hand |
 | `WIRING.md` Mermaid diagrams (×3) | hand |
@@ -166,7 +166,7 @@ a test — at none of that cost.
 - The ESPHome projects (`audiobook-player`, `presence-detector`, `wireguard-ha`),
   where the YAML *is* the firmware and the join does not apply the same way.
 - The other 12 `WIRING.md` files, most of which carry light or no pin tables.
-  `robocar-unified` proves the chain end-to-end because it has every consumer.
+  `robocar` proves the chain end-to-end because it has every consumer.
 
 ## Alternatives considered
 
@@ -226,7 +226,7 @@ pin joins that line's net and nothing else.
 
 ### Later addition: a cable between two carrier boards (#750)
 
-robocar-unified's carrier is two boards: a head board with the XIAO on the
+robocar's carrier is two boards: a head board with the XIAO on the
 pan-tilt, and the main board, joined by a ribbon cable. A `[[cables]]` entry
 (`build = "carrier"` only) names one parts-registry entry for both connectors,
 `head_ref` and `main_ref`, with `[pins]` keyed by the MCU's pad names, so the

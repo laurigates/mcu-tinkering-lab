@@ -58,7 +58,7 @@ vendor's own net.
 
 ## Where this is already load-bearing
 
-Every physical claim in `packages/robocar/unified/docs/wiring-card-motors.typ`
+Every physical claim in `packages/robotics/robocar/docs/wiring-card-motors.typ`
 came out of these two files, including the ones that decide whether the card is
 usable at all: the PCA9685's row order (PWM nearest the chip, then V+, then GND
 at the edge), its two identical 6-pin side headers (GND/OE/SCL/SDA/VCC/V+), the

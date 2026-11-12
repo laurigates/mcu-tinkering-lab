@@ -11,7 +11,7 @@ allowed-tools: Read, Grep, Glob, Bash(just:*), Bash(ls:*)
 Audit project(s) for completeness against the monorepo standard checklist.
 
 - If `$ARGUMENTS` is a project path → audit that single project
-- If `$ARGUMENTS` is `all` or empty → audit all projects under `packages/<domain>/`
+- If `$ARGUMENTS` is `all` or empty → audit every project `just list-projects` prints (the `mod` lines in the root justfile); some are nested inside another project, e.g. `packages/robotics/robocar/bringup`
 
 ## Checklist
 
@@ -101,7 +101,7 @@ Suggested actions:
 
 | Project | README | CLAUDE | WIRING | justfile | registered | sdkconfig | version | gitignore | creds | mDNS | Score |
 |---------|--------|--------|--------|----------|------------|-----------|---------|-----------|-------|------|-------|
-| robocar-unified | PASS | FAIL | ... | ... | ... | ... | ... | ... | ... | ... | 7/10 |
+| robocar | PASS | FAIL | ... | ... | ... | ... | ... | ... | ... | ... | 7/10 |
 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
 Projects needing attention:

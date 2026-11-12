@@ -6,7 +6,7 @@ on:
     paths:
       - 'docs/schematics/**'
       # Read by circuits at render time (#495): the physical board layouts,
-      # the join that parses them, and robocar-unified's PCA9685 channels.
+      # the join that parses them, and robocar's PCA9685 channels.
       # A change to any of them re-renders an SVG, so it must run this check.
       # hardware.toml names the part pin every MCU wire lands on (#462).
       - 'docs/reference/boards/*.md'
@@ -18,9 +18,9 @@ on:
       # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
-      - 'packages/robocar/unified/docs/build-guide.typ'
-      - 'packages/robocar/unified/main/planner_task.h'
-      - 'packages/robocar/unified/main/plan_activity.h'
+      - 'packages/robotics/robocar/docs/build-guide.typ'
+      - 'packages/robotics/robocar/main/planner_task.h'
+      - 'packages/robotics/robocar/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
       - '.github/actions/setup-tools/**'
   pull_request:
@@ -38,9 +38,9 @@ on:
       # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
-      - 'packages/robocar/unified/docs/build-guide.typ'
-      - 'packages/robocar/unified/main/planner_task.h'
-      - 'packages/robocar/unified/main/plan_activity.h'
+      - 'packages/robotics/robocar/docs/build-guide.typ'
+      - 'packages/robotics/robocar/main/planner_task.h'
+      - 'packages/robotics/robocar/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
       - '.github/actions/setup-tools/**'
   workflow_dispatch:

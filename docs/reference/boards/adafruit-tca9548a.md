@@ -1,6 +1,6 @@
 # Adafruit TCA9548A 1-to-8 I2C Multiplexer Breakout (#2717)
 
-Breakout for the TCA9548A I2C multiplexer. robocar-unified puts every I2C device
+Breakout for the TCA9548A I2C multiplexer. robocar puts every I2C device
 behind it (`I2C_BUS_CHANNEL_*` in `main/pin_config.h`). Two 12-pin headers on the
 long edges: power, the upstream bus, the reset and address pins and channels 0–1
 on the left; channels 2–7 on the right.

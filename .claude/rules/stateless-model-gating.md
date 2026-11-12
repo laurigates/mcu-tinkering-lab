@@ -3,8 +3,8 @@ reviewed: 2026-11-04
 paths:
   - '**/*gemini*'
   - '**/prompt_builder.*'
-  - 'packages/robocar/unified/main/{speech,voice,scene_change,ambient,dialogue,plan,planner,mic}*'
-  - 'packages/robocar/unified/test/test_{speech,voice,scene,ambient,dialogue,plan}*'
+  - 'packages/robotics/robocar/main/{speech,voice,scene_change,ambient,dialogue,plan,planner,mic}*'
+  - 'packages/robotics/robocar/test/test_{speech,voice,scene,ambient,dialogue,plan}*'
 ---
 # Gating a Stateless Model: Withhold the Capability, Don't Word the Instruction Harder
 
@@ -186,7 +186,7 @@ failed to read must never be reported as a measurement — least of all to a mod
 that will narrate it.
 
 Pinned by `test_a_deaf_gate_never_reports_novelty` and three siblings in
-`packages/robocar/unified/test/test_ambient_audio.c`; the bench cannot stage
+`packages/robotics/robocar/test/test_ambient_audio.c`; the bench cannot stage
 "prove it stays shut for an hour with no microphone fitted".
 
 ## Where to put the knobs
@@ -213,7 +213,7 @@ are pure C with injected state (clock, PRNG, luma plane) precisely so the
 untestable-on-hardware cases are one `memset`:
 
 ```sh
-just robocar-unified::test   # test_speech_budget, test_scene_change, test_dialogue_style
+just robocar::test   # test_speech_budget, test_scene_change, test_dialogue_style
 ```
 
 The load-bearing cases are the ones a bench cannot stage: an exact +80 brightness

@@ -10,11 +10,11 @@
 
 ## Context
 
-The current `robocar-unified` firmware implements an on-demand inference loop: capture frame → upload to cloud AI → block on response → parse one-letter motor command (`F`/`B`/`L`/`R`/`S`) → enqueue to motor task. The robot is blind between inferences (500–2000 ms gaps), resulting in jerky stop-go motion. This monolithic "AI-as-controller" pattern is a legacy of the non-streaming Claude API era, where each call incurred time and cost.
+The current `robocar` firmware implements an on-demand inference loop: capture frame → upload to cloud AI → block on response → parse one-letter motor command (`F`/`B`/`L`/`R`/`S`) → enqueue to motor task. The robot is blind between inferences (500–2000 ms gaps), resulting in jerky stop-go motion. This monolithic "AI-as-controller" pattern is a legacy of the non-streaming Claude API era, where each call incurred time and cost.
 
 Google's [Gemini Robotics-ER documentation](https://ai.google.dev/gemini-api/docs/robotics-overview) and [Physical Agents blog post](https://developers.googleblog.com/building-the-next-generation-of-physical-agents-with-gemini-robotics-er-15/) explicitly position ER as the *"high level brain for your robot"* that calls a faster control layer. The pattern is clear: a **slow planner** (~0.5–2 Hz) emits structured goals via function calls; a **fast reactive executor** (20–50 Hz) on-device owns motor output and drives toward the goal. The robot moves smoothly and continuously, with the planner redirecting rather than stepping.
 
-This ADR adopts that hierarchy for `robocar-unified` and removes Claude and Ollama backends from this project entirely.
+This ADR adopts that hierarchy for `robocar` and removes Claude and Ollama backends from this project entirely.
 
 ## Decision
 
@@ -98,12 +98,12 @@ Replace the monolithic AI-as-controller loop with a hierarchical two-layer archi
 
 ## Supersedes and Amends
 
-This ADR supersedes the runtime contract of **ADR-003: Pluggable AI Backends** for `robocar-unified` specifically. ADR-003 remains valid for other projects in the monorepo (e.g., `esp32cam-llm-telegram`). The decision to support multiple backends at compile time is reversed for this project; single-backend design is now the pattern.
+This ADR supersedes the runtime contract of **ADR-003: Pluggable AI Backends** for `robocar` specifically. ADR-003 remains valid for other projects in the monorepo (e.g., `esp32cam-llm-telegram`). The decision to support multiple backends at compile time is reversed for this project; single-backend design is now the pattern.
 
 ## Related
 
 - **PRP**: `docs/prompts/hierarchical-ai-controller.md` — Product requirements and work breakdown
-- **ADR-002**: Dual ESP32 Architecture (context on what `robocar-unified` consolidated)
-- **ADR-003**: Pluggable AI Backends (this ADR narrows that pattern for robocar-unified; other projects unaffected)
+- **ADR-002**: Dual ESP32 Architecture (context on what `robocar` consolidated)
+- **ADR-003**: Pluggable AI Backends (this ADR narrows that pattern for robocar; other projects unaffected)
 - **ADR-008**: Gemini Third AI Backend (Gemini integration, now the sole planner backend)
 - **Google Robotics-ER**: [Robotics overview](https://ai.google.dev/gemini-api/docs/robotics-overview), [Physical agents blog](https://developers.googleblog.com/building-the-next-generation-of-physical-agents-with-gemini-robotics-er-15/)

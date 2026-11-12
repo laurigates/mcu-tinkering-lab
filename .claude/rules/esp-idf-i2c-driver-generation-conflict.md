@@ -43,7 +43,7 @@ flag it**:
   SCCB_HARDWARE_I2C_DRIVER_SELECTION` Kconfig, and its own upstream default
   has itself changed generation across releases.
 
-Robocar-unified hit this twice. The first time, `sdkconfig.defaults` was
+Robocar hit this twice. The first time, `sdkconfig.defaults` was
 hand-pinned to `CONFIG_SCCB_HARDWARE_I2C_DRIVER_LEGACY=y` with a comment
 recording *why* — to match i2cdev, which was legacy at the time. Nobody
 revisited that pin when i2cdev was later bumped to 2.1.2 (new driver by

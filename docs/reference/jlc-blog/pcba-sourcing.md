@@ -106,7 +106,7 @@ $3.58 hand-soldering labour per order, about one extra build day, and no
 feeder fee. The part must be listed for THT assembly in the parts library,
 and shell/mounting tabs count as joints. Source: #1. Count from the committed
 boards (`(pad … thru_hole` in each `.kicad_pcb`): integrated carrier 170
-joints, socketed unified 247, balancebot 68. Integrated ×5 is 850 joints ≈
+joints, socketed robocar 247, balancebot 68. Integrated ×5 is 850 joints ≈
 $13.9 + $3.58 ≈ $17.5 before the THT parts' own prices; ×2 is ≈ $9.2.
 Status: **new**. JO § 4 does not list it, and `jlc.py:7-9` and the READMEs
 treat sockets and connectors as hand-soldered by design. Fit: a JO § 4 lever

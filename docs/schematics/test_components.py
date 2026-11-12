@@ -32,7 +32,7 @@ from components import (
 )
 from hardware import board_layout, join
 
-UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
+ROBOCAR = FsPath(__file__).resolve().parents[2] / "packages/robotics/robocar"
 
 
 def _mic(clk: str = "GPIO42", data: str = "GPIO41"):
@@ -60,14 +60,14 @@ def test_pdm_microphone_is_dashed_so_it_reads_as_on_module():
     assert _mic()._userparams.get("ls") == "--"
 
 
-def test_robocar_unified_draws_the_onboard_microphone(real_circuit):
-    circuit = real_circuit("robocar_unified")
+def test_robocar_draws_the_onboard_microphone(real_circuit):
+    circuit = real_circuit("robocar")
     mics = [
         e
         for e in circuit.drawing.elements
         if isinstance(e, elm.Ic) and {"CLK", "DATA"} <= set(e.anchors)
     ]
-    assert len(mics) == 1, "robocar_unified must draw exactly one PDM microphone"
+    assert len(mics) == 1, "robocar must draw exactly one PDM microphone"
     mic = mics[0]
     assert mic._userparams.get("ls") == "--"
 
@@ -95,7 +95,7 @@ def test_robocar_unified_draws_the_onboard_microphone(real_circuit):
     # hand in the circuit: the mic roles are [[undrawn]], so no [[nets]] entry
     # binds them and check_all_drawn() cannot see a CLK/DATA role swap. This
     # pins that choice, and fails on exactly that swap.
-    roles = join(UNIFIED).roles
+    roles = join(ROBOCAR).roles
     labels = {p.name: p.pin for p in mic._userparams["pins"]}
     assert labels == {
         "CLK": f"GPIO{roles['MIC_PDM_CLK_PIN']}",
@@ -211,8 +211,8 @@ def test_default_layout_is_still_the_schematic_symbol():
     assert names == {"DIN", "LRC", "BCLK", "GAIN", "SD", "GND", "VIN", "OUT-", "OUT+"}
 
 
-def test_robocar_unified_draws_every_known_board_physically(real_circuit):
-    circuit = real_circuit("robocar_unified")
+def test_robocar_draws_every_known_board_physically(real_circuit):
+    circuit = real_circuit("robocar")
     ics = [e for e in circuit.drawing.elements if isinstance(e, elm.Ic)]
     for factory_name, (_, slug) in PHYSICAL.items():
         layout = board_layout(slug)
@@ -227,15 +227,15 @@ def test_robocar_unified_draws_every_known_board_physically(real_circuit):
 
 # --- Suggested capacitors (#628) ---------------------------------------------
 
-WIRING = UNIFIED / "WIRING.md"
-BUILD_GUIDE = UNIFIED / "docs/build-guide.typ"
+WIRING = ROBOCAR / "WIRING.md"
+BUILD_GUIDE = ROBOCAR / "docs/build-guide.typ"
 
 
 def _suggested_caps():
-    """robocar_unified's SUGGESTED_CAPS, read from the circuit that draws them."""
+    """robocar's SUGGESTED_CAPS, read from the circuit that draws them."""
     from render import load_circuit
 
-    path = FsPath(__file__).parent / "circuits" / "robocar_unified.py"
+    path = FsPath(__file__).parent / "circuits" / "robocar.py"
     return load_circuit(path).SUGGESTED_CAPS
 
 
@@ -260,8 +260,8 @@ def test_suggested_capacitors_are_the_ones_no_breakout_carries():
     assert len({c.ref for c in caps}) == len(caps)
 
 
-def test_robocar_unified_draws_every_suggested_capacitor_on_its_rail(real_circuit):
-    circuit = real_circuit("robocar_unified")
+def test_robocar_draws_every_suggested_capacitor_on_its_rail(real_circuit):
+    circuit = real_circuit("robocar")
     elements = circuit.drawing.elements
     drawn = {
         e._userlabels[0].label.split()[0]: e

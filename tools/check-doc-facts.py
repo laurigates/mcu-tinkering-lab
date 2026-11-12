@@ -62,7 +62,7 @@ class FactRule:
     probe_glob: str
     probe: str
     # Claim shapes that are then wrong. Deliberately specific: a broad
-    # `BLE|Bluetooth` would flag robocar-unified's README, which says "not the
+    # `BLE|Bluetooth` would flag robocar's README, which says "not the
     # BLE variant" precisely to stop this confusion. A check that cries wolf
     # gets disabled, and then it protects nothing.
     forbid: tuple[str, ...]

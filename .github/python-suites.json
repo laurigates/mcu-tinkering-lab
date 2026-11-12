@@ -44,23 +44,23 @@
   },
   {
     "name": "robocar-twin",
-    "dir": "packages/robocar/twin/harness",
+    "dir": "packages/robotics/robocar/twin/harness",
     "run": "just robocar-twin::test",
     "apt": "libcjson-dev",
     "paths": [
-      "packages/robocar/twin/**",
-      "packages/robocar/unified/main/**",
-      "packages/robocar/unified/test/include/**"
+      "packages/robotics/robocar/twin/**",
+      "packages/robotics/robocar/main/**",
+      "packages/robotics/robocar/test/include/**"
     ]
   },
   {
     "name": "live-probe",
-    "dir": "packages/robocar/unified/tools/live-probe",
-    "run": "cd packages/robocar/unified/tools/live-probe && uv run pytest -q",
+    "dir": "packages/robotics/robocar/tools/live-probe",
+    "run": "cd packages/robotics/robocar/tools/live-probe && uv run pytest -q",
     "paths": [
-      "packages/robocar/unified/tools/live-probe/**",
-      "packages/robocar/unified/main/voice_persona.c",
-      "packages/robocar/unified/tools/make-style-sweep.py"
+      "packages/robotics/robocar/tools/live-probe/**",
+      "packages/robotics/robocar/main/voice_persona.c",
+      "packages/robotics/robocar/tools/make-style-sweep.py"
     ]
   },
   {

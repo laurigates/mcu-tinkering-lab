@@ -16,7 +16,7 @@ Follow RED -> GREEN -> REFACTOR:
 Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
 
 Include scope for ESP32 projects:
-- `feat(robocar-unified): add WiFi reconnection logic`
+- `feat(robocar): add WiFi reconnection logic`
 - `fix(telegram): correct UART baud rate`
 
 ## Code Quality Gates

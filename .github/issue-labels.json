@@ -2,12 +2,11 @@
   "$comment": "Label taxonomy read by .github/workflows/issue-labels.yml (git-plugin/scripts/issue-labels.py in laurigates/claude-plugins). build and area entries own their label's colour and description; core entries replace the script's built-in globs key by key. tools/test_issue_labels_taxonomy.py checks every glob and scope.",
   "build": {
     "robocar": {
-      "description": "robocar-unified, unified-integrated, twin, simulation, Teuvo",
+      "description": "robocar firmware, integrated carrier, bringup, twin, simulation, Teuvo",
       "color": "1d76db",
-      "paths": ["packages/robocar/**", "docs/site/robocar/**"],
+      "paths": ["packages/robotics/robocar/**", "docs/site/robocar/**"],
       "scopes": [
-        "robocar-unified",
-        "robocar-unified-integrated",
+        "robocar-integrated",
         "robocar-twin",
         "robocar-bringup",
         "robocar-simulation",
@@ -65,8 +64,8 @@
         "tools/enclosure/**",
         "tools/mechanism/**",
         "tools/cadstd/**",
-        "packages/*/*/hardware/enclosure/**",
-        "packages/*/*/hardware/pan-tilt/**"
+        "packages/**/hardware/enclosure/**",
+        "packages/**/hardware/pan-tilt/**"
       ],
       "scopes": ["enclosure", "mechanism", "cadstd", "printed-mechanism"]
     },
@@ -79,8 +78,8 @@
         "tools/hardware/**",
         "docs/reference/parts/**",
         "docs/reference/blocks/**",
-        "packages/*/*/hardware/carrier/**",
-        "packages/*/*/hardware/perfboard/**"
+        "packages/**/hardware/carrier/**",
+        "packages/**/hardware/perfboard/**"
       ],
       "scopes": [
         "kicad",

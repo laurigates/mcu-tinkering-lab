@@ -69,7 +69,7 @@ just <module>::flash          # flash from the host (PORT=/dev/... overrides det
 just <module>::monitor        # serial monitor
 just <module>::menuconfig     # containerized menuconfig
 
-just build-all                # robocar-unified only
+just build-all                # robocar only
 just clean-all                # clean every project build
 
 just lint                     # cppcheck + ruff
@@ -84,10 +84,10 @@ just docker-clean             # remove containers and volumes
 
 | Suite | Command |
 |---|---|
-| robocar-unified host tests | `just robocar-unified::test` |
+| robocar host tests | `just robocar::test` |
 | kids-audio-toy host tests | `just kids-audio::test` |
 | balancebot host tests | `just balancebot::test` |
-| Robocar simulation | `cd packages/robocar/simulation && uv sync && uv run pytest tests/ --cov` |
+| Robocar simulation | `cd packages/robotics/robocar/simulation && uv sync && uv run pytest tests/ --cov` |
 | All pre-commit hooks | `pre-commit run --all-files` |
 
 Host tests compile hardware-independent firmware modules with the native
@@ -146,11 +146,11 @@ release-please builds release PRs and changelogs from them.
 | `ci` | CI workflows |
 | `chore` | Other maintenance |
 
-The scope is the project's `just` module name (`robocar-unified`,
+The scope is the project's `just` module name (`robocar`,
 `telegram`, `thinkpack-brainbox`) or an area such as `ci` or `docs`.
 
 ```
-feat(robocar-unified): add WiFi reconnection logic
+feat(robocar): add WiFi reconnection logic
 fix(telegram): fix memory leak in image capture
 feat(i2c)!: switch the I2C protocol checksum to CRC8
 
@@ -199,6 +199,15 @@ recipes. Then:
 4. Optional: add a `flasher.json` to list it in the
    [web flasher](https://laurigates.github.io/mcu-tinkering-lab/).
    `packages/audio/kids-audio-toy/flasher.json` shows the fields.
+
+A subproject of an existing project (the robocar's `bringup/` and `twin/`) goes
+in a directory beneath that project, one level deeper, so its justfile imports
+the shared recipes with four `../`. Add its directory to the parent's
+`exclude_paths` in `.github/project-matrix.json` (relative to `packages/`), so
+a change only there does not build the parent, and to the parent's
+`exclude-paths` in `release-please-config.json` (relative to the repo root), so
+it does not release it. `python3 tools/check-component-extra-paths.py` fails
+until both lists name it.
 
 `.claude/rules/containerized-builds.md` covers the justfile conventions and
 the flash recipe checks in detail.

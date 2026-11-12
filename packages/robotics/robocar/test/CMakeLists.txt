@@ -1,0 +1,1013 @@
+cmake_minimum_required(VERSION 3.16)
+project(robocar_host_tests C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# Use provided CMAKE_C_FLAGS or set defaults
+if(NOT CMAKE_C_FLAGS)
+    set(CMAKE_C_FLAGS "-Wall -Wextra -O0 -g -std=c11")
+endif()
+
+# Host test feature flags
+add_compile_definitions(
+    GOAL_STATE_HOST_TEST=1
+    REACTIVE_CONTROLLER_HOST_TEST=1
+    ULTRASONIC_HOST_TEST=1
+    CLIFF_SENSOR_HOST_TEST=1
+)
+
+# Main source directory
+set(MAIN_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../main")
+
+# Include directories
+# test/include comes first so its esp_err.h / esp_log.h shims shadow any
+# ESP-IDF header that leaks in via motor_controller.h (which unconditionally
+# includes "esp_err.h") or gemini_parse.c (which uses ESP_LOG* macros). The
+# companion host-test guards in goal_state.h / ultrasonic.h /
+# reactive_controller.h handle their own typedef under #else.
+include_directories(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${MAIN_SRC_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+# Shared on-host link requirements
+find_package(Threads REQUIRED)
+
+# cJSON — required by gemini_parse.c. Prefer the installed library via
+# pkg-config; fall back to Homebrew's prefix on macOS.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(CJSON libcjson)
+endif()
+
+if(NOT CJSON_FOUND)
+    # Homebrew on Apple Silicon
+    set(_CJSON_HINTS "/opt/homebrew/opt/cjson" "/opt/homebrew" "/usr/local/opt/cjson" "/usr/local")
+    find_path(CJSON_INCLUDE_DIR cjson/cJSON.h HINTS ${_CJSON_HINTS} PATH_SUFFIXES include)
+    find_library(CJSON_LIB cjson HINTS ${_CJSON_HINTS} PATH_SUFFIXES lib)
+    if(CJSON_INCLUDE_DIR AND CJSON_LIB)
+        set(CJSON_INCLUDE_DIRS "${CJSON_INCLUDE_DIR}/cjson")
+        set(CJSON_LIBRARIES "${CJSON_LIB}")
+        set(CJSON_FOUND TRUE)
+    endif()
+endif()
+
+enable_testing()
+
+# -----------------------------------------------------------------------------
+# goal_state host tests (Phase 4, gate G3)
+# -----------------------------------------------------------------------------
+add_executable(test_goal_state
+    "${MAIN_SRC_DIR}/goal_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_goal_state.c"
+)
+target_link_libraries(test_goal_state PRIVATE Threads::Threads m)
+add_test(NAME goal_state COMMAND test_goal_state)
+
+# -----------------------------------------------------------------------------
+# ultrasonic stub regression (Phase 5, issue #226)
+# -----------------------------------------------------------------------------
+add_executable(test_ultrasonic_stub
+    "${MAIN_SRC_DIR}/ultrasonic.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ultrasonic_stub.c"
+)
+target_link_libraries(test_ultrasonic_stub PRIVATE Threads::Threads m)
+add_test(NAME ultrasonic_stub COMMAND test_ultrasonic_stub)
+
+# -----------------------------------------------------------------------------
+# RCWL-1601 two-phase I2C read sequencing (issue #782)
+#
+# ultrasonic_core.c is the state machine the firmware runs, compiled unmodified
+# against a recording fake bus: trigger and read on separate calls with the
+# conversion wait between them, pacing on the failure path, and zero /
+# out-of-range readings reported as errors rather than clamped.
+# -----------------------------------------------------------------------------
+add_executable(test_ultrasonic_core
+    "${MAIN_SRC_DIR}/ultrasonic_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ultrasonic_core.c"
+)
+target_link_libraries(test_ultrasonic_core PRIVATE m)
+add_test(NAME ultrasonic_core COMMAND test_ultrasonic_core)
+
+# -----------------------------------------------------------------------------
+# MCP23017 pin/mode validation (issue #781)
+#
+# gpio_expander_core.c is the check gpio_expander_set_mode() runs before it
+# touches the bus: GPA7 and GPB7 (pins 7 and 15) are output-only on the Rev D
+# part, so input and pull-up modes there are refused rather than written.
+# -----------------------------------------------------------------------------
+add_executable(test_gpio_expander_core
+    "${MAIN_SRC_DIR}/gpio_expander_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_gpio_expander_core.c"
+)
+add_test(NAME gpio_expander_core COMMAND test_gpio_expander_core)
+
+# -----------------------------------------------------------------------------
+# Cliff reflex decisions (front and rear floor sensors, interim for issue #1010)
+#
+# cliff_core.c compiled unmodified: fail-closed start and read failures, the
+# debounce, brake then back off, no back-off toward a side without floor or
+# forward into an obstacle, and which motions permits() allows. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_cliff_core
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_cliff_core.c"
+)
+add_test(NAME cliff_core COMMAND test_cliff_core)
+
+# -----------------------------------------------------------------------------
+# reactive_controller decision logic (Phase 5, gate G2, issue #226)
+# -----------------------------------------------------------------------------
+add_executable(test_reactive_controller
+    "${MAIN_SRC_DIR}/goal_state.c"
+    "${MAIN_SRC_DIR}/ultrasonic.c"
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
+)
+target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
+# The cliff tests expect the reflex armed from boot, whatever the firmware default.
+target_compile_definitions(test_reactive_controller PRIVATE CLIFF_REFLEX_AT_BOOT=1)
+add_test(NAME reactive_controller COMMAND test_reactive_controller)
+
+# -----------------------------------------------------------------------------
+# Obstacle-to-brake latency over the real I2C read cycle (issue #791)
+#
+# The executor and ultrasonic_core.c compiled unmodified; the suite supplies
+# ultrasonic.h itself over a fake bus (in place of ultrasonic.c's host stub,
+# which returns a reading every poll), so the reflex sees readings at the
+# firmware's real pace and the worst case is measured, not assumed.
+# -----------------------------------------------------------------------------
+add_executable(test_reflex_latency
+    "${MAIN_SRC_DIR}/goal_state.c"
+    "${MAIN_SRC_DIR}/ultrasonic_core.c"
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"
+)
+target_link_libraries(test_reflex_latency PRIVATE Threads::Threads m)
+add_test(NAME reflex_latency COMMAND test_reflex_latency)
+
+# -----------------------------------------------------------------------------
+# head_aim — pan/tilt aiming for track goals (issue #511)
+#
+# Pure C, compiled unmodified. The executor integration (servo writes, the
+# wheel-only fallback, head leases) is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_head_aim
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_head_aim.c"
+)
+target_link_libraries(test_head_aim PRIVATE m)
+add_test(NAME head_aim COMMAND test_head_aim)
+
+# -----------------------------------------------------------------------------
+# idle_gaze — where the head looks when nothing directs it (ADR-029 §1)
+#
+# Pure C, compiled unmodified with a scripted random source. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_idle_gaze
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_idle_gaze.c"
+)
+target_link_libraries(test_idle_gaze PRIVATE m)
+add_test(NAME idle_gaze COMMAND test_idle_gaze)
+
+# -----------------------------------------------------------------------------
+# base64 streaming decoder (TTS audio path)
+#
+# base64.c has no ESP-IDF dependencies, so it compiles on the host as-is.
+# -----------------------------------------------------------------------------
+add_executable(test_base64_stream
+    "${MAIN_SRC_DIR}/base64.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_base64_stream.c"
+)
+target_link_libraries(test_base64_stream PRIVATE Threads::Threads m)
+add_test(NAME base64_stream COMMAND test_base64_stream)
+
+# -----------------------------------------------------------------------------
+# speech tag filter (inline TTS delivery tags)
+#
+# speech_tags.c is pure C with no ESP-IDF dependency, like base64.c.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_tags
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_tags.c"
+)
+target_link_libraries(test_speech_tags PRIVATE Threads::Threads m)
+add_test(NAME speech_tags COMMAND test_speech_tags)
+
+# -----------------------------------------------------------------------------
+# sound clips: names, the [tag] split, the reflex honk cooldown
+#
+# Pure C; the PCM itself is in sound_clips.c and stays on the device.
+# -----------------------------------------------------------------------------
+add_executable(test_sound_clips
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_sound_clips.c"
+)
+add_test(NAME sound_clips COMMAND test_sound_clips)
+
+# -----------------------------------------------------------------------------
+# dialogue_style variation module (spoken-line repetition)
+#
+# dialogue_style.c is deliberately free of ESP-IDF and FreeRTOS (the PRNG is
+# seeded from outside), so it compiles on the host with no shims at all.
+# -----------------------------------------------------------------------------
+add_executable(test_dialogue_style
+    "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${MAIN_SRC_DIR}/speech_tags.c"  # note_spoken() strips delivery tags
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_dialogue_style.c"
+)
+target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)
+add_test(NAME dialogue_style COMMAND test_dialogue_style)
+
+# -----------------------------------------------------------------------------
+# speech_budget rationing (how often the robot is offered the `speak` tool)
+#
+# Pure C with an injected clock, so the uint32 millisecond wrap is reachable in
+# a test instead of only after 49 days of uptime.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_budget
+    "${MAIN_SRC_DIR}/speech_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_budget.c"
+)
+target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
+add_test(NAME speech_budget COMMAND test_speech_budget)
+
+# -----------------------------------------------------------------------------
+# speech_evidence (why the planner may speak this cycle — issue #618)
+#
+# The planner request carries an image and no audio, so the audio-only clause
+# must not assert a sound source the model cannot know. Pinned here because the
+# failure is a fluent fabrication, which no bench run flags as an error.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_evidence
+    "${MAIN_SRC_DIR}/speech_evidence.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_evidence.c"
+)
+add_test(NAME speech_evidence COMMAND test_speech_evidence)
+
+# -----------------------------------------------------------------------------
+# planner_range (the rangefinder readings in every planner request)
+#
+# A failed sensor reads as max range in the executor's filter; the clause must
+# say "unavailable" there, never "no echo", or the model is told the path is
+# clear when nothing was measured.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_range
+    "${MAIN_SRC_DIR}/planner_range.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_range.c"
+)
+add_test(NAME planner_range COMMAND test_planner_range)
+
+# -----------------------------------------------------------------------------
+# voice_fx_core (the retro-robot body resonance on the way to I2S)
+#
+# The load-bearing case is the comb's (1-g) input trim: without it the feedback
+# gain is 1/(1-g) and the effect pins at the rail instead of resonating. That
+# still sounds like a robot on a bench, which is exactly why it needs a test.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_fx_core
+    "${MAIN_SRC_DIR}/voice_fx_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_fx_core.c"
+)
+target_link_libraries(test_voice_fx_core PRIVATE Threads::Threads m)
+add_test(NAME voice_fx_core COMMAND test_voice_fx_core)
+
+# -----------------------------------------------------------------------------
+# scene_change gate (does the view differ from the one last spoken about?)
+#
+# Pure C over a caller-supplied luma plane, so the synthetic frames a bench
+# session cannot produce reliably — an exact brightness shift with no motion —
+# are one memset here.
+# -----------------------------------------------------------------------------
+add_executable(test_scene_change
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_scene_change.c"
+)
+target_link_libraries(test_scene_change PRIVATE Threads::Threads m)
+add_test(NAME scene_change COMMAND test_scene_change)
+
+# -----------------------------------------------------------------------------
+# ambient_audio gate (has the ROOM changed since the robot last spoke?)
+#
+# Pure C over a caller-supplied PCM frame with an injected clock, so the cases a
+# bench cannot stage — an exact +12 dB gain change over a byte-identical
+# soundscape, a controlled DC offset, and the uint32 millisecond wrap at day 49
+# — are one memset each.
+# -----------------------------------------------------------------------------
+add_executable(test_ambient_audio
+    "${MAIN_SRC_DIR}/ambient_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ambient_audio.c"
+)
+target_link_libraries(test_ambient_audio PRIVATE Threads::Threads m)
+add_test(NAME ambient_audio COMMAND test_ambient_audio)
+
+# -----------------------------------------------------------------------------
+# plan_budget (the hard ceiling on planner spend)
+#
+# Pure C with no clock at all. The cases worth pinning are the ones that only
+# appear after hours of running or after somebody else's JSON changes: a
+# response whose token count could not be read must be CHARGED, not free, or the
+# ceiling silently stops being a ceiling.
+# -----------------------------------------------------------------------------
+add_executable(test_plan_budget
+    "${MAIN_SRC_DIR}/plan_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_plan_budget.c"
+)
+target_link_libraries(test_plan_budget PRIVATE Threads::Threads m)
+add_test(NAME plan_budget COMMAND test_plan_budget)
+
+# -----------------------------------------------------------------------------
+# oled_status_core (the OLED status screen's four rows)
+#
+# Pure formatter. Pins a tripped fuse, one failed rangefinder beside a working
+# one, a dead bus, and that the widest value in every field still fits the
+# 21-column panel using only characters its font carries.
+# -----------------------------------------------------------------------------
+add_executable(test_oled_status_core
+    "${MAIN_SRC_DIR}/oled_status_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_oled_status_core.c"
+)
+add_test(NAME oled_status_core COMMAND test_oled_status_core)
+
+# -----------------------------------------------------------------------------
+# voice_budget (the hands-free ration and the voice-turn spend ceiling)
+#
+# Pure C with an injected clock. Pins what a bench cannot stage: an hour of a
+# talkative room bounded by the ration, an unattended night stopped by the
+# ceiling, `listen` exempt from the first but not the second, and the window
+# across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_budget
+    "${MAIN_SRC_DIR}/voice_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_budget.c"
+)
+target_link_libraries(test_voice_budget PRIVATE Threads::Threads m)
+add_test(NAME voice_budget COMMAND test_voice_budget)
+
+# -----------------------------------------------------------------------------
+# plan_activity (should this cycle make a request at all?)
+#
+# Pure C over caller-supplied luma planes with an injected clock, so the whole
+# nine-minute backoff ladder runs in microseconds and the uint32 millisecond
+# wrap at day 49 is reachable without waiting 49 days. Links scene_change.c for
+# the fingerprint representation it shares.
+# -----------------------------------------------------------------------------
+add_executable(test_plan_activity
+    "${MAIN_SRC_DIR}/plan_activity.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_plan_activity.c"
+)
+target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
+add_test(NAME plan_activity COMMAND test_plan_activity)
+
+# -----------------------------------------------------------------------------
+# note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
+# -----------------------------------------------------------------------------
+add_executable(test_note_gate
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_note_gate.c"
+)
+add_test(NAME note_gate COMMAND test_note_gate)
+
+# -----------------------------------------------------------------------------
+# planner_cycle_core (the planner's per-cycle decisions, ADR-030)
+#
+# The request gate and its one-shot announce latches, speech screening (near
+# repeats, a person speaking during the request), goal write vs force-stop and
+# the backoff ladder — against the real pure modules planner_task.c links, so
+# the decisions tested are the ones the robot and the behaviour twin run.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_cycle_core
+    "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${MAIN_SRC_DIR}/plan_activity.c"
+    "${MAIN_SRC_DIR}/plan_budget.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${MAIN_SRC_DIR}/ambient_audio.c"
+    "${MAIN_SRC_DIR}/speech_budget.c"
+    "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_cycle_core.c"
+)
+target_link_libraries(test_planner_cycle_core PRIVATE Threads::Threads m)
+add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
+
+# -----------------------------------------------------------------------------
+# gemini parse (Phase 5, gate G1, issue #228)
+#
+# Only built when cJSON is available. Skipped (with a message) otherwise so
+# the other host-test suites still build in environments without cJSON.
+# -----------------------------------------------------------------------------
+if(CJSON_FOUND)
+    add_executable(test_gemini_parse
+        "${MAIN_SRC_DIR}/gemini_parse.c"
+        "${MAIN_SRC_DIR}/note_gate.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_parse.c"
+    )
+    target_include_directories(test_gemini_parse PRIVATE ${CJSON_INCLUDE_DIRS})
+    # pkg-config returns a plain -lcjson without a library path. Pass the
+    # library search dirs explicitly so the linker finds libcjson.*.
+    target_link_directories(test_gemini_parse PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_gemini_parse PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    target_compile_definitions(test_gemini_parse PRIVATE
+        "FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures\""
+    )
+    add_test(NAME gemini_parse COMMAND test_gemini_parse)
+
+    # GlitchTip event JSON and the RTC breadcrumb ring (ADR-033): the shape
+    # tools/glitchtip/bridge parses, garbage RTC memory after power-on, and a
+    # line torn by a reset.
+    add_executable(test_event_report_core
+        "${MAIN_SRC_DIR}/event_report_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_event_report_core.c"
+    )
+    target_include_directories(test_event_report_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_event_report_core PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_event_report_core PRIVATE ${CJSON_LIBRARIES})
+    add_test(NAME event_report_core COMMAND test_event_report_core)
+
+    add_executable(test_voice_history
+        "${MAIN_SRC_DIR}/voice_history.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_history.c"
+    )
+    target_include_directories(test_voice_history PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_voice_history PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_voice_history PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    add_test(NAME voice_history COMMAND test_voice_history)
+
+    # Every prompt built from a persona reaches the request whole (issue #847),
+    # and the TTS request has the gemini-3.8-flash-tts shape (issue #844).
+    # Compiles the real voice_persona.c table, so its config.h needs a
+    # credentials.h: the fixture is copied in as one, as for the loader below.
+    set(VOICE_PROMPTS_CRED_DIR "${CMAKE_CURRENT_BINARY_DIR}/voice_prompts_cred")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+                   "${VOICE_PROMPTS_CRED_DIR}/credentials.h" COPYONLY)
+    add_executable(test_voice_prompts
+        "${MAIN_SRC_DIR}/voice_history.c"
+        "${MAIN_SRC_DIR}/voice_persona.c"
+        "${MAIN_SRC_DIR}/dialogue_style.c"
+        "${MAIN_SRC_DIR}/speech_tags.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
+        "${MAIN_SRC_DIR}/tts_request.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_prompts.c"
+    )
+    target_include_directories(test_voice_prompts PRIVATE ${CJSON_INCLUDE_DIRS}
+                               "${VOICE_PROMPTS_CRED_DIR}")
+    target_link_directories(test_voice_prompts PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    add_test(NAME voice_prompts COMMAND test_voice_prompts)
+else()
+    message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
+endif()
+
+# -----------------------------------------------------------------------------
+# audio_clip (clip sizing, WAV framing, normalisation)
+#
+# Pure C, and the two load-bearing cases are ones the device cannot show you: a
+# 32-bit overflow in the size arithmetic (a wrapped product is an ordinary small
+# number, so the bug is a short allocation that is then overrun), and the exact
+# 44 WAV header bytes — Gemini rejects raw PCM with a 400 that names no field, so
+# a byte-order slip fails remotely and opaquely instead of here.
+# -----------------------------------------------------------------------------
+add_executable(test_audio_clip
+    "${MAIN_SRC_DIR}/audio_clip.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_audio_clip.c"
+)
+target_link_libraries(test_audio_clip PRIVATE Threads::Threads m)
+add_test(NAME audio_clip COMMAND test_audio_clip)
+
+# -----------------------------------------------------------------------------
+# voice_preroll + voice_endpoint (issue #616: keep the words that triggered a
+# hands-free turn, and stop recording when the speaker stops)
+#
+# Pure C with caller-supplied storage, PCM and clock, so the failures a bench
+# shows only as "the robot ignored me" — the robot's own voice leaking into the
+# pre-roll, stale audio spliced onto the next turn, a pause that never ends the
+# recording, and the uint32 millisecond wrap at day 49 — are each a few lines.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_preroll
+    "${MAIN_SRC_DIR}/voice_preroll.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_preroll.c"
+)
+target_link_libraries(test_voice_preroll PRIVATE Threads::Threads m)
+add_test(NAME voice_preroll COMMAND test_voice_preroll)
+
+add_executable(test_voice_endpoint
+    "${MAIN_SRC_DIR}/voice_endpoint.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_endpoint.c"
+)
+target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
+add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
+
+# -----------------------------------------------------------------------------
+# ota_park (park on open floor before an OTA install): no open heading, a front
+# sensor failing mid-turn, a wall behind, and the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_park
+    "${MAIN_SRC_DIR}/ota_park.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_park.c"
+)
+target_link_libraries(test_ota_park PRIVATE Threads::Threads m)
+add_test(NAME ota_park COMMAND test_ota_park)
+
+# ota_announce (what the robot says before an OTA install, and the postpone
+# window): notes dropped whole when they do not fit, UTF-8 never split, a late
+# postpone refused, and the uint32 millisecond wrap.
+add_executable(test_ota_announce
+    "${MAIN_SRC_DIR}/ota_announce.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_announce.c"
+)
+target_link_libraries(test_ota_announce PRIVATE Threads::Threads m)
+add_test(NAME ota_announce COMMAND test_ota_announce)
+
+# -----------------------------------------------------------------------------
+# http_timing (issue #948: split a voice turn's latency into connect, request
+# and download). Repeated events, phases that never happened and the uint32
+# millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_http_timing
+    "${MAIN_SRC_DIR}/http_timing.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_http_timing.c"
+)
+target_link_libraries(test_http_timing PRIVATE Threads::Threads m)
+add_test(NAME http_timing COMMAND test_http_timing)
+
+# -----------------------------------------------------------------------------
+# speech_trigger (issue #617: start a hands-free turn on a voice, not a slam)
+#
+# Synthetic voiced speech, a click, white noise and in-band tones either side of
+# the sustain time — none of which a bench produces on demand — plus the uint32
+# millisecond wrap in the gap test.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_trigger
+    "${MAIN_SRC_DIR}/speech_trigger.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_trigger.c"
+)
+target_link_libraries(test_speech_trigger PRIVATE Threads::Threads m)
+add_test(NAME speech_trigger COMMAND test_speech_trigger)
+
+# -----------------------------------------------------------------------------
+# audio_player producer accounting (TTS playback ring)
+#
+# audio_player.c is compiled UNMODIFIED against the shims in test/include
+# (freertos/*, driver/*, esp_heap_caps.h) rather than being split behind an
+# #ifdef: the code the test links has to be the code the device runs, or the
+# test pins a transcription instead of the shipped path. Only the ring has real
+# behaviour — see test/host_shims.c.
+#
+# The case it pins is one a bench cannot stage: an utterance whose PCM length
+# leaves an odd remainder after the last 2048-byte batch. That made the write
+# tally drift one byte per utterance, and the consequence surfaced minutes later
+# and in another subsystem — a microphone that had gone permanently deaf.
+# -----------------------------------------------------------------------------
+add_executable(test_audio_player
+    "${MAIN_SRC_DIR}/audio_player.c"
+    # audio_player.c applies the voice effect in its drain loop, so the real
+    # module links in here rather than a stub: a stub would let the two drift,
+    # and the player's own tests would stop covering the call at all.
+    "${MAIN_SRC_DIR}/voice_fx_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_audio_player.c"
+)
+target_compile_definitions(test_audio_player PRIVATE AUDIO_PLAYER_HOST_TEST=1)
+target_link_libraries(test_audio_player PRIVATE Threads::Threads m)
+add_test(NAME audio_player COMMAND test_audio_player)
+
+# -----------------------------------------------------------------------------
+# pca9685_set_pwm_values (vendored esp-idf-lib driver, multi-channel write)
+#
+# The driver is compiled UNMODIFIED from the vendored component against the
+# shims in test/include/pca9685_host, which is added AHEAD of the component so
+# pca9685.h's <i2cdev.h> resolves to the shim. AddressSanitizer is on for this
+# target because the defect it pins is a stack-buffer overflow: the driver
+# indexed a buffer sized for `channels` entries by the absolute channel number,
+# so motor_stop()'s (first_ch = 8, channels = 6) wrote 32 bytes past the end of
+# a 24-byte VLA and the board double-faulted at the first boot with the PCA9685
+# fitted. Content assertions alone could pass on lucky garbage; ASan cannot.
+# -----------------------------------------------------------------------------
+# The driver is a MANAGED component now (main/idf_component.yml), so its source
+# lives under managed_components/ — gitignored, and absent until an ESP-IDF
+# build has run. This target is therefore optional: a fresh checkout runs the
+# other suites, and the driver test appears once the firmware has been built.
+set(PCA9685_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/esp-idf-lib__pca9685")
+if(EXISTS "${PCA9685_MANAGED_DIR}/pca9685.c")
+    add_executable(test_pca9685_multi
+        "${PCA9685_MANAGED_DIR}/pca9685.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_pca9685_multi.c"
+    )
+    target_include_directories(test_pca9685_multi BEFORE PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
+        "${PCA9685_MANAGED_DIR}"
+    )
+    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
+    target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
+    add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
+else()
+    message(STATUS
+        "pca9685_multi: SKIPPED — no managed PCA9685 driver at ${PCA9685_MANAGED_DIR}. "
+        "Run an ESP-IDF build (just robocar::build) to fetch it, then re-run the tests.")
+endif()
+
+# -----------------------------------------------------------------------------
+# pca9685_phase — phase-staggered LEDn encoding
+#
+# Pure C, no shims needed. The invariant with teeth is that staggering moves a
+# pulse within the period without changing its width: get the 12-bit wrap wrong
+# and a motor silently runs at a duty cycle nobody asked for, which on a bench
+# reads as a mechanical or supply fault rather than an arithmetic one. Also
+# pins that full-on/full-off stay FLAG encodings and take no phase — on this
+# board those are the motor direction pins, and a phase offset there would turn
+# a digital level into a ~197 Hz square wave.
+# -----------------------------------------------------------------------------
+add_executable(test_pca9685_phase
+    "${MAIN_SRC_DIR}/pca9685_phase.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_pca9685_phase.c"
+)
+add_test(NAME pca9685_phase COMMAND test_pca9685_phase)
+
+# -----------------------------------------------------------------------------
+# servo_controller init ordering
+#
+# servo_controller.c is compiled UNMODIFIED against the shims in test/include
+# (freertos/*, driver/gpio.h, esp_log.h) plus the pca9685_host i2cdev shim that
+# i2c_bus.h drags in; the i2c_bus itself is a recording stub in the test. The
+# case it pins is init centring the servos through a setter that refuses until
+# init has finished — a failure with no bus traffic to show for it, which on the
+# device read as "Failed to center servos" and a reboot. The write-vs-release
+# cases (issue #1058) run two writers on pthreads; the test supplies its own
+# pthread-backed semaphore shim so the module's lock really contends.
+# -----------------------------------------------------------------------------
+add_executable(test_servo_controller
+    "${MAIN_SRC_DIR}/servo_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_servo_controller.c"
+)
+target_include_directories(test_servo_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
+)
+target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
+add_test(NAME servo_controller COMMAND test_servo_controller)
+
+# -----------------------------------------------------------------------------
+# activity_trace LED shadow expiry
+#
+# activity_trace.c is compiled with ACTIVITY_TRACE_HOST_TEST, which changes
+# nothing but activity_trace_tick()'s linkage so the test can drive the
+# indicator task's loop body directly. The led_controller it writes through and
+# the clock it reads are stubs in the test. The case it pins cannot be staged on
+# a bench: a PCA9685 that silently lost the colour it was told to hold, leaving
+# a held red or blue indicator dark with nothing to correct it.
+# -----------------------------------------------------------------------------
+add_executable(test_activity_trace
+    "${MAIN_SRC_DIR}/activity_trace.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
+)
+target_compile_definitions(test_activity_trace PRIVATE ACTIVITY_TRACE_HOST_TEST=1)
+target_link_libraries(test_activity_trace PRIVATE Threads::Threads m)
+add_test(NAME activity_trace COMMAND test_activity_trace)
+
+# -----------------------------------------------------------------------------
+# i2c_bus activity counters
+#
+# i2c_bus.c is compiled UNMODIFIED against the shims in test/include plus driver
+# stubs in the test, so the counters are exercised through the real
+# i2c_bus_select_channel() gate rather than by poking their statics. The case
+# worth pinning is the one that would lie: a rate whose window stopped advancing
+# because the traffic stopped must read 0, not the last value it remembers.
+# The same gate resets the TCA9548A after I2C_BUS_MUX_RESET_AFTER_FAILURES
+# consecutive failed selects (issue #782); the test records the RESET pin's
+# levels and the low time through recording gpio / esp_rom_delay_us stubs.
+# -----------------------------------------------------------------------------
+add_executable(test_i2c_bus_stats
+    "${MAIN_SRC_DIR}/i2c_bus.c"
+    "${MAIN_SRC_DIR}/pca9685_phase.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_i2c_bus_stats.c"
+)
+target_include_directories(test_i2c_bus_stats BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"  # pca9685.h declarations
+)
+target_link_libraries(test_i2c_bus_stats PRIVATE Threads::Threads m)
+add_test(NAME i2c_bus_stats COMMAND test_i2c_bus_stats)
+
+# -----------------------------------------------------------------------------
+# motor_controller idle re-write suppression
+#
+# motor_controller.c is compiled UNMODIFIED against the shims in test/include;
+# the i2c_bus, the STBY GPIO and the clock are all stubs in the test. The cases
+# it pins are the ones a bench cannot stage: a failed write must not be
+# remembered as applied, the suppression must expire so a chip whose contents
+# drifted is re-asserted, and that expiry must survive the uint32 millisecond
+# wrap at day 49 rather than latching the robot into permanent suppression.
+# -----------------------------------------------------------------------------
+add_executable(test_motor_controller
+    "${MAIN_SRC_DIR}/motor_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_motor_controller.c"
+)
+target_include_directories(test_motor_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
+)
+target_link_libraries(test_motor_controller PRIVATE Threads::Threads m)
+add_test(NAME motor_controller COMMAND test_motor_controller)
+
+# -----------------------------------------------------------------------------
+# LED colour-to-channel placement
+#
+# led_controller.c is compiled UNMODIFIED. Its write path is the same shape as
+# motor_controller.c's — one run of consecutive PCA9685 channels per LED — and
+# carried the same defect: a positional {red, green, blue} array that silently
+# encoded the order of LED_*_R/G/B_CHANNEL in pin_config.h. Reordering those
+# lights the wrong colour with nothing failing, and the bench check for it is
+# "look at an LED and trust your eyes about which leg is which".
+# -----------------------------------------------------------------------------
+add_executable(test_led_controller
+    "${MAIN_SRC_DIR}/led_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_led_controller.c"
+)
+target_include_directories(test_led_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
+)
+target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
+add_test(NAME led_controller COMMAND test_led_controller)
+
+# -----------------------------------------------------------------------------
+# mqtt_command (issue #524) — MQTT command-topic validator/dispatcher
+#
+# mqtt_command.c is deliberately free of ESP-IDF and FreeRTOS (mqtt_logger.c
+# owns everything protocol-specific and calls in with plain ints/chars), so it
+# compiles with no shims at all. The cases worth pinning are the ones a
+# network boundary must never let through: an oversized or non-printable
+# payload, and a message fragmented across multiple MQTT_EVENT_DATA callbacks
+# (event->total_data_len / event->current_data_offset) — a target (the topic)
+# resolved once, with more of the payload still arriving.
+# -----------------------------------------------------------------------------
+add_executable(test_mqtt_command
+    "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_command.c"
+)
+target_link_libraries(test_mqtt_command PRIVATE Threads::Threads m)
+add_test(NAME mqtt_command COMMAND test_mqtt_command)
+
+# -----------------------------------------------------------------------------
+# self_report per-peripheral health (issue #500)
+#
+# self_report.c is compiled UNMODIFIED against the shims in test/include plus
+# the recording stubs in self_report_stubs.c, which back every live health
+# accessor with a settable field. That is the whole point: the hardware phase
+# no longer aborts the boot when one PCA9685-backed peripheral fails, so the
+# facts line is the only thing that says which one is missing — and the case
+# worth pinning (a live I2C bus with exactly one dead peripheral) is precisely
+# the one a bench cannot stage.
+# -----------------------------------------------------------------------------
+add_executable(test_self_report
+    "${MAIN_SRC_DIR}/self_report.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
+    "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
+    "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
+)
+target_include_directories(test_self_report BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
+)
+target_link_libraries(test_self_report PRIVATE Threads::Threads m)
+add_test(NAME self_report COMMAND test_self_report)
+
+# -----------------------------------------------------------------------------
+# ota_version_compare (issue #539 — the OTA manifest poll)
+#
+# Pure C, no ESP-IDF dependency. Compares the manifest's "version" field
+# against esp_app_get_description()->version NUMERICALLY rather than
+# lexically ("0.2.10" > "0.2.9"), and fails CLOSED on anything it cannot
+# parse — a network-fetched string a bench cannot exercise, and the one gate
+# standing between a manifest read and a call to esp_https_ota.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_version_compare
+    "${MAIN_SRC_DIR}/ota_version_compare.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_version_compare.c"
+)
+target_link_libraries(test_ota_version_compare PRIVATE Threads::Threads m)
+add_test(NAME ota_version_compare COMMAND test_ota_version_compare)
+
+# -----------------------------------------------------------------------------
+# ota_update_decision (issue #627 — build SHA in the OTA manifest)
+#
+# Pure C, no ESP-IDF dependency. Combines the version comparison above with
+# the manifest's "buildSha" and the SHA compiled into the firmware: only a
+# strictly newer version with a valid manifest SHA may install, a missing SHA
+# refuses (fail closed), and an equal version is reported by what the SHA
+# comparison found.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_update_decision
+    "${MAIN_SRC_DIR}/ota_update_decision.c"
+    "${MAIN_SRC_DIR}/ota_version_compare.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_update_decision.c"
+)
+target_link_libraries(test_ota_update_decision PRIVATE Threads::Threads m)
+add_test(NAME ota_update_decision COMMAND test_ota_update_decision)
+
+# -----------------------------------------------------------------------------
+# ota_interval (PR #559 review follow-up)
+#
+# Pure C, no ESP-IDF dependency. Reproduces pdMS_TO_TICKS()'s own formula in a
+# 64-bit intermediate so OTA_CHECK_INTERVAL_MIN=360 at CONFIG_FREERTOS_HZ=1000
+# resolves to the exact 21,600,000-tick interval the firmware needs, instead
+# of the ~125,163 ticks (~125 s instead of ~21,600 s) a 32-bit
+# TickType_t-only computation silently wrapped to on this project's non-SMP
+# FreeRTOS kernel.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_interval
+    "${MAIN_SRC_DIR}/ota_interval.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_interval.c"
+)
+target_link_libraries(test_ota_interval PRIVATE Threads::Threads m)
+add_test(NAME ota_interval COMMAND test_ota_interval)
+
+# -----------------------------------------------------------------------------
+# improv_wifi transport and protocol (issues #644, #1056)
+#
+# Compiles the shared component from packages/components/improv-wifi unmodified.
+# Its two ESP-IDF-only hooks are replaced in the test: the UART0 default writer
+# (improv_wifi_uart.c) by a recorder, so the suite can assert which transport a
+# reply took — UART0 by default (brainbox), the injected writer once one is set
+# (robocar's USB-Serial-JTAG console) — and improv_wifi_device_info()
+# (improv_wifi_device_info.c) by fixed strings. The protocol tests check the
+# bytes against the Improv Serial spec and its reference client, sdk-serial-js.
+# -----------------------------------------------------------------------------
+set(IMPROV_WIFI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/improv-wifi")
+add_executable(test_improv_wifi
+    "${IMPROV_WIFI_DIR}/improv_wifi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_wifi.c"
+)
+target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")
+add_test(NAME improv_wifi COMMAND test_improv_wifi)
+
+# -----------------------------------------------------------------------------
+# Console line assembly with Improv packets kept out (review of #1056)
+#
+# console_line.c and the improv-wifi parser, both unmodified, driven with the
+# bytes ESP Web Tools sends. command_task() logs every completed line (and the
+# log reaches the UART0 mirror and the GlitchTip breadcrumb ring), so a
+# credentials packet must never complete one, including across an Improv arm
+# or disarm in the middle of a packet (issue #1087).
+# -----------------------------------------------------------------------------
+add_executable(test_console_line
+    "${MAIN_SRC_DIR}/console_line.c"
+    "${IMPROV_WIFI_DIR}/improv_wifi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_console_line.c"
+)
+target_include_directories(test_console_line PRIVATE "${IMPROV_WIFI_DIR}")
+add_test(NAME console_line COMMAND test_console_line)
+
+# -----------------------------------------------------------------------------
+# improv-wifi's IMPROV_FIRMWARE_NAME escaping (review of #1056)
+#
+# The component turns its project's flasher.json `name` into a C string with
+# improv_c_string_literal(). This builds a definition the same way from a name
+# holding a double quote and backslashes; without the escaping the test file
+# does not compile.
+# -----------------------------------------------------------------------------
+include("${IMPROV_WIFI_DIR}/improv_c_string.cmake")
+improv_c_string_literal(improv_test_firmware_literal "Robo \"Car\" C:\\bench\\")
+add_executable(test_improv_firmware_name
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_firmware_name.c"
+)
+target_compile_definitions(test_improv_firmware_name PRIVATE
+                           "IMPROV_FIRMWARE_NAME=${improv_test_firmware_literal}")
+add_test(NAME improv_firmware_name COMMAND test_improv_firmware_name)
+
+# -----------------------------------------------------------------------------
+# MQTT broker-credential loader (issue #639)
+#
+# credentials_loader.c is compiled unmodified against the in-memory NVS in
+# nvs_shim.c (include/nvs.h). Its output decides whether the MQTT command topic
+# may change anything, and the cases worth pinning are the ones a board reaches
+# without anyone noticing: a half-written NVS pair (which must fall back to
+# credentials.h, never yield a lone username) and an empty or over-long value
+# handed to `mqtt auth`.
+#
+# The source is COPIED into the build tree first, with credentials_fixture.h
+# copied beside it as credentials.h. The loader includes "credentials.h", and
+# the quote form searches the including file's own directory before any -I
+# path — so compiled in place it would pick up the untracked
+# main/credentials.h, whose contents are the CMake stub on one machine and a
+# developer's real broker password on another. configure_file re-copies
+# whenever either source changes, so the copies cannot go stale.
+#
+# Built twice: with broker credentials in the fixture, and without
+# (CREDENTIALS_FIXTURE_NO_MQTT, the CMake stub's shape), so every fallback is
+# asserted both as credentials.h and as "none".
+#
+# Each build also runs a second time with GEMINI_API_KEY set (issue #1088).
+# The loader's last key source is that variable, and a developer who exports
+# it for other tools used to fail five no-broker cases. The suite now clears
+# it itself and sets it only in the case that tests it; the `_with_env` runs
+# hold it to that on every machine, whatever the shell exports.
+# -----------------------------------------------------------------------------
+set(CREDENTIALS_LOADER_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/credentials_loader_src")
+configure_file("${MAIN_SRC_DIR}/credentials_loader.c"
+               "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c" COPYONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+               "${CREDENTIALS_LOADER_COPY_DIR}/credentials.h" COPYONLY)
+foreach(_variant credentials_loader credentials_loader_no_mqtt)
+    add_executable(test_${_variant}
+        "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c"
+        "${MAIN_SRC_DIR}/gemini_key_state.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
+    )
+    add_test(NAME ${_variant} COMMAND test_${_variant})
+    add_test(NAME ${_variant}_with_env COMMAND test_${_variant})
+    set_tests_properties(${_variant}_with_env PROPERTIES
+                         ENVIRONMENT "GEMINI_API_KEY=developer-exported-key")
+endforeach()
+target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)
+
+# -----------------------------------------------------------------------------
+# log_mirror_core (issue #798 — the application log mirrored to UART0 / J15)
+#
+# Pure C, no ESP-IDF dependency. Renders one ESP_LOG line into the vprintf
+# hook's fixed stack buffer with LF -> CRLF expansion. Pins that the result
+# never runs past the buffer, that a cut line is marked and still ends a line,
+# and that an existing CRLF is not doubled — the cases a log line long enough
+# to overflow the buffer would reach only rarely on a bench.
+# -----------------------------------------------------------------------------
+add_executable(test_log_mirror_core
+    "${MAIN_SRC_DIR}/log_mirror_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_log_mirror_core.c"
+)
+add_test(NAME log_mirror_core COMMAND test_log_mirror_core)
+
+# -----------------------------------------------------------------------------
+# net_supervisor_core (issue #846 — network services armed on link-up)
+#
+# Pure C with an injected clock. Pins that a board booted offline starts MQTT
+# and OTA when the link returns, that OTA (and its rollback-confirm timer)
+# starts once per boot, that MQTT follows every edge, and when Improv re-arms,
+# including across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_net_supervisor_core
+    "${MAIN_SRC_DIR}/net_supervisor_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_net_supervisor_core.c"
+)
+add_test(NAME net_supervisor_core COMMAND test_net_supervisor_core)
+
+# -----------------------------------------------------------------------------
+# mqtt_logger client lifecycle (issue #1054 — OTA notify subscription dropped)
+#
+# mqtt_logger.c compiled UNMODIFIED over a recording esp-mqtt
+# (test/include/mqtt_logger_host, ahead of test/include). Pins ADR-028 §2:
+# mqtt_logger_init() creates the client without starting it, so a
+# subscription registered before the first link-up (ota_manager_init()'s
+# check-now topic) is sent on the first connect and again after a link bounce.
+# config.h includes credentials.h, which is untracked; the fixture stands in.
+# -----------------------------------------------------------------------------
+set(MQTT_LOGGER_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/mqtt_logger_fixture")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+               "${MQTT_LOGGER_FIXTURE_DIR}/credentials.h" COPYONLY)
+add_executable(test_mqtt_logger
+    "${MAIN_SRC_DIR}/mqtt_logger.c"
+    "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_logger.c"
+)
+target_include_directories(test_mqtt_logger BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/mqtt_logger_host"
+    "${MQTT_LOGGER_FIXTURE_DIR}"
+)
+# strdup, vasprintf and gettimeofday are outside strict C11.
+target_compile_definitions(test_mqtt_logger PRIVATE _GNU_SOURCE CREDENTIALS_FIXTURE_NO_MQTT=1)
+add_test(NAME mqtt_logger COMMAND test_mqtt_logger)

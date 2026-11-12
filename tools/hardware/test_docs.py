@@ -32,7 +32,7 @@ from hardware.docs import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UNIFIED = REPO_ROOT / "packages/robocar/unified"
+ROBOCAR = REPO_ROOT / "packages/robotics/robocar"
 
 
 def git_init(path: Path) -> None:
@@ -605,33 +605,33 @@ class DocsDiscoveryTest(Fixture):
             check_project(bare, repo_root=Path(tmp.name))
 
 
-class RobocarUnifiedDocsTest(unittest.TestCase):
+class RobocarDocsTest(unittest.TestCase):
     """The acceptance in #461: green on the committed tree, red after a hand edit."""
 
     def copy_project(self) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        proj = Path(tmp.name) / "unified"
+        proj = Path(tmp.name) / "robocar"
         (proj / "main").mkdir(parents=True)
-        shutil.copy(UNIFIED / "hardware.toml", proj)
+        shutil.copy(ROBOCAR / "hardware.toml", proj)
         for name in ("pin_config.h", "planner_task.h", "plan_activity.h"):
-            shutil.copy(UNIFIED / "main" / name, proj / "main")
+            shutil.copy(ROBOCAR / "main" / name, proj / "main")
         for name in ("WIRING.md", "README.md"):
-            shutil.copy(UNIFIED / name, proj)
+            shutil.copy(ROBOCAR / name, proj)
         git_init(proj)
         return proj
 
     def test_the_committed_docs_are_up_to_date(self):
-        self.assertEqual(check_project(UNIFIED), [])
+        self.assertEqual(check_project(ROBOCAR), [])
 
     def test_wiring_carries_every_expected_block(self):
-        text = (UNIFIED / "WIRING.md").read_text(encoding="utf-8")
+        text = (ROBOCAR / "WIRING.md").read_text(encoding="utf-8")
         for name in ("pin-table", "signals:amp", "signals:mux", "power-diagram"):
             self.assertIn(BEGIN(name), text)
 
     def test_the_power_diagram_carries_no_hand_typed_gpio(self):
         # #646: the diagram's GPIO labels come from the join, grouped per part.
-        text = (UNIFIED / "WIRING.md").read_text(encoding="utf-8")
+        text = (ROBOCAR / "WIRING.md").read_text(encoding="utf-8")
         self.assertIn(
             'mcu -.->|"GPIO7 (D8) → BCLK<br/>GPIO8 (D9) → LRC<br/>GPIO9 (D10) → DIN"| amp',
             text,

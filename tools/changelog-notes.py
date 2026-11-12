@@ -5,7 +5,7 @@
 
 generate-flasher-manifests.sh calls this for every project and writes the
 result into its OTA manifest as "notes", a top-level field ESP Web Tools
-ignores (as it does "buildSha"). robocar-unified reads it to say what an update
+ignores (as it does "buildSha"). robocar reads it to say what an update
 changes before installing it.
 
 Only the Features, Bug Fixes and Performance Improvements subsections of the

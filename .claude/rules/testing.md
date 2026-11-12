@@ -7,7 +7,7 @@ reviewed: 2026-11-03
 ## Python Simulation Tests
 
 ```bash
-cd packages/robocar/simulation
+cd packages/robotics/robocar/simulation
 uv run pytest tests/ --cov
 ```
 
@@ -76,13 +76,13 @@ change the pin and say which parts move (ADR-035).
 
 - Static analysis via `cppcheck` (run in CI)
 - Format checking via `clang-format --dry-run`
-- **Host unit tests exist for robocar-unified** — the suites under
-  `packages/robocar/unified/test/` (one `add_test` each in its
+- **Host unit tests exist for robocar** — the suites under
+  `packages/robotics/robocar/test/` (one `add_test` each in its
   `CMakeLists.txt`; the recipe's ctest summary gives the current count), run
   natively with no ESP-IDF container:
 
   ```bash
-  just robocar-unified::test
+  just robocar::test
   ```
 
   `test/CMakeLists.txt` compiles the ESP-IDF-free modules straight from `main/`

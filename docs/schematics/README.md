@@ -287,7 +287,7 @@ router.finish()
 
   A wire routed with no `net=` is drawn black and fails the tests for the
   real circuits. The one literal left is the gray `SD_MODE` annotation arrow
-  in `robocar_unified.py`: it marks a pin left floating, not a net.
+  in `robocar.py`: it marks a pin left floating, not a net.
 - **Output format**: SVG is the source of truth — schemdraw writes
   byte-deterministic SVG, so a change to it is reliable signal that the
   rendered output is out of sync with `circuits/<name>.py`. The PNG is
@@ -302,7 +302,7 @@ the project's `WIRING.md`). Keep the schematic and that document in sync when
 pins change.
 
 A project with a `hardware.toml` (ADR-021) does not transcribe its MCU wiring.
-`robocar_unified.py` and `balancebot.py` load the join live at render time and ask
+`robocar.py` and `balancebot.py` load the join live at render time and ask
 `hardware_nets.JoinedNets` for each net by pin role —
 `router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")` — so the XIAO pad comes
 from `pin_config.h` and the board reference, and the part pin from the
@@ -331,7 +331,7 @@ these too.
 `.github/workflows/schematics-check.yml` re-renders all circuits on every PR
 that touches `docs/schematics/**` — or an input a circuit reads at render
 time: the board references in `docs/reference/boards/`, `tools/hardware/`,
-and the `main/pin_config.h` and `hardware.toml` that robocar-unified's wiring
+and the `main/pin_config.h` and `hardware.toml` that robocar's wiring
 and labels come from — and fails if `images/*.svg` would change. A circuit that starts
 reading a new file needs that file on the workflow's trigger paths, or the
 SVG can go stale with no check running.
@@ -349,8 +349,8 @@ the regenerated SVG and PNG, plus any PDF it recompiled.
 
 ## Embedded in a build guide
 
-A Typst document can embed a rendered PNG — the robocar-unified build guide
-embeds `images/robocar_unified.png` — and its committed PDF then carries the
+A Typst document can embed a rendered PNG — the robocar build guide
+embeds `images/robocar.png` — and its committed PDF then carries the
 image's bytes. Re-rendering that circuit leaves the PDF stale, and
 `build-guide-check.yml` fails on it even though this directory's own check
 passes (issue #595).

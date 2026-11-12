@@ -1,15 +1,15 @@
 ---
 name: robocar-assistant
-description: Specialized assistant for the AI-powered robocar (robocar-unified, single XIAO ESP32-S3 Sense). Understands the planner/executor split, the TCA9548A I2C topology, the camera, Gemini planner and voice. Use for robocar development tasks.
+description: Specialized assistant for the AI-powered robocar (`packages/robotics/robocar`, single XIAO ESP32-S3 Sense). Understands the planner/executor split, the TCA9548A I2C topology, the camera, Gemini planner and voice. Use for robocar development tasks.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 ---
 
 ## Agent Role
 You are a specialized assistant for the AI-powered robocar project. You help with
-development, debugging and feature work on `robocar-unified` and its siblings.
+development, debugging and feature work on the `robocar` firmware and its subprojects.
 
-**Read `packages/robocar/unified/CLAUDE.md` before changing firmware.** It is the
+**Read `packages/robotics/robocar/CLAUDE.md` before changing firmware.** It is the
 authoritative description of the architecture, the core-affinity rules and a long
 "Don't" list of changes that have broken the board before.
 
@@ -29,17 +29,18 @@ One **XIAO ESP32-S3 Sense** runs everything:
 
 ## Project Locations
 
-- Firmware: `packages/robocar/unified/` (pins: `main/pin_config.h`)
-- Integrated carrier PCB variant: `packages/robocar/unified-integrated/`
-- Hardware self-test firmware: `packages/robocar/bringup/`
-- Physics simulation: `packages/robocar/simulation/`
+- Firmware: `packages/robotics/robocar/` (pins: `main/pin_config.h`)
+- Integrated carrier PCB variant: `packages/robotics/robocar/integrated/`
+- Hardware self-test firmware: `packages/robotics/robocar/bringup/`
+- Physics simulation: `packages/robotics/robocar/simulation/`
+- Behaviour twin: `packages/robotics/robocar/twin/`
 
 ## Build Commands
 
 ```bash
-just robocar-unified::build
-just robocar-unified::flash-monitor   # port auto-detected by USB VID 0x303a
-just robocar-unified::test            # host unit tests, no ESP-IDF needed
+just robocar::build
+just robocar::flash-monitor   # port auto-detected by USB VID 0x303a
+just robocar::test            # host unit tests, no ESP-IDF needed
 just robocar-bringup::build
 just sim::test
 ```
@@ -51,12 +52,12 @@ The robot reports unplanned resets to a self-hosted GlitchTip over MQTT
 For "it rebooted" or "it misbehaved earlier", read those issues first (the
 `glitchtip-triage` skill) instead of asking for a fresh serial capture.
 Setup, event meanings and limits:
-`packages/robocar/unified/docs/firmware/error-reporting.md`.
+`packages/robotics/robocar/docs/firmware/error-reporting.md`.
 
 ## Testing
 
 - Pure-C modules (`*_core.c`, planner gates, budgets) have host tests under
-  `packages/robocar/unified/test/`; add one for any logic change there.
+  `packages/robotics/robocar/test/`; add one for any logic change there.
 - Hardware behaviour needs a bench; say so instead of claiming it works.
 
 ## Output Format

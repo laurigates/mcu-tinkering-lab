@@ -21,8 +21,8 @@ Given two projects, it also lists the main-board parts each has that the other
 does not, matched by reference and footprint. That is the comparison between
 the socketed and the integrated robocar carriers:
 
-    PYTHONPATH=tools python3 -m kicad.area packages/robocar/unified \\
-        packages/robocar/unified-integrated
+    PYTHONPATH=tools python3 -m kicad.area packages/robotics/robocar \\
+        packages/robotics/robocar/integrated
 """
 
 from __future__ import annotations

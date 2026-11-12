@@ -1,14 +1,14 @@
 # OV3660 — 3MP CMOS Image Sensor (OmniBSI, DVP)
 
 **Manufacturer:** OmniVision Technologies
-**Used in:** robocar-unified, on the Seeed XIAO ESP32-S3 Sense camera board
+**Used in:** robocar, on the Seeed XIAO ESP32-S3 Sense camera board
 ([`../boards/xiao-esp32s3-sense.md`](../boards/xiao-esp32s3-sense.md)). The
 board logs `PID=0x3660` at boot; `camera_pins.h` called it an OV2640 for years,
 which was wrong (see
-[`camera-and-log.md`](../../../packages/robocar/unified/docs/firmware/camera-and-log.md#the-sensor-is-an-ov3660-not-an-ov2640)
+[`camera-and-log.md`](../../../packages/robotics/robocar/docs/firmware/camera-and-log.md#the-sensor-is-an-ov3660-not-an-ov2640)
 and [`camera-sensor-identity.md`](../../../.claude/rules/camera-sensor-identity.md)).
 The firmware runs it at QVGA JPEG, quality 15, `fb_count = 2`, XCLK 20 MHz
-(`packages/robocar/unified/main/camera.c` lines 41–63).
+(`packages/robotics/robocar/main/camera.c` lines 41–63).
 
 **Differs from the [OV2640](camera--ov2640.md):** 16-bit register addresses
 (no bank switching), SCCB address 0x3C rather than 0x30, and
@@ -102,7 +102,7 @@ with 16-bit-addressed SCCB reads and accepts only `0x3660`, logging
 address 0x3C, so probing the address alone cannot tell the two apart.
 
 The robot's boot log reports `PID=0x3660`
-([`camera-and-log.md`](../../../packages/robocar/unified/docs/firmware/camera-and-log.md#the-sensor-is-an-ov3660-not-an-ov2640)),
+([`camera-and-log.md`](../../../packages/robotics/robocar/docs/firmware/camera-and-log.md#the-sensor-is-an-ov3660-not-an-ov2640)),
 which matches the datasheet's 0x36/0x60.
 
 ## Exposure, gain and the gain ceiling

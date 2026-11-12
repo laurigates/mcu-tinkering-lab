@@ -22,7 +22,7 @@ therefore inert for them:
                      ``speechMetadata.style``. gemini-3.8-flash-tts reads the
                      text as a verbatim transcript, so the preview's
                      "<style>: <text>" prefix would be spoken. This is how
-                     robocar-unified's `voice_persona_t.tts_style` reaches the
+                     robocar's `voice_persona_t.tts_style` reaches the
                      model (tts_request_build() in main/tts_request.c), so a
                      sweep over candidate directives here auditions the exact
                      mechanism the firmware uses.
@@ -48,7 +48,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-# The model robocar-unified's firmware calls (TTS_MODEL in main/tts_request.h).
+# The model robocar's firmware calls (TTS_MODEL in main/tts_request.h).
 # gemini-3.1-flash-tts-preview has a listed shutdown of 2026-11-17 (issue #844);
 # Flash-Lite TTS has no Finnish.
 MODEL = "gemini-3.8-flash-tts"
@@ -105,7 +105,7 @@ def pcm_from_inline(data: bytes, mime: str | None) -> bytes:
 def build_contents(text: str, style: str = "") -> types.Content:
     """The request content: the text verbatim, the style beside it.
 
-    Same shape as tts_request_build() in robocar-unified's firmware. No style
+    Same shape as tts_request_build() in robocar's firmware. No style
     sends no speechMetadata at all rather than an empty one.
     """
     part = types.Part(
@@ -247,7 +247,7 @@ def main() -> int:
 
     # The voices file is a parameter so a second project can drive the same
     # generator with its own vocabulary instead of copying this script — see
-    # packages/robocar/bringup/tools/voices.json. Defaults to the sibling file,
+    # packages/robotics/robocar/bringup/tools/voices.json. Defaults to the sibling file,
     # so gamepad-synth's own `just tts-generate` is unchanged.
     voices_path = (
         Path(argv[1]).resolve()

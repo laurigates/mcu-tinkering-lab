@@ -12,18 +12,24 @@ configure time) before anything is written:
   <commit|branch> clone the repo locally into tmp/flash/<sha>, copy the
                   gitignored main/credentials.h across, build there; the image
                   must embed exactly <sha>
-  <version tag>   "v0.2.17", "0.2.17" or "<tag-prefix>0.2.17": download the
+  <version tag>   "v0.2.24", "0.2.24" or "<tag-prefix>0.2.24": download the
                   prebuilt parts from that GitHub release when it carries all
                   four, otherwise build the tag's commit as above; either way
                   the image must embed the tag's commit
+
+The project directory, image stem and tag prefix given are used for every ref.
+A commit or release from before one of them changed is refused: robocar's
+releases up to 0.2.23 are tagged robocar-unified-v* and its commits before the
+move have no packages/robotics/robocar. Flash those from a checkout of that
+commit, with the recipe it carries.
 
 It prints shell assignments for the recipe to eval, SRC_DIR (a directory with
 the usual build/ layout) plus SHA and SOURCE; progress goes to stderr. The
 recipe then cds into SRC_DIR and runs its own esptool line, so the files and
 offsets stay literal for tools/check-flash-recipes.py.
 
-Run:   python3 tools/flash-source.py --project-dir packages/robocar/unified \\
-           --bin robocar-unified --tag-prefix robocar-unified-v [REF]
+Run:   python3 tools/flash-source.py --project-dir packages/robotics/robocar \\
+           --bin robocar --tag-prefix robocar-v [REF]
 Exit:  0 ready to flash; 1 on any mismatch or failure (nothing is flashed).
 Tests: python3 -m unittest tools/test_flash_source.py
 """
@@ -180,6 +186,12 @@ def build_commit(
         # and the image would embed "unknown").
         git(root, "clone", "-q", "--local", "--no-checkout", str(root), str(clone))
     git(clone, "checkout", "-q", "--detach", sha)
+    if not (clone / project).is_dir():
+        raise FlashSourceError(
+            f"{sha[:12]} has no {project}: the commit predates the project's "
+            "current directory, so this recipe cannot build it; flash it from a "
+            "checkout of that commit"
+        )
     creds = root / project / "main" / "credentials.h"
     if creds.is_file():
         shutil.copy2(creds, clone / project / "main" / "credentials.h")
@@ -259,13 +271,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--project-dir",
         required=True,
-        help="repo-relative, e.g. packages/robocar/unified",
+        help="repo-relative, e.g. packages/robotics/robocar",
     )
+    parser.add_argument("--bin", required=True, help="app image stem, e.g. robocar")
     parser.add_argument(
-        "--bin", required=True, help="app image stem, e.g. robocar-unified"
-    )
-    parser.add_argument(
-        "--tag-prefix", required=True, help="release tag prefix, e.g. robocar-unified-v"
+        "--tag-prefix", required=True, help="release tag prefix, e.g. robocar-v"
     )
     parser.add_argument(
         "ref",

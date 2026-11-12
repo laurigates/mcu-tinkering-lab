@@ -10,7 +10,7 @@ paths:
 # Gemini API: Model-ID / thinkingConfig / Token-Budget Drift, and Prompted TTS Style
 
 The Google Gemini API (`generativelanguage.googleapis.com`) is called from
-several projects here — `robocar/unified`,
+several projects here — `robotics/robocar`,
 `camera-vision/gemini-vision`, `thinkpack/brainbox`, `games/nfc-scavenger-hunt`.
 Its request surface **moves under you**: ids get suffixes, config fields get
 renamed, and moving aliases (`*-latest`) repoint to newer model generations with
@@ -53,7 +53,7 @@ the string form instead:
 
 The 400 is opaque by default because it names nothing — **log the response body
 at ERROR level**, not DEBUG, or you get a status code and no clue which field the
-API rejected. (robocar-unified's narrate path hid this at `ESP_LOGD` for exactly
+API rejected. (robocar's narrate path hid this at `ESP_LOGD` for exactly
 that reason.)
 
 ## 3. `maxOutputTokens` is a *combined* budget — thinking is spent first, and varies

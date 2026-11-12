@@ -3,7 +3,7 @@
  * @brief Default Improv reply transport: UART0.
  *
  * Kept apart from improv_wifi.c so the protocol code has no driver dependency
- * and compiles in the host tests (packages/robocar/unified/test/).
+ * and compiles in the host tests (packages/robotics/robocar/test/).
  */
 
 #include "driver/uart.h"

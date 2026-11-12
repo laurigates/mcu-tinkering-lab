@@ -61,13 +61,16 @@ class CheckSha(unittest.TestCase):
 
 
 class TagCandidates(unittest.TestCase):
-    P = "robocar-unified-v"
+    P = "robocar-v"
 
     def test_version_forms(self):
-        for ref in ("v0.2.17", "0.2.17", "robocar-unified-v0.2.17"):
-            self.assertEqual(
-                fs.tag_candidates(ref, self.P), ["robocar-unified-v0.2.17"]
-            )
+        for ref in ("v0.2.24", "0.2.24", "robocar-v0.2.24"):
+            self.assertEqual(fs.tag_candidates(ref, self.P), ["robocar-v0.2.24"])
+
+    def test_a_tag_from_before_the_rename_is_not_a_release_tag(self):
+        # No legacy prefix: robocar-unified-v0.2.17 is resolved as a plain git
+        # ref, and its commit is then refused for lacking the project directory.
+        self.assertEqual(fs.tag_candidates("robocar-unified-v0.2.17", self.P), [])
 
     def test_branches_and_shas_are_not_tags(self):
         for ref in ("main", "fix/robocar-drive-reverse", SHA, "vacation"):
@@ -76,24 +79,24 @@ class TagCandidates(unittest.TestCase):
 
 class ReleaseParts(unittest.TestCase):
     def test_every_build_part_has_a_prefixed_asset(self):
-        parts = fs.release_parts("robocar-unified")
+        parts = fs.release_parts("robocar")
         self.assertEqual(
             parts,
             {
-                "build/bootloader/bootloader.bin": "robocar-unified-bootloader.bin",
-                "build/partition_table/partition-table.bin": "robocar-unified-partition-table.bin",
-                "build/ota_data_initial.bin": "robocar-unified-ota_data_initial.bin",
-                "build/robocar-unified.bin": "robocar-unified.bin",
+                "build/bootloader/bootloader.bin": "robocar-bootloader.bin",
+                "build/partition_table/partition-table.bin": "robocar-partition-table.bin",
+                "build/ota_data_initial.bin": "robocar-ota_data_initial.bin",
+                "build/robocar.bin": "robocar.bin",
             },
         )
 
 
 class Assignments(unittest.TestCase):
     def test_eval_safe(self):
-        out = fs.assignments(Path("/tmp/a dir/x"), SHA, "release robocar-unified-v1")
+        out = fs.assignments(Path("/tmp/a dir/x"), SHA, "release robocar-v1")
         parsed = dict(line.split("=", 1) for line in out.splitlines())
         self.assertEqual(shlex.split(parsed["SRC_DIR"]), ["/tmp/a dir/x"])
-        self.assertEqual(shlex.split(parsed["SOURCE"]), ["release robocar-unified-v1"])
+        self.assertEqual(shlex.split(parsed["SOURCE"]), ["release robocar-v1"])
 
 
 class CheckoutSha(unittest.TestCase):
@@ -128,6 +131,16 @@ class CheckoutSha(unittest.TestCase):
     def test_tracked_change_is_dirty(self):
         (self.root / "f.txt").write_text("two\n")
         self.assertEqual(fs.checkout_sha(self.root), self.head + "-dirty")
+
+    def test_a_commit_without_the_project_directory_is_refused(self):
+        # A commit from before the project moved to its current directory:
+        # nothing is built, and the error says how to flash it.
+        with self.assertRaises(fs.FlashSourceError) as caught:
+            fs.build_commit(
+                self.root, "packages/robotics/robocar", "robocar", self.head
+            )
+        self.assertIn("has no packages/robotics/robocar", str(caught.exception))
+        self.assertIn("checkout of that commit", str(caught.exception))
 
     def test_untracked_file_is_not_dirty(self):
         (self.root / "new.txt").write_text("x\n")

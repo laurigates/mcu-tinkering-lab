@@ -1,10 +1,16 @@
 [
   {
     "system": "esp32",
-    "project": "robocar-unified",
-    "path": "robocar/unified",
+    "project": "robocar",
+    "path": "robotics/robocar",
     "target": "esp32s3",
     "fetch_bluepad32": false,
+    "exclude_paths": [
+      "robotics/robocar/bringup",
+      "robotics/robocar/integrated",
+      "robotics/robocar/simulation",
+      "robotics/robocar/twin"
+    ],
     "extra_paths": [
       "components/improv-wifi",
       "components/ota-github",
@@ -21,11 +27,11 @@
   {
     "system": "esp32",
     "project": "robocar-bringup",
-    "path": "robocar/bringup",
+    "path": "robotics/robocar/bringup",
     "target": "esp32s3",
     "fetch_bluepad32": false,
     "extra_paths": [
-      "robocar/unified/main",
+      "robotics/robocar/main",
       "components/improv-wifi",
       "components/ota-github",
       "components/thinkpack-audio",

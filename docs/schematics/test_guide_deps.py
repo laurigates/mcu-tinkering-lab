@@ -62,11 +62,11 @@ def repo(tmp_path: Path) -> Path:
 
 def test_embedded_images_reads_relative_and_root_relative_paths():
     text = (
-        '#image("../../../../docs/schematics/images/robocar_unified.png")\n'
+        '#image("../../../../docs/schematics/images/robocar.png")\n'
         '#image("/docs/schematics/images/balancebot.svg", width: 50%)\n'
         '#image("photos/board.jpg")\n'
     )
-    assert embedded_images(text) == {"robocar_unified.png", "balancebot.svg"}
+    assert embedded_images(text) == {"robocar.png", "balancebot.svg"}
 
 
 def test_embedded_images_ignores_a_document_with_no_schematic():
@@ -74,8 +74,8 @@ def test_embedded_images_ignores_a_document_with_no_schematic():
 
 
 def test_project_dir_strips_the_docs_component():
-    assert project_dir("packages/robocar/unified/docs/build-guide.typ") == (
-        "packages/robocar/unified"
+    assert project_dir("packages/robotics/robocar/docs/build-guide.typ") == (
+        "packages/robotics/robocar"
     )
 
 

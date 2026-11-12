@@ -20,7 +20,8 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("changelog-notes.py")
 
-# The shape release-please writes (packages/robocar/unified/CHANGELOG.md).
+# The shape release-please writes (packages/robotics/robocar/CHANGELOG.md,
+# whose 0.2.17 and 0.2.18 sections predate the rename from robocar-unified).
 CHANGELOG = textwrap.dedent(
     """\
     # Changelog

@@ -113,10 +113,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("do not edit it or the .kicad_pcb by hand", out)
 
     def test_hint_names_the_just_module_not_the_directory(self):
-        self.justfile.write_text("mod robocar-unified 'packages/demo'\n")
+        self.justfile.write_text("mod robocar 'packages/demo'\n")
         code, out = self.run_main()
         self.assertEqual(code, 1)
-        self.assertIn("just robocar-unified::carrier-check", out)
+        self.assertIn("just robocar::carrier-check", out)
         self.assertNotIn("demo::", out)
 
     def test_stamp_that_is_not_json(self):

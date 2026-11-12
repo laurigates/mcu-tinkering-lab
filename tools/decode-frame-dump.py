@@ -3,9 +3,9 @@
 # requires-python = ">=3.11"
 # dependencies = ["pillow"]
 # ///
-"""Recover camera frames from a robocar-unified serial log.
+"""Recover camera frames from a robocar serial log.
 
-The firmware (packages/robocar/unified/main/frame_dump.c) emits the exact JPEG
+The firmware (packages/robotics/robocar/main/frame_dump.c) emits the exact JPEG
 it hands to Gemini, base64-framed, interleaved with ordinary ESP_LOG output:
 
     SNAPBEGIN seq=1 len=11423 crc=5276e4c6 w=320 h=240 pid=3660 gain=62 exp=1248 ceil=248

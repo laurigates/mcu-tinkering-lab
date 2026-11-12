@@ -37,25 +37,23 @@ echo "  2) camera-vision  — camera / AI vision projects"
 echo "  3) games          — games, scavenger hunts"
 echo "  4) input-gaming   — gamepads, controllers, bridges"
 echo "  5) networking     — WiFi tests, VPN, network tools"
-echo "  6) robocar        — robocar subsystem"
-echo "  7) robotics       — motion-control robotics"
-echo "  8) sensors        — sensor firmware"
-echo "  9) thinkpack      — ThinkPack ESP-NOW mesh boxes"
-echo " 10) usb-tools      — USB tools and protocol firmware"
-echo " 11) other          — type a custom domain folder name"
-read -p "Choice [1-11]: " DOMAIN_CHOICE
+echo "  6) robotics       — motion-control robotics"
+echo "  7) sensors        — sensor firmware"
+echo "  8) thinkpack      — ThinkPack ESP-NOW mesh boxes"
+echo "  9) usb-tools      — USB tools and protocol firmware"
+echo " 10) other          — type a custom domain folder name"
+read -p "Choice [1-10]: " DOMAIN_CHOICE
 case $DOMAIN_CHOICE in
     1) DOMAIN="audio" ;;
     2) DOMAIN="camera-vision" ;;
     3) DOMAIN="games" ;;
     4) DOMAIN="input-gaming" ;;
     5) DOMAIN="networking" ;;
-    6) DOMAIN="robocar" ;;
-    7) DOMAIN="robotics" ;;
-    8) DOMAIN="sensors" ;;
-    9) DOMAIN="thinkpack" ;;
-    10) DOMAIN="usb-tools" ;;
-    11) read -p "Domain folder name: " DOMAIN ;;
+    6) DOMAIN="robotics" ;;
+    7) DOMAIN="sensors" ;;
+    8) DOMAIN="thinkpack" ;;
+    9) DOMAIN="usb-tools" ;;
+    10) read -p "Domain folder name: " DOMAIN ;;
     *) echo -e "${RED}Invalid choice${NC}"; exit 1 ;;
 esac
 

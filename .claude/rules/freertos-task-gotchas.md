@@ -5,7 +5,7 @@ paths:
 ---
 # FreeRTOS Task Gotchas on ESP-IDF: Yield-on-Overrun and TLS Stack Sizing
 
-Two independent task-authoring traps found bringing up the robocar-unified
+Two independent task-authoring traps found bringing up the robocar
 firmware. Both crash (task watchdog / stack overflow), both are intermittent
 enough to pass a quick test and fail later.
 

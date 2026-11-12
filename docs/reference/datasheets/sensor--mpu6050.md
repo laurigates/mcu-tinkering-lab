@@ -3,8 +3,8 @@
 **Used in:** balancebot (fitted, on a [GY-521 breakout](../boards/gy-521.md),
 I2C1 at 400 kHz, driver `packages/robotics/balancebot/src/mpu6050.c`);
 glowbug (`packages/thinkpack/glowbug/main/imu.c`, I2C at 100 kHz, accelerometer
-only). robocar-unified reserves TCA9548A channels 5–7 for "IMU / ToF / future
-sensors" (`packages/robocar/unified/main/pin_config.h`, `WIRING.md`) but
+only). robocar reserves TCA9548A channels 5–7 for "IMU / ToF / future
+sensors" (`packages/robotics/robocar/main/pin_config.h`, `WIRING.md`) but
 assigns no IMU to a channel yet.
 
 The MPU-6000 and MPU-6050 are one die in two packagings: "identical to each

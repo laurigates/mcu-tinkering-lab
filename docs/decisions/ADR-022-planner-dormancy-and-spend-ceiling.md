@@ -185,5 +185,5 @@ already omitted when muted. Not the lever.
   layer in from this one, and the source of `ambient_audio_event()`
 - `.claude/rules/stateless-model-gating.md` §4 — a gate feeding a stateless
   prompt must fail closed; the audio-gate fail-open this decision is shaped by
-- `packages/robocar/unified/main/plan_activity.h`, `plan_budget.h` — the design
+- `packages/robotics/robocar/main/plan_activity.h`, `plan_budget.h` — the design
   arguments in full, beside the code

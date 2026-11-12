@@ -201,7 +201,7 @@ jobs:
           done <<<"$docs"
           if [ "$status" -ne 0 ]; then
             echo "::error::One or more Typst documents are out of date. Regenerate with the project's own recipe, which pins the same CLI version and flags used here:"
-            echo "::error::  just <project>::build-guide     # e.g. just robocar-unified::build-guide"
+            echo "::error::  just <project>::build-guide     # e.g. just robocar::build-guide"
             echo "::error::then commit the regenerated pin_defs.typ and PDF."
             echo "::error::Equivalent by hand: mise exec typst@${TYPST_VERSION} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/<doc>.typ <path>/<doc>.pdf"
             exit 1

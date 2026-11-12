@@ -8,7 +8,9 @@ when one of these defines it:
   the Dockerfile builds on (`just kconfig-symbols::idf`). It holds every
   target's symbols, so a symbol valid only on another target is not caught;
 * the project's own components: Kconfig* files under the project directory and
-  in the components its EXTRA_COMPONENT_DIRS reach (parsed from the repo);
+  in the components its EXTRA_COMPONENT_DIRS reach (parsed from the repo). A
+  nested ESP-IDF project (robocar's bringup, inside the firmware's directory)
+  is a separate build, so its Kconfig files and manifests are left out;
 * its managed components: `components/<ns>__<name>@<version>.txt` for every
   component an idf_component.yml of the project or of those components
   declares, and their recorded dependencies, transitively
@@ -81,11 +83,15 @@ def component_lists(directory: Path = COMPONENTS_DIR) -> Components:
     return out
 
 
-def _files(root: Path, predicate) -> list[Path]:
+def _files(root: Path, predicate, nested: tuple[Path, ...] = ()) -> list[Path]:
+    """Files under `root` whose name passes `predicate`, outside SKIP_DIRS and
+    outside the `nested` project directories."""
     found = []
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root).parts
         if any(p in SKIP_DIRS for p in rel[:-1]) or not path.is_file():
+            continue
+        if any(n in path.parents for n in nested):
             continue
         if predicate(path.name):
             found.append(path)
@@ -146,10 +152,12 @@ def known_symbols(
     roots, externals = component_roots(project_dir)
     symbols = set(idf.symbols)
     pending: list[str] = list(externals)
+    nested_project_dirs = _extra_paths_module().nested_project_dirs
     for root in roots:
-        for path in _files(root, lambda n: n.startswith("Kconfig")):
+        nested = tuple(nested_project_dirs(root))
+        for path in _files(root, lambda n: n.startswith("Kconfig"), nested):
             symbols |= kconfig_symbols(path.read_text(encoding="utf-8"))
-        for path in _files(root, lambda n: n == "idf_component.yml"):
+        for path in _files(root, lambda n: n == "idf_component.yml", nested):
             pending.extend(manifest_dependencies(path.read_text(encoding="utf-8")))
     seen: set[str] = set()
     recorded, unrecorded = [], []

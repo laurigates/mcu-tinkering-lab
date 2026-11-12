@@ -23,7 +23,7 @@ export const meta = {
 //   final     directory name under root for the refined winner (default "print")
 //   deliverables  what an entry directory must contain (default: design.py, README.md,
 //             gate outputs)
-// The pan-tilt run (packages/robocar/unified/hardware/pan-tilt) is the worked example.
+// The pan-tilt run (packages/robotics/robocar/hardware/pan-tilt) is the worked example.
 
 const A = args || {}
 for (const k of ['problem', 'root', 'gates', 'entrants', 'lenses']) {

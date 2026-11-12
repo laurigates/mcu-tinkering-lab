@@ -3,7 +3,7 @@
 **Candidate, not yet bought.** A breakout for ST's VL53L8CX multizone
 time-of-flight sensor, with a 3.3 V and a 1.8 V regulator and an NXS0108 level
 shifter, so it runs from one 3.2–5.5 V supply with I/O at the VIN level.
-Considered for robocar-unified as a forward-and-down floor-edge and obstacle
+Considered for robocar as a forward-and-down floor-edge and obstacle
 sensor on a free TCA9548A channel (5–7). For the silicon see
 [`sensor--vl53l8cx.md`](../datasheets/sensor--vl53l8cx.md).
 
@@ -139,14 +139,14 @@ on at one target (`vl53l8cx_api.h` lines 164–165, 253–267, 288–292), so ab
 1.4 kB (the per-field sizes in UM3109 Table 3). The firmware image and default
 configuration are constant arrays in `vl53l8cx_buffers.h`.
 
-## For robocar-unified, if it is bought
+## For robocar, if it is bought
 
 Inferences from the facts above and from this repo's code; none is measured.
 
 - **The mux caps the clock at 400 kHz, and the bus currently runs at 100 kHz.**
   The TCA9548A "is a Fast-mode part" and the whole bus runs at
   `I2C_MASTER_FREQ_HZ` 100 kHz because of the RCWL-1601s
-  (`packages/robocar/unified/main/i2c_bus.c` lines 173–183,
+  (`packages/robotics/robocar/main/i2c_bus.c` lines 173–183,
   `main/pin_config.h` line 39). At 100 kHz the sibling's measured upload is
   9.4 s; at 400 kHz, 2.5–2.8 s (SparkFun Example2).
 - **The upload holds the bus the motors use.** The PCA9685 on channel 0 is

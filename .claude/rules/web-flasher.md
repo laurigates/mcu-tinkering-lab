@@ -75,7 +75,7 @@ ESP Web Tools requires decimal integer offsets (not hex). The manifests are gene
 
 Every manifest also carries a top-level `buildSha` — the full commit the
 binaries were built from (`BUILD_SHA`, default `git rev-parse HEAD`). ESP Web
-Tools ignores it; robocar-unified's OTA reads it, because every release
+Tools ignores it; robocar's OTA reads it, because every release
 rebuilds every project at the triggering commit and a version alone cannot
 name the build (issue #627). A project that compiles its own commit into the
 app declares `"embedsBuildSha": true` in `flasher.json`, and the release and
@@ -86,7 +86,7 @@ PR builds then check the binary contains it — see
 that name, for the GlitchTip bridge to symbolicate crash backtraces by version
 (ADR-033). It must equal the ELF's file name in `build/` (`<project>.elf`), and
 it shares `otaAssetName`'s uniqueness guard. The ELF goes on the release only,
-never on Pages. Only robocar-unified sets it.
+never on Pages. Only robocar sets it.
 
 **`releaseFlashParts` (optional, `true`)** also attaches the bootloader,
 partition table and `ota_data_initial.bin` to the release as
@@ -94,7 +94,7 @@ partition table and `ota_data_initial.bin` to the release as
 `-ota_data_initial.bin`, so `just <project>::flash <version tag>` can write a
 release without building it (`tools/flash-source.py`). Pages holds only the
 latest set, and a partition table can change between releases. Only
-robocar-unified sets it.
+robocar sets it.
 
 ## Key Constraints
 
@@ -123,7 +123,7 @@ robocar-unified sets it.
 
 - `docs/flasher/index.html` — Flasher web page (source, deployed to Pages root)
 - `.github/workflows/build-firmware.yml` — Builds firmware, generates manifests, deploys Pages
-- `packages/*/*/partitions.csv` — Source of truth for flash offsets when
+- `packages/**/partitions.csv` — Source of truth for flash offsets when
   `sdkconfig.defaults` selects it (`CONFIG_PARTITION_TABLE_CUSTOM=y`)
 - `tools/lib/idf-partition-tables/` — ESP-IDF's built-in tables with offsets
   filled in, for projects on a preset

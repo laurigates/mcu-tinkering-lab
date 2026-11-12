@@ -20,7 +20,7 @@ Invocation:
 `packages/<domain>/<project-name>`.
 
 The canonical source of truth is
-`packages/robocar/unified/main/wifi_manager.c`. That project
+`packages/robotics/robocar/main/wifi_manager.c`. That project
 runs reliably on XIAO ESP32-S3 Sense in the same environment as every other
 WiFi project in this monorepo, so its configuration is the reference.
 
@@ -187,7 +187,7 @@ Drift check (compare against canonical values):
      init function), keep it inline and edit in place.
    - If WiFi code is spread across `main.c` OR the project is large enough
      that extracting clarifies it, create `main/wifi_manager.{c,h}` with the
-     canonical shape (see `robocar-unified/main/wifi_manager.{c,h}` for exact
+     canonical shape (see `packages/robotics/robocar/main/wifi_manager.{c,h}` for exact
      file contents). Update `main/CMakeLists.txt` SRCS accordingly and
      replace inline WiFi code in `main.c` with `wifi_init()` +
      `wifi_connect(WIFI_SSID, WIFI_PASSWORD)` calls.

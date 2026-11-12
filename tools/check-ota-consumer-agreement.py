@@ -9,7 +9,7 @@ nothing keeps them in sync. Issue #540 is exactly this class of bug: the
 consumers were written against names the release pipeline never published,
 and it was never caught because no build or CI step compared the two sides.
 
-Two shapes of consumer, both covered here:
+Three shapes of consumer, all covered here:
 
   TRIGGERED mode (`cfg.triggered_asset_filename = "X";`) builds a direct
   download URL from the literal, so X must equal otaAssetName exactly -- there
@@ -20,18 +20,27 @@ Two shapes of consumer, both covered here:
   match, despite older docs in this component describing it as one. X must
   therefore be a pattern that matches otaAssetName, not equal it.
 
+  MANIFEST POLL (`#define OTA_MANIFEST_URL "X"`) fetches the web-flasher
+  manifest from GitHub Pages. build-firmware.yml and
+  tools/generate-flasher-manifests.sh publish each project under
+  `firmware/<basename of the flasher.json directory>/`, so X's path must end in
+  `/firmware/<that basename>/manifest.json`. The URL holds a second copy of the
+  directory name: after a project directory is renamed, firmware built with
+  the old URL gets a 404 on every check and never updates again, with a green
+  build and green release gates.
+
   MQTT (`#define OTA_MQTT_NOTIFY_TOPIC "X"`) must equal otaNotifyTopic
   exactly -- build-firmware.yml resolves which project to wake by scanning
   every flasher.json for a matching otaNotifyTopic, so a device subscribed to
   a topic no flasher.json advertises will never hear the release that was
   meant for it.
 
-A fourth check, independent of the three above: `otaNotifyTopic` itself must
+One more check, independent of the ones above: `otaNotifyTopic` itself must
 follow `<release-please component>/ota/notify`, where the component comes
 from `release-please-config.json` -- that is the string build-firmware.yml's
 notify step parses out of the fired release tag (`<component>-v<semver>`) to
 find which flasher.json to publish to. Getting the macro and flasher.json to
-agree with EACH OTHER (the three checks above) is not sufficient if both
+agree with EACH OTHER (the checks above) is not sufficient if both
 agree on the wrong string: matching typos pass the macro-vs-flasher.json
 checks and still mean the notify step can never find this project. A project
 absent from release-please-config.json cannot be checked against the
@@ -39,6 +48,7 @@ convention and is reported as advisory rather than failed.
 
 Run:  python3 tools/check-ota-consumer-agreement.py [--verbose]
 Exit: 0 clean (including advisory-only), 1 on any blocking mismatch.
+Tests: python3 -m unittest tools/test_check_ota_consumer_agreement.py
 """
 
 from __future__ import annotations
@@ -50,24 +60,21 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# On main, robocar-unified's config.h still carries the pre-#409 shared
-# filename pattern and notify topic. PR #559 (the #539 rewrite that drops
-# esp_ghota for a Pages-manifest poll) DOES still read OTA_MQTT_NOTIFY_TOPIC
-# -- it becomes the check-now nudge that wakes the poll task early -- and
-# changes it to "robocar-unified/ota/notify", matching flasher.json. So this
-# skip is only needed until #559 merges, not because #559 stops reading the
-# macro. #559 depends on this PR (#558) for flasher.json/build-firmware.yml
-# to actually publish to that topic, so land #558 before #559.
-# Remove this entry once #559 lands and re-run with --verbose to confirm it
-# reports 0 findings on its own.
-SKIP_PROJECTS = {"packages/robocar/unified"}
+# Projects check_project does not read, by repo-relative directory. Empty: an
+# entry here switches off every macro-vs-flasher.json comparison for the
+# project it names.
+SKIP_PROJECTS: set[str] = set()
 
 TRIGGERED_ASSET_RE = re.compile(r'triggered_asset_filename\s*=\s*"([^"]+)"')
 FILENAME_MATCH_RE = re.compile(r'#define\s+OTA_FIRMWARE_FILENAME_MATCH\s+"([^"]+)"')
 NOTIFY_TOPIC_RE = re.compile(r'#define\s+OTA_MQTT_NOTIFY_TOPIC\s+"([^"]+)"')
+# The value may sit on the next line after a backslash continuation.
+MANIFEST_URL_DEFINE_RE = re.compile(r"#define\s+OTA_MANIFEST_URL\b")
+MANIFEST_URL_RE = re.compile(r'#define\s+OTA_MANIFEST_URL(?:\s|\\\n)+"([^"]+)"')
 
 
 @dataclass
@@ -206,7 +213,9 @@ def check_project(flasher_json: Path) -> list[Finding]:
                     )
                 )
 
-    for hdr in sorted(project_dir.glob("main/*.h")):
+    # The macros are read from main/'s sources as well as its headers: a
+    # #define in a .c file reaches the same build.
+    for hdr in sorted(project_dir.glob("main/*.[ch]")):
         rel_hdr = hdr.relative_to(REPO_ROOT).as_posix()
         text = _read(hdr)
 
@@ -230,6 +239,31 @@ def check_project(flasher_json: Path) -> list[Finding]:
                         f"{rel_flasher} otaAssetName '{ota_asset}' "
                         "(fnmatch(pattern, name, 0) is a full-string match, not "
                         "a substring match)",
+                    )
+                )
+
+        expected_tail = f"/firmware/{project_dir.name}/manifest.json"
+        urls = [m.group(1) for m in MANIFEST_URL_RE.finditer(text)]
+        if len(urls) != len(MANIFEST_URL_DEFINE_RE.findall(text)):
+            findings.append(
+                Finding(
+                    name,
+                    "MANIFEST_URL_UNREADABLE",
+                    f"{rel_hdr} defines OTA_MANIFEST_URL as something other than "
+                    "one string literal, so its directory cannot be compared "
+                    f"with '{expected_tail}'",
+                )
+            )
+        for url in urls:
+            if not urlsplit(url).path.endswith(expected_tail):
+                findings.append(
+                    Finding(
+                        name,
+                        "MANIFEST_URL_MISMATCH",
+                        f"{rel_hdr} polls '{url}' but the release publishes this "
+                        f"project's manifest at '...{expected_tail}' (the "
+                        f"directory of {rel_flasher}) -- the firmware would get "
+                        "a 404 on every update check",
                     )
                 )
 

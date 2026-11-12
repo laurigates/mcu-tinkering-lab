@@ -1,6 +1,6 @@
 # VL53L4CD — Time-of-Flight Proximity Sensor (ST, 940 nm, 0–1300 mm)
 
-**Used in:** not yet. robocar-unified plans two, aimed down at the front
+**Used in:** not yet. robocar plans two, aimed down at the front
 corners as cliff and table-edge detectors, on TCA9548A channels 5 and 6 (both
 parts answer only at 0x29, so each needs a channel of its own). Nothing is
 bought. Candidate breakout:

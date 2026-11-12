@@ -3,7 +3,7 @@
  * @brief Device info strings for RPC 0x03, read from the running image.
  *
  * Kept apart from improv_wifi.c so the protocol code has no ESP-IDF
- * dependency and compiles in the host tests (packages/robocar/unified/test/),
+ * dependency and compiles in the host tests (packages/robotics/robocar/test/),
  * which supply their own improv_wifi_device_info().
  *
  * ESP Web Tools compares the first string with the flasher manifest's `name`

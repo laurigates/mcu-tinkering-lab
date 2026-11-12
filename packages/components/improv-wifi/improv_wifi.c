@@ -69,7 +69,7 @@ static struct {
 } g_ctx = {.current_state = IMPROV_STATE_AUTHORIZED};
 
 /* Outside g_ctx on purpose: improv_wifi_init() clears g_ctx, and a writer set
- * before init must survive it (robocar-unified sets it first). */
+ * before init must survive it (robocar sets it first). */
 static improv_wifi_write_fn_t s_writer;
 
 // Low byte of the sum of `len` bytes, added to `sum`.
