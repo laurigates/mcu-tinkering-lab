@@ -43,9 +43,10 @@ are usually still in transit; put them in a separate `<file>-incoming.toml`
 and print it once the parts are in hand.
 
 Look at `page-<N>.png` before printing (`just labels::build <file> true` draws
-the cut outlines on the previews). A dry run checks a cut job with no cutter
-attached: `just labels::cut 1 <file> true` writes `cut-p1.cmd`, the command
-stream a Portrait 2 would receive, and `cut-p1.log`.
+the cut outlines on the previews). A dry run checks a cut job without touching
+the cutter: `just labels::cut 1 <file> true` writes `cut-p1.cmd`, the command
+stream a Portrait 2 would receive, and `cut-p1.log`. It never opens the cutter,
+so the USB cable can stay plugged in (trap 3).
 
 ## Data
 
@@ -161,7 +162,13 @@ pairing is required was not tested.
 3. **A plain driver dry run never reaches the cut.** With `--dry_run=True` the
    driver reads nothing back, and a job with marks waits for the sensor's
    "found" reply. `cut.sh` dry runs go through `dry_cut.py`, which answers that
-   one reply.
+   one reply. The driver also probes USB in a dry run: with a cutter plugged
+   in it opens it, sends it the status and firmware queries, and reads the
+   mark-search reply from it, so the dry run stops at the marks (#1104).
+   `dry_cut.py` makes that probe find nothing, the driver's own path when no
+   cutter is attached, so the transcript is the same plugged in or not. The
+   plain driver's `--dry_run=True`, run outside `cut.sh`, still needs the
+   cable unplugged.
    **The driver never sends the blade depth to a Portrait 2.** It sends the
    AutoBlade depth command (`TF`) only to the Cameo 3 and Cameo 4 lines, so
    `--depth` was dropped and the blade stayed at whatever depth it was last

@@ -50,7 +50,7 @@ probe-marks data=_data top="20" left="0":
 blade depth="1":
     cd {{_root}} && "{{_driver}}/venv/bin/python" tools/labels/probe.py "{{_driver}}/src" depth {{depth}}
 
-# Kiss-cut one printed page over USB, or Bluetooth with LABEL_CUTTER=ble. dry=true checks the job with no cutter attached
+# Kiss-cut one printed page over USB, or Bluetooth with LABEL_CUTTER=ble. dry=true checks the job and never opens the cutter
 cut page="1" data=_data dry="false" depth="1" pressure="10" speed="0":
     cd {{_root}} && DRY_RUN={{dry}} DEPTH={{depth}} PRESSURE={{pressure}} SPEED={{speed}} tools/labels/cut.sh tmp/labels/$(basename {{data}} .toml)/cut-p{{page}}.svg tmp/labels/$(basename {{data}} .toml)/plan.json
 

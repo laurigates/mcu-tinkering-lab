@@ -347,6 +347,72 @@ class DryCut(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("only runs dry", r.stderr)
 
+    # A stand-in for the driver (f376a08) with a Portrait 2 on USB. Like the
+    # real SilhouetteCameo, __init__ wraps whatever _find_usb_device() returns
+    # in a transport, and read() goes to that transport when there is one.
+    GRAPHTEC = """
+import sys
+
+PRODUCT_LINE_CAMEO3_ON = []
+
+class Portrait2OnUsb:
+    def read_bytes(self, size, timeout):
+        return b"    1\\x03"  # the mark search did not find the marks
+
+class SilhouetteCameo:
+    def __init__(self, dry_run=False):
+        self.log = sys.stderr
+        self.dry_run = dry_run
+        self.hardware = {}
+        dev = self._find_usb_device()
+        self.transport = dev
+
+    def _find_usb_device(self):
+        print("USB-PROBED")
+        self.hardware = {"name": "Silhouette_Portrait2"}
+        return Portrait2OnUsb()
+
+    def setup(self, *args, **kwargs):
+        pass
+
+    def read(self, size=64, timeout=5000):
+        if self.transport is None:
+            return None
+        return self.transport.read_bytes(size, timeout)
+"""
+    DRIVER = """
+import sys
+from silhouette.Graphtec import SilhouetteCameo
+
+dev = SilhouetteCameo(dry_run="--dry_run=True" in sys.argv)
+print("hardware:", dev.hardware["name"])
+print("mark reply:", dev.read(timeout=40000))
+"""
+
+    def test_an_attached_cutter_is_never_opened(self):
+        # #1104: the driver probes USB in a dry run too, and then reads the
+        # mark-search reply from the cutter rather than from dry_cut.py.
+        d = Path(tempfile.mkdtemp())
+        (d / "silhouette").mkdir()
+        (d / "silhouette" / "__init__.py").write_text("")
+        (d / "silhouette" / "Graphtec.py").write_text(self.GRAPHTEC)
+        (d / "sendto_silhouette.py").write_text(self.DRIVER)
+        r = subprocess.run(
+            [
+                sys.executable,
+                str(HERE / "dry_cut.py"),
+                str(d / "sendto_silhouette.py"),
+                "--dry_run=True",
+                "x.svg",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("hardware: Crashtest Dummy Device", r.stdout)
+        self.assertNotIn("USB-PROBED", r.stdout)
+        self.assertIn("mark reply: b'    0\\x03'", r.stdout)
+
 
 class AutobladeDepth(unittest.TestCase):
     """autoblade.patch_depth() against a stand-in for the driver's Graphtec module."""
