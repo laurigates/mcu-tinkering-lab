@@ -240,6 +240,15 @@ repos:
         pass_filenames: false
         files: '^(ruff\.toml|tools/test_ruff_config\.py)$'
 
+      # The Claude Code post-edit hook formats only this repo's files and
+      # keeps a not-yet-used import or noqa between Edits (issue #1111).
+      - id: post-edit-lint-hook
+        name: Claude post-edit-lint hook stays inside the repo and keeps unused imports
+        entry: python3 -m unittest tools/test_post_edit_lint_hook.py
+        language: system
+        pass_filenames: false
+        files: '^(\.claude/hooks/post-edit-lint\.sh|tools/test_post_edit_lint_hook\.py|ruff\.toml)$'
+
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools
