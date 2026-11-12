@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.13...balancebot-v0.1.14) (2026-11-12)
+
+
+### Bug Fixes
+
+* **balancebot:** close the CLI arm/mount/load gaps left after [#1041](https://github.com/laurigates/mcu-tinkering-lab/issues/1041) ([#1118](https://github.com/laurigates/mcu-tinkering-lab/issues/1118)) ([f4af358](https://github.com/laurigates/mcu-tinkering-lab/commit/f4af35856dd9b147e26ffaf61fb21474163800b4)), closes [#1063](https://github.com/laurigates/mcu-tinkering-lab/issues/1063)
+
 ## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.12...balancebot-v0.1.13) (2026-11-10)
 
 
