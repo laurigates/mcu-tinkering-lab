@@ -1101,6 +1101,11 @@ VERSION_COMMENT = re.compile(r"\s+#\s+v\d+\.\d+\.\d+\Z")
 UNPINNED_BY_DESIGN = ("./", "actions/", "laurigates/.github/")
 
 
+def is_pinned(ref: str, rest: str) -> bool:
+    """A full 40-hex commit SHA, then a ``# vX.Y.Z`` comment and nothing else."""
+    return bool(PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
+
+
 def third_party_refs() -> list[tuple[str, int, str, str]]:
     """(file, line, ref, rest of line) for each third-party ``uses:``."""
     files = workflow_files() + sorted(
@@ -1122,7 +1127,7 @@ class ActionPinTest(unittest.TestCase):
         unpinned = [
             f"{f}:{n}: {ref}{rest}"
             for f, n, ref, rest in refs
-            if not (PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
+            if not is_pinned(ref, rest)
         ]
         self.assertEqual(unpinned, [], "pin to the tag's commit SHA with # vX.Y.Z")
 
@@ -1135,8 +1140,7 @@ class ActionPinTest(unittest.TestCase):
             (f"dorny/paths-filter@{sha[:12]}", " # v4.0.3", False),
         ):
             with self.subTest(ref=ref, rest=rest):
-                ok = bool(PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
-                self.assertEqual(ok, pinned)
+                self.assertEqual(is_pinned(ref, rest), pinned)
 
 
 class ActionlintGateTest(unittest.TestCase):
