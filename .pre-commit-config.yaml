@@ -200,9 +200,12 @@ repos:
         pass_filenames: false
 
       # actionlint over every workflow (#1103): expression types, contexts,
-      # job needs, runner labels, permission scopes and the inputs a reusable
-      # workflow or a pinned action takes. Needs actionlint on PATH; CI Config
-      # Hooks installs the release test.yml pins and checks its sha256.
+      # job needs, runner labels, permission scopes and the inputs of local
+      # reusable workflows and actions. A remote action's inputs are checked
+      # only for a major-tag ref in actionlint's bundled data
+      # (actions/checkout@v4), so the SHA-pinned and full-version refs here
+      # get no input check. Needs actionlint on PATH; CI Config Hooks
+      # installs the release test.yml pins and checks its sha256.
       # shellcheck and pyflakes are off here because a machine without them
       # would lint less than one with them; with no arguments it reads
       # .github/workflows and .github/actionlint.yaml.
