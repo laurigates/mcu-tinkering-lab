@@ -14,6 +14,16 @@
 # repository, including a clone under the project's tmp/, or in no repository
 # is left alone; ruff would apply its defaults to code with another style
 # (issue #1111). tools/test_post_edit_lint_hook.py pins this.
+#
+# Which ruff (issue #1130): the one on PATH, with its fix step gated on its
+# version. When `ruff --version` matches the ruff-pre-commit rev pinned in the
+# repository's .pre-commit-config.yaml, the hook formats and fixes; otherwise
+# it only formats. Another version's fixes can delete code the pinned version
+# keeps (.claude/rules/python-lint.md); a formatting difference is redone by
+# the pinned ruff-format hook before the commit. Calling
+# `pre-commit run ruff --files` instead was rejected: it took 520 ms per edit
+# against 33 ms (mean of 5 runs, 2026-11-13), and its `--fix` hook args remove
+# the not-yet-used imports this hook keeps.
 set -euo pipefail
 
 file_path="$(jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
@@ -72,7 +82,16 @@ case "$file_path" in
         # The pre-commit ruff hook applies every fix before a commit.
         if command -v ruff >/dev/null 2>&1; then
             ruff format "$file_path" >/dev/null || true
-            ruff check --fix --unfixable F401,RUF100 "$file_path" || true
+            repo_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null || true)"
+            pinned="$(sed -n '/astral-sh\/ruff-pre-commit/,/rev:/s/^[[:space:]]*rev:[[:space:]]*"\{0,1\}v\{0,1\}\([0-9][0-9.]*\).*/\1/p' \
+                "$repo_root/.pre-commit-config.yaml" 2>/dev/null || true)"
+            found="$(ruff --version 2>/dev/null || true)"
+            found="${found#ruff }"
+            if [[ -n "$pinned" && "$found" == "$pinned" ]]; then
+                ruff check --fix --unfixable F401,RUF100 "$file_path" || true
+            else
+                echo "post-edit-lint: ruff ${found:-?} on PATH, pre-commit pins ${pinned:-?}; formatted, no fixes" >&2
+            fi
         fi
         ;;
 esac

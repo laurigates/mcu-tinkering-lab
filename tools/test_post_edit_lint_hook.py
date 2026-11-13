@@ -8,10 +8,12 @@ ways it cost work:
 2. Its `ruff check --fix` removed an import added in one Edit before the next
    Edit used it, and a `# noqa` comment the same way.
 
-Each test builds a throwaway project repository with a copy of the hook, so
-nothing here reads or writes the real checkout. A stub `ruff` on PATH records
-its arguments, which shows whether the hook ran at all. The last test runs the
-real ruff when one is on PATH, as the hook does.
+Each test builds a throwaway project repository with a copy of the hook and
+of .pre-commit-config.yaml, so nothing here reads or writes the real checkout.
+A stub `ruff` on PATH records its arguments, which shows whether the hook ran
+at all, and reports the version the test gives it: the hook applies fixes only
+when that version is the one pre-commit pins (issue #1130). The last test runs
+the real ruff when one is on PATH, as the hook does.
 
 Git calls here and the hook itself run without inherited GIT_* variables.
 InheritedGitEnvTest re-runs every test with the GIT_DIR and GIT_INDEX_FILE a
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -42,15 +45,31 @@ setUpModule = gitenv.isolate
 REPO = Path(__file__).resolve().parent.parent
 HOOK = REPO / ".claude" / "hooks" / "post-edit-lint.sh"
 RUFF_TOML = REPO / "ruff.toml"
+PRECOMMIT_CONFIG = REPO / ".pre-commit-config.yaml"
+
+# The rev line of the ruff-pre-commit repo entry, version in group 2.
+RUFF_REV = re.compile(
+    r'(astral-sh/ruff-pre-commit\s+rev:\s*"?v?)([0-9][0-9.]*)', re.MULTILINE
+)
 
 STUB_RUFF = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"$RUFF_LOG"
+if [[ "${1:-}" == "--version" ]]; then
+    echo "ruff $RUFF_STUB_VERSION"
+fi
 """
 
 # A tools/cquality.sh stand-in: records each call, like the stub ruff.
 STUB_CQUALITY = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"$CQUALITY_LOG"
 """
+
+
+def pinned_ruff_version() -> str:
+    match = RUFF_REV.search(PRECOMMIT_CONFIG.read_text())
+    if match is None:
+        raise AssertionError(f"no ruff-pre-commit rev in {PRECOMMIT_CONFIG}")
+    return match.group(2)
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -85,6 +104,7 @@ class PostEditLintHookTest(unittest.TestCase):
         hooks.mkdir(parents=True)
         shutil.copy2(HOOK, hooks / HOOK.name)
         shutil.copy2(RUFF_TOML, self.project / "ruff.toml")
+        shutil.copy2(PRECOMMIT_CONFIG, self.project / ".pre-commit-config.yaml")
         self.hook = hooks / HOOK.name
 
         self.bin = self.tmp / "bin"
@@ -106,6 +126,7 @@ class PostEditLintHookTest(unittest.TestCase):
             **gitenv.clean_env(),
             "CLAUDE_PROJECT_DIR": str(self.project),
             "RUFF_LOG": str(self.log),
+            "RUFF_STUB_VERSION": pinned_ruff_version(),
             "CQUALITY_LOG": str(self.cquality_log),
             **(extra_env or {}),
         }
@@ -241,7 +262,21 @@ class PostEditLintHookTest(unittest.TestCase):
 
     # -- what the hook may change in a file ------------------------------
 
+    def test_ruff_off_pin_formats_without_fixing(self) -> None:
+        """A ruff other than the pinned one formats but applies no fixes.
+
+        Another version's fixes can delete code the pinned one keeps (the
+        `# noqa: E402` comments in .claude/rules/python-lint.md).
+        """
+        path = self.write_py(self.project / "tools" / "new_tool.py")
+        self.run_hook(path, extra_env={"RUFF_STUB_VERSION": "0.0.1"})
+        calls = self.ruff_calls()
+        self.assertIn("--version", calls)
+        self.assertTrue(any(c.startswith("format ") for c in calls), calls)
+        self.assertFalse(any(c.startswith("check ") for c in calls), calls)
+
     def test_fix_leaves_unused_imports_and_noqa_alone(self) -> None:
+        """With the pinned ruff the fix step runs, keeping F401 and RUF100."""
         path = self.write_py(self.project / "tools" / "new_tool.py")
         self.run_hook(path)
         checks = [c for c in self.ruff_calls() if c.startswith("check ")]
@@ -256,15 +291,23 @@ class PostEditLintHookTest(unittest.TestCase):
         shutil.which("ruff"), "no ruff on PATH (the hook skips Python then too)"
     )
     def test_not_yet_used_import_survives_real_ruff(self) -> None:
-        """An Edit that adds imports before the Edit that uses them keeps them."""
+        """An Edit that adds imports before the Edit that uses them keeps them.
+
+        The project's pin is set to the PATH ruff's version so the fix step
+        runs; the import order it sorts shows that it did.
+        """
+        version = subprocess.run(
+            ["ruff", "--version"], check=True, capture_output=True, text=True
+        ).stdout.split()[1]
+        config = self.project / ".pre-commit-config.yaml"
+        config.write_text(RUFF_REV.sub(rf"\g<1>{version}", config.read_text()))
         path = self.project / "tools" / "test_labels.py"
         path.parent.mkdir(parents=True)
-        source = "import io\nimport types\n\nx = 1  # noqa: E501\n"
+        source = "import types\nimport io\n\nx = 1  # noqa: E501\n"
         path.write_text(source)
         self.run_hook(path, stub_ruff=False)
         after = path.read_text()
-        self.assertIn("import io\n", after)
-        self.assertIn("import types\n", after)
+        self.assertIn("import io\nimport types\n", after)
         self.assertIn("# noqa: E501", after)
 
 
