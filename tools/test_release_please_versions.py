@@ -14,6 +14,7 @@ Stdlib unittest only, so the pre-commit hook runs it with nothing but python3:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -32,6 +33,23 @@ def simple_packages() -> list[str]:
         for path, package in config["packages"].items()
         if package.get("release-type", default) == "simple"
     )
+
+
+_VERSION_READ = re.compile(
+    r"^\s*file\s*\(\s*(READ|STRINGS)\s+[^)\n]*version\.txt", re.MULTILINE
+)
+
+
+def reads_version_txt(cmake: str) -> bool:
+    """Whether a CMakeLists.txt reads version.txt with file(READ|STRINGS ...).
+
+    Comment lines are dropped first: a comment that names the file is not a
+    read, and neither is the ``if(EXISTS ...)`` guard around one.
+    """
+    code = "\n".join(
+        line for line in cmake.splitlines() if not line.lstrip().startswith("#")
+    )
+    return bool(_VERSION_READ.search(code))
 
 
 def tracked(path: str) -> bool:
@@ -74,9 +92,22 @@ class ReleasePleaseVersionsTest(unittest.TestCase):
             package
             for package in simple_packages()
             if (ROOT / package / "CMakeLists.txt").is_file()
-            and "version.txt" not in (ROOT / package / "CMakeLists.txt").read_text()
+            and not reads_version_txt((ROOT / package / "CMakeLists.txt").read_text())
         ]
         self.assertEqual(unread, [])
+
+    def test_a_comment_naming_version_txt_is_not_a_read(self):
+        # The check above once looked for the bare substring, which the
+        # comment over each read satisfies on its own.
+        read = 'file(READ "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" PROJECT_VER)\n'
+        comment = "# Read version from release-please managed version.txt\n"
+        self.assertTrue(reads_version_txt(comment + read))
+        self.assertTrue(reads_version_txt("  file( STRINGS version.txt V )\n"))
+        self.assertFalse(reads_version_txt(comment + "project(x VERSION 0.1.0)\n"))
+        self.assertFalse(reads_version_txt("# " + read))
+        self.assertFalse(
+            reads_version_txt('if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt")\n')
+        )
 
 
 if __name__ == "__main__":
