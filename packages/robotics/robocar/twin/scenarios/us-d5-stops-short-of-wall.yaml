@@ -1,0 +1,82 @@
+# US-D5: driven at a wall, he brakes before he reaches it and stays braked.
+#
+# This scenario runs against the physics plant (ADR-036 section 3): the range
+# readings come from the robot's pose in arenas/wall-1m.yaml, not from the
+# script, so the wall gets closer because the wheels turn. `just
+# robocar-twin::test-physics` runs it.
+#
+# From the firmware:
+#   - The planner boots dormant; the console line at 5 s wakes it for the 15 s
+#     tick, so the drive does not depend on a rangefinder reading. The reply
+#     (1 s) is a forward drive at 40 %, written at 16 s.
+#   - 40 % is 102/255, PCA9685 duty 1638. motor_controller.c ramps a rise (546,
+#     996, 1446 on the ticks from 16.005 s) and reaches 1638 at 16.104 s.
+#   - The front reflex trips on one reading below STOP_THRESHOLD_CM (15) and
+#     brakes both wheels (rangers_reflex(), apply_wheels()). A reading
+#     completes every 165 ms and is 132 ms old when it is read
+#     (ultrasonic_core.c), so the brake follows the wall coming inside 15 cm by
+#     up to REACTIVE_REFLEX_WORST_CASE_MS (297).
+#   - The reflex holds while the latest reading and the mean of the last three
+#     are below 15 cm. The 30 s planner tick requests again (the goal still
+#     moves the wheels, goal_moves_wheels()) and is offered the `note` tool
+#     for the trip; its drive goal is held by the same reflex.
+#
+# From the plant's estimates (simulation/src/robocar_sim/plant.yaml; none of
+# them is measured, ADR-036 open question 1), so asserted as ordering and wide
+# bounds only:
+#   - The start pose is the axle midpoint at the origin, facing the wall at
+#     x = 100. The rangefinder is 8 cm ahead of the axle and the chassis front
+#     edge is level with it, so the first range is 92 cm, the wall is inside
+#     15 cm from x = 77 and the chassis touches it at x = 92.
+#   - At duty 1638 the plant runs at about 22 cm/s and stops from a brake in
+#     about 2 cm. In a run with seed 7 the brake came at 19.932 s and the robot
+#     stopped at x = 83.8, the sensor 8 cm from the wall.
+#
+# Why 40 %: the speed sets the margin, and the margin is the plant's. At 40 %
+# the travel in the worst-case 297 ms (6.5 cm) and the brake distance fit
+# inside the 15 cm with about 6 cm to spare. At 60 % the same run stops 6 cm
+# from the wall, and at 80 % it reaches the wall: the brake comes too late,
+# and under 2 cm the rangefinder reads nothing, which the reflex takes for a
+# clear path. At 40 % the scenario fails on a lost reflex and not on a small
+# change in an estimate.
+id: us-d5-stops-short-of-wall
+stories: [US-D5]
+seed: 7
+duration: 40s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+plant:
+  physics:
+    arena: arenas/wall-1m.yaml
+    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 40}
+expect:
+  - requests: {count: 2}
+  - goals: {sequence: [drive, drive]}
+  # Parked at the start pose until the goal, then the ramp to 40 %.
+  - pose_at: {at: 16s, x_cm: 0, y_cm: 0, heading_deg: 0, collided: false}
+  - wheels_at: {at: 16s, left: coast, right: coast}
+  - wheels_at: {at: 16.104s, left: forward, right: forward, left_duty: 1638, right_duty: 1638}
+  # He covers ground toward the wall before anything brakes him.
+  - wheels: {left: brake, between: [0s, 17s], count: 0}
+  - pose: {x_cm: [20, 92], between: [16s, 40s], min: 1}
+  # One brake, on both wheels, and no forward drive after it.
+  - wheels: {left: brake, right: brake, count: 1}
+  - wheels_at: {at: 30s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 40s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  # He never touches the wall.
+  - pose: {collided: true, count: 0}
+  # Stopped inside the reflex distance and short of the wall, and still there
+  # at the end: nothing moves him in the last ten seconds.
+  - pose_at: {at: 40s, x_cm: [70, 91], y_cm: [-2, 2], heading_deg: [-5, 5], collided: false}
+  - pose: {between: [30s, 40s], count: 0}
+  # The planner hears of the trip from the executor's telemetry.
+  - note_offered: {trigger: reflex, between: [30s, 30s], count: 1}

@@ -32,3 +32,6 @@ minversion = "8.0"
 addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
 filterwarnings = ["error"]
+markers = [
+    "physics: runs a scenario against the robocar_sim plant process (just robocar-twin::test-physics)",
+]

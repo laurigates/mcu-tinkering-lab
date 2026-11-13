@@ -10,8 +10,8 @@
  * REACTIVE_LOOP_PERIOD_MS of virtual time and writes the trace records.
  *
  * Sensor values enter in two places only, twin_exec_set_range() and
- * twin_exec_set_floor(). Scripted world events call them today; a plant
- * response (ADR-036 §3) feeds the same two.
+ * twin_exec_set_floor(). Scripted world events call them, or with
+ * "plant":"external" each plant_response does (ADR-036 §3).
  */
 
 #pragma once

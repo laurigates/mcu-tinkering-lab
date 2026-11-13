@@ -1,0 +1,85 @@
+# US-D6: on a table he drives to the edge, backs away from it, and never puts
+# a wheel over it.
+#
+# This scenario runs against the physics plant (ADR-036 section 3): the floor
+# readings come from the robot's pose in arenas/table-1m.yaml, a floor polygon
+# with no walls, so backing off brings the floor back and driving on loses it
+# again. `just robocar-twin::test-physics` runs it. The scripted counterpart,
+# us-d4-cliff-brakes-and-backs-off, pins the reflex's timing tick by tick.
+#
+# From the firmware:
+#   - `cliff: true` arms the cliff reflex. It starts as "no floor" and fails
+#     closed; the plant's first reading arrives after tick 0, and the three
+#     floor samples of CLIFF_CLEAR_SAMPLES clear both sensors by 99 ms.
+#   - Nothing is in range of either rangefinder on a table, so every read
+#     fails and the range gives the planner nothing to wake on. The console
+#     line at 5 s wakes it for the 15 s tick; the reply (1 s) is a forward
+#     drive at 40 %, written at 16 s: duty 1638 from 16.104 s (102/255, after
+#     motor_controller.c's ramp).
+#   - At the edge: CLIFF_TRIP_SAMPLES (2) no-floor samples brake, the brake
+#     lasts CLIFF_BRAKE_MS (150), and the back-off reverses at
+#     CLIFF_BACKOFF_SPEED (140/255, duty 2248) for CLIFF_BACKOFF_MS (400)
+#     (cliff_core.c). Once three samples see floor again the drive goal, still
+#     fresh, takes him forward to the edge once more, so he goes back and forth
+#     at it for as long as the goal lasts. The 30 s planner tick renews the
+#     goal (goal_moves_wheels()).
+#
+# From the plant's estimates (simulation/src/robocar_sim/plant.yaml; none of
+# them is measured, ADR-036 open question 1), so asserted as ordering and wide
+# bounds only:
+#   - The start pose is the axle midpoint at the origin, facing the edge at
+#     x = 60. The front floor sensor is 7 cm ahead of the axle, so it loses
+#     the floor from x = 53. The wheels are on the axle line: a wheel is over
+#     the edge, and the plant reports off_floor, from x = 60.
+#   - At duty 1638 the plant runs at about 22 cm/s. In a run the first brake
+#     came at 18.645 s with the axle at x = 53.9, he rolled on to x = 55.7,
+#     the back-off took him to about x = 46, and over the whole run the axle
+#     never passed x = 56.2: 3.8 cm short of a wheel leaving the table.
+#
+# Why 40 %: the margin is the 7 cm between the sensor and the wheels less the
+# travel during the two trip samples and the brake, all of them estimates. At
+# 60 % the same run leaves 2.1 cm and at 80 % 0.9 cm. 40 % is the fastest of
+# the three that keeps half of the 7 cm, so the scenario fails on a lost
+# reflex and not on a small change in an estimate.
+id: us-d6-stays-on-table
+stories: [US-D6]
+seed: 7
+duration: 40s
+config: {cliff: true}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: table-top}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+plant:
+  physics:
+    arena: arenas/table-1m.yaml
+    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 40}
+expect:
+  - requests: {count: 2}
+  - goals: {sequence: [drive, drive]}
+  # Floor confirmed and parked at the start pose until the goal, then 40 %.
+  - pose_at: {at: 16s, x_cm: 0, y_cm: 0, heading_deg: 0, off_floor: false}
+  - wheels_at: {at: 16s, left: coast, right: coast}
+  - wheels_at: {at: 16.104s, left: forward, right: forward, left_duty: 1638, right_duty: 1638}
+  # He covers ground before the reflex does anything.
+  - wheels: {left: brake, between: [0s, 17s], count: 0}
+  - wheels: {left: reverse, between: [0s, 17s], count: 0}
+  # He reaches the edge: the axle comes within 10 cm of it.
+  - pose: {x_cm: [50, 60], min: 1}
+  # The cliff reflex answers: a brake, then the back-off at its own duty.
+  - wheels: {left: brake, right: brake, min: 1}
+  - wheels: {left: reverse, right: reverse, left_duty: 2248, right_duty: 2248, min: 1}
+  # Backing off brings the floor back, and the goal takes him forward again.
+  - wheels: {left: forward, right: forward, left_duty: 1638, between: [17s, 40s], min: 1}
+  # No wheel ever leaves the table, and there is nothing on it to hit.
+  - pose: {off_floor: true, count: 0}
+  - pose: {collided: true, count: 0}
+  # Still at the edge, on the table and pointing the way he set off, at the end.
+  - pose_at: {at: 40s, x_cm: [30, 60], y_cm: [-5, 5], heading_deg: [-10, 10], off_floor: false}

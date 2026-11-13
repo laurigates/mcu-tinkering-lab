@@ -180,7 +180,9 @@ All PRs must pass:
 - The Python Suites job in `test.yml`: each uv project suite in
   `.github/python-suites.json` (`enclosure::test`, `mechanism::test`,
   `cadstd::test`, `glitchtip::test`, `robocar-twin::test`,
-  `synth::tts-test`, the live probe's offline tests, and the make-only
+  `robocar-twin::test-physics` (the twin's scenarios that run against the
+  simulation's plant, ADR-036), `synth::tts-test`, the live probe's offline
+  tests, and the make-only
   `components::test`, which has no uv `dir`) when a path it lists
   changes, with `UV_LOCKED=1` so a stale `uv.lock` fails rather than
   re-resolving. A new uv project with tests gets an entry there; the

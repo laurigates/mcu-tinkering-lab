@@ -55,6 +55,21 @@
     ]
   },
   {
+    "name": "robocar-twin-physics",
+    "dir": "packages/robotics/robocar/twin/harness",
+    "run": "just robocar-twin::test-physics",
+    "apt": "libcjson-dev",
+    "paths": [
+      "packages/robotics/robocar/twin/**",
+      "packages/robotics/robocar/main/**",
+      "packages/robotics/robocar/test/include/**",
+      "packages/robotics/robocar/test/servo_controller_stub.c",
+      "packages/robotics/robocar/simulation/src/**",
+      "packages/robotics/robocar/simulation/pyproject.toml",
+      "packages/robotics/robocar/simulation/uv.lock"
+    ]
+  },
+  {
     "name": "live-probe",
     "dir": "packages/robotics/robocar/tools/live-probe",
     "run": "cd packages/robotics/robocar/tools/live-probe && uv run pytest -q",

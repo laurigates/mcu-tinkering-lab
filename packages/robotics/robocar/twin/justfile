@@ -6,6 +6,9 @@
 _dir := source_directory()
 _build := _dir / "build"
 _harness := "cd " + _dir / "harness" + " && uv run --locked --quiet"
+# The plant the physics scenarios step (ADR-036 section 3): the simulation
+# project next to this directory, in its own uv environment.
+_sim := parent_directory(_dir) / "simulation"
 
 default:
     @just --list
@@ -15,17 +18,25 @@ build:
     cmake -S {{_dir}} -B {{_build}} >/dev/null
     cmake --build {{_build}}
 
-# Build the twin, run its smoke test, then the harness unit tests and every scenario
+# Build the twin, run its ctest suite, then the harness unit tests and every scripted scenario (never starts the plant)
 test: build
     ctest --test-dir {{_build}} --output-on-failure
-    {{_harness}} pytest
+    {{_harness}} pytest -m "not physics"
+
+# Build the plant's environment from the simulation's uv.lock, so that a stale lock fails here and no scenario's timeout covers an install
+_plant:
+    uv run --project {{_sim}} --locked python -c "import robocar_sim.plant"
+
+# Build the twin and run the scenarios whose plant is the physics plant (needs the simulation project)
+test-physics: build _plant
+    {{_harness}} pytest -m physics
 
 # Harness unit tests only, without the twin (scenario files are validated, not run)
 unit:
     cd {{_dir}}/harness && uv run --locked --quiet pytest -k "not test_scenario_passes"
 
-# Run every scenario and write a scorecard (exit 0 only if all pass)
-run out="build/scorecard.json": build
+# Run every scenario, scripted and physics, and write a scorecard (exit 0 only if all pass)
+run out="build/scorecard.json": build _plant
     {{_harness}} python -m robocar_twin run --scenarios {{_dir}}/scenarios/*.yaml --out {{ absolute_path(_dir / out) }}
 
 # Remove the CMake build directory

@@ -1,0 +1,9 @@
+# A table top 1 m square with nothing on it and no walls: the floor polygon
+# ends at an edge the rangefinders cannot see (robocar_sim.arena, ADR-036
+# section 2). Scenarios start the robot at the origin facing the +x edge,
+# 60 cm away.
+floor:
+  - [-40, -50]
+  - [60, -50]
+  - [60, 50]
+  - [-40, 50]

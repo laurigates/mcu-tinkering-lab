@@ -17,10 +17,11 @@
  *
  * Protocol (one JSON object per line):
  *   stdin:  config, world events, {"t":"run"}, then one model_response per
- *           model_request.
+ *           model_request and, with "plant":"external" in config, one
+ *           plant_response per plant_request (ADR-036 §3).
  *   stdout: trace records (cycle, goal, force_stop, utterance, suppressed,
  *           announce, backoff, note_offered, note, note_not_offered, wheels,
- *           head), model_request, and a final done.
+ *           head), model_request, plant_request, and a final done.
  *
  * Firmware modules log with printf on the host (goal_state.c's host branch), so
  * stdout is moved to stderr at start and the trace goes to a private dup of the
@@ -224,6 +225,9 @@ typedef struct {
     long max_tokens;
     bool head;  /* servos present: the executor aims the head (ADR-036 §1) */
     bool cliff; /* cliff reflex armed */
+    /* "plant":"external": range and floor readings come from a plant_response
+     * after each executor tick, not from world events (ADR-036 §3). */
+    bool plant_external;
 } twin_config_t;
 
 static twin_config_t s_cfg = {
@@ -234,6 +238,7 @@ static twin_config_t s_cfg = {
     .max_tokens = -1,
     .head = false,
     .cliff = false,
+    .plant_external = false,
 };
 
 /* ---- World state, as the robot's sensors and links would report it ---- */
@@ -414,6 +419,24 @@ static void read_setup(void)
             if (!have_config) {
                 die(2, "'run' before 'config'");
             }
+            if (s_cfg.plant_external) {
+                /* The plant produces these readings; a scripted one would be
+                 * overwritten by the next plant_response. Checked here because
+                 * nothing orders the config line before the events. */
+                for (size_t i = 0; i < s_event_count; i++) {
+                    const ev_kind_t k = s_events[i].kind;
+                    if (k == EV_RANGE || k == EV_RANGE_FAIL || k == EV_FLOOR) {
+                        const char *name = "floor";
+                        if (k != EV_FLOOR) {
+                            name = (k == EV_RANGE) ? "range" : "range_fail";
+                        }
+                        die(2,
+                            "'%s' event at %llu ms with config.plant \"external\": the plant "
+                            "supplies range and floor readings",
+                            name, (unsigned long long)s_events[i].at_ms);
+                    }
+                }
+            }
             qsort(s_events, s_event_count, sizeof(*s_events), cmp_event);
             return;
         }
@@ -432,6 +455,15 @@ static void read_setup(void)
             }
             s_cfg.head = opt_bool_field(obj, "head", false, t);
             s_cfg.cliff = opt_bool_field(obj, "cliff", false, t);
+            s_cfg.plant_external = false;
+            if (field(obj, "plant", false, t)) {
+                char plant[16];
+                str_field(obj, "plant", plant, sizeof(plant), t);
+                if (strcmp(plant, "external") != 0) {
+                    die(2, "config.plant must be \"external\" when present (got '%s')", plant);
+                }
+                s_cfg.plant_external = true;
+            }
             have_config = true;
             cJSON_Delete(obj);
             continue;
@@ -693,6 +725,74 @@ static void audio_frame(void)
     ambient_audio_note(&fp, t);
 }
 
+/**
+ * One range of a plant_response: a whole number of centimetres inside the
+ * bounds ultrasonic_core_decode() accepts, or a failed read. null, a number
+ * outside the bounds and a number with a fraction are all failed reads
+ * (ADR-036 §1 "Rangefinders").
+ */
+static int plant_range(const cJSON *ranges, const char *sensor)
+{
+    const cJSON *f = field(ranges, sensor, true, "plant_response.range_cm");
+    if (cJSON_IsNull(f)) {
+        return TWIN_RANGE_FAILED;
+    }
+    if (!cJSON_IsNumber(f)) {
+        die(2, "plant_response.range_cm.%s must be a number or null", sensor);
+    }
+    const double cm = f->valuedouble;
+    const bool in_range =
+        cm >= (double)ULTRASONIC_MIN_RANGE_CM && cm <= (double)ULTRASONIC_MAX_RANGE_CM;
+    if (!in_range || cm != (double)(int)cm) {
+        return TWIN_RANGE_FAILED;
+    }
+    return (int)cm;
+}
+
+/**
+ * Send the plant_request for the executor tick @p id, just run at the current
+ * virtual time, and block on stdin for its plant_response, as await_response()
+ * does for a model request (ADR-036 §3 "Twin protocol"). The response is the
+ * world one tick later: it sets what each rangefinder's next trigger ranges
+ * and what the next tick's floor sample reads.
+ */
+static void plant_exchange(uint64_t id, const twin_exec_report_t *r)
+{
+    emit("{\"t\":\"plant_request\",\"id\":%llu,\"at_ms\":%llu,\"dt_ms\":%u,"
+         "\"left\":{\"drive\":\"%s\",\"duty\":%u},\"right\":{\"drive\":\"%s\",\"duty\":%u}}",
+         (unsigned long long)id, (unsigned long long)s_now_ms, (unsigned)REACTIVE_LOOP_PERIOD_MS,
+         r->left.drive, (unsigned)r->left.duty, r->right.drive, (unsigned)r->right.duty);
+
+    char *line = read_line();
+    if (!line) {
+        die(3, "stdin closed while waiting for plant_response %llu", (unsigned long long)id);
+    }
+    cJSON *obj = cJSON_Parse(line);
+    if (!obj || !cJSON_IsObject(obj)) {
+        die(2, "plant_response line is not a JSON object: %.200s", line);
+    }
+    char t[32];
+    str_field(obj, "t", t, sizeof(t), "?");
+    if (strcmp(t, "plant_response") != 0) {
+        die(2, "expected plant_response for request %llu, got '%s'", (unsigned long long)id, t);
+    }
+    const long got_id = int_field(obj, "id", true, 0, t);
+    if (got_id < 0 || (uint64_t)got_id != id) {
+        die(2, "plant_response id %ld does not answer request %llu", got_id,
+            (unsigned long long)id);
+    }
+    const cJSON *ranges = field(obj, "range_cm", true, t);
+    const cJSON *floors = field(obj, "floor", true, t);
+    if (!cJSON_IsObject(ranges) || !cJSON_IsObject(floors)) {
+        die(2, "plant_response.range_cm and .floor must be objects");
+    }
+    twin_exec_set_range(ULTRASONIC_FRONT, plant_range(ranges, "front"));
+    twin_exec_set_range(ULTRASONIC_REAR, plant_range(ranges, "rear"));
+    twin_exec_set_floor(true, bool_field(floors, "front", "plant_response.floor"),
+                        bool_field(floors, "rear", "plant_response.floor"));
+    cJSON_Delete(obj);
+}
+
 /** When the next executor tick falls due. The first is at t = 0. */
 static uint64_t s_next_exec_ms;
 
@@ -730,6 +830,11 @@ static void executor_tick(void)
              (unsigned long long)s_now_ms, r.pan_deg, r.tilt_deg, r.mode,
              r.settled ? "true" : "false");
     }
+    if (s_cfg.plant_external) {
+        /* After the tick's own records. The tick just run has index
+         * twin_exec_ticks() - 1. */
+        plant_exchange(twin_exec_ticks() - 1u, &r);
+    }
 }
 
 /**
@@ -742,7 +847,10 @@ static void executor_tick(void)
  * that holds it ends after it starts.
  *
  * backend_plan() calls this for a reply's latency window, so executor ticks
- * inside the window run against the previous goal, as on the robot.
+ * inside the window run against the previous goal, as on the robot. With an
+ * external plant each of those ticks exchanges with it before the reply is
+ * handled; the model_response was read before the window began, so the two
+ * kinds of request never overlap on stdin.
  */
 static void advance_to(uint64_t t_ms)
 {

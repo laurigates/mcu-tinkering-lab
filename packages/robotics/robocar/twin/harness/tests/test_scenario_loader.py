@@ -181,6 +181,10 @@ expect: [{requests: {max: 9}}]
         ),
         (("seed: 1", "seed: 1\nconfig: {head: 1}"), "true/false"),
         (("seed: 1", "seed: 1\nconfig: {plant: external}"), "unknown key"),
+        # The twin reads the seed as a uint32 and the plant refuses a negative
+        # one, so the loader takes only what both use whole.
+        (("seed: 1", "seed: -1"), r"seed: expected 0\.\.4294967295"),
+        (("seed: 1", "seed: 4294967296"), r"seed: expected 0\.\.4294967295"),
     ],
 )
 def test_validation_errors(write_scenario, patch, match):
@@ -190,6 +194,11 @@ def test_validation_errors(write_scenario, patch, match):
     with pytest.raises(ScenarioError, match=match) as info:
         load_scenario(path)
     assert str(path) in str(info.value)
+
+
+def test_the_largest_seed_the_twin_reads_whole_loads(write_scenario):
+    path = write_scenario("big", MINIMAL.replace("seed: 1", "seed: 4294967295"))
+    assert load_scenario(path).seed == 4294967295
 
 
 def test_id_must_match_filename(write_scenario, tmp_path):
@@ -297,3 +306,143 @@ def test_floor_events_need_boolean_fields(write_scenario):
                 "floor-half", body.replace("front: 1, rear: true", "rear: true")
             )
         )
+
+
+ARENA_YAML = """\
+floor: [[-50, -60], [100, -60], [100, 60], [-50, 60]]
+walls:
+  - {from: [100, -60], to: [100, 60]}
+"""
+PLANT_BLOCK = (
+    "models: {planner: inline}\n"
+    "plant:\n"
+    "  physics:\n"
+    "    arena: arenas/wall.yaml\n"
+    "    start: {x_cm: 0, y_cm: -2.5, heading_deg: 90}\n"
+)
+
+
+def physics_body() -> str:
+    assert "models: {planner: inline}\n" in MINIMAL
+    return MINIMAL.replace("models: {planner: inline}\n", PLANT_BLOCK)
+
+
+def test_plant_defaults_to_scripted(write_scenario):
+    for name, body in (
+        ("absent", MINIMAL),
+        ("named", MINIMAL.replace("seed: 1", "seed: 1\nplant: scripted")),
+    ):
+        s = load_scenario(write_scenario(name, body))
+        assert s.plant is None and s.plant_kind == "scripted"
+        # The twin is told to block on a plant only when one will answer.
+        assert "plant" not in s.protocol_lines()[0]
+
+
+def test_physics_plant_loads_the_arena_and_sets_the_config_key(
+    write_scenario, write_arena, tmp_path
+):
+    write_arena("wall", ARENA_YAML)
+    s = load_scenario(write_scenario("phys", physics_body()))
+    assert s.plant_kind == "physics"
+    # Resolved against the scenario's twin directory, like a replay: binding.
+    assert s.plant.arena_path == (tmp_path / "twin" / "arenas" / "wall.yaml").resolve()
+    assert s.plant.arena == {
+        "floor": [[-50, -60], [100, -60], [100, 60], [-50, 60]],
+        "walls": [{"from": [100, -60], "to": [100, 60]}],
+    }
+    assert s.plant.start == {"x_cm": 0, "y_cm": -2.5, "heading_deg": 90}
+    assert s.protocol_lines()[0] == {
+        "t": "config",
+        "seed": 1,
+        "duration_ms": 60000,
+        "planner_period_ms": 15000,
+        "plant": "external",
+    }
+
+
+def test_physics_arena_may_be_an_absolute_path(write_scenario, tmp_path):
+    arena = tmp_path / "elsewhere.yaml"
+    arena.write_text(ARENA_YAML)
+    body = physics_body().replace("arenas/wall.yaml", str(arena))
+    assert load_scenario(write_scenario("abs", body)).plant.arena_path == arena
+
+
+def test_physics_forwards_an_arena_it_does_not_understand(write_scenario, write_arena):
+    # The plant owns the schema; the loader checks only for a mapping.
+    write_arena("wall", "moat: {depth_cm: 5}\n")
+    s = load_scenario(write_scenario("odd", physics_body()))
+    assert s.plant.arena == {"moat": {"depth_cm": 5}}
+
+
+@pytest.mark.parametrize(
+    "kind", ["range: 50", "range_fail: {}", "floor: {front: true, rear: true}"]
+)
+def test_physics_refuses_the_readings_the_plant_produces(
+    write_scenario, write_arena, kind
+):
+    write_arena("wall", ARENA_YAML)
+    frame = "{at: 0s, frame: {scene: room}}"
+    body = (
+        physics_body()
+        .replace("seed: 1", "seed: 1\nconfig: {cliff: true}")
+        .replace(frame, frame + "\n  - {at: 1s, " + kind + "}")
+    )
+    with pytest.raises(ScenarioError, match="not allowed with plant: physics"):
+        load_scenario(write_scenario("both", body))
+    # The same event loads in a scripted world.
+    scripted = body.replace(PLANT_BLOCK, "models: {planner: inline}\n")
+    assert len(load_scenario(write_scenario("scripted", scripted)).world) == 2
+
+
+@pytest.mark.parametrize(
+    ("arena_file", "patch", "match"),
+    [
+        (None, None, "no arena file at"),
+        ("- [0, 0]\n", None, "expected a mapping"),
+        ("floor: [0, 0\n", None, "invalid YAML"),
+        ("floor: 2026-11-13\n", None, "cannot be sent to the plant as JSON"),
+        (
+            ARENA_YAML,
+            ("plant:\n  physics:\n", "plant:\n  kinematic:\n"),
+            "expected 'scripted' or",
+        ),
+        (
+            ARENA_YAML,
+            (PLANT_BLOCK, "models: {planner: inline}\nplant: physics\n"),
+            "expected 'scripted' or",
+        ),
+        (ARENA_YAML, ("    arena: arenas/wall.yaml\n", ""), "missing key"),
+        (
+            ARENA_YAML,
+            ("    start: {x_cm: 0, y_cm: -2.5, heading_deg: 90}\n", ""),
+            "missing key",
+        ),
+        (ARENA_YAML, ("arena: arenas/wall.yaml", "arena: 3"), "expected a path"),
+        (ARENA_YAML, ("heading_deg: 90}", "heading_deg: 90, z_cm: 0}"), "unknown key"),
+        (ARENA_YAML, ("y_cm: -2.5, ", ""), "missing key"),
+        (ARENA_YAML, ("x_cm: 0", "x_cm: left"), r"start\.x_cm: expected a number"),
+        (ARENA_YAML, ("heading_deg: 90", "heading_deg: true"), r"start\.heading_deg"),
+        # The plant refuses a start that is not finite; so does the loader.
+        (ARENA_YAML, ("x_cm: 0", "x_cm: .nan"), r"start\.x_cm: expected a finite"),
+        (ARENA_YAML, ("heading_deg: 90", "heading_deg: .inf"), r"start\.heading_deg"),
+        (ARENA_YAML, ("y_cm: -2.5", "y_cm: -.inf"), r"start\.y_cm: expected a finite"),
+        (
+            ARENA_YAML,
+            ("plant:\n  physics:\n", "plant:\n  scripted: {}\n  physics:\n"),
+            "expected 'scripted' or",
+        ),
+        (ARENA_YAML, ("start: {x", "seed: 3\n    start: {x"), "unknown key"),
+    ],
+)
+def test_plant_validation_errors(write_scenario, write_arena, arena_file, patch, match):
+    if arena_file is not None:
+        write_arena("wall", arena_file)
+    body = physics_body()
+    if patch is not None:
+        old, new = patch
+        assert old in body
+        body = body.replace(old, new)
+    path = write_scenario("bad-plant", body)
+    with pytest.raises(ScenarioError, match=match) as info:
+        load_scenario(path)
+    assert str(path) in str(info.value)
