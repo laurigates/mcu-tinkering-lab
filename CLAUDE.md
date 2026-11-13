@@ -59,6 +59,7 @@ mcu-tinkering-lab/
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # Reusable ESP-IDF components
+│       ├── host-test/              # Shared headers for the component host suites
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
 │       ├── ota-github/             # GitHub Releases OTA updater
 │       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
@@ -215,6 +216,14 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `carrier-check.yml` | Push/PR (path-filtered) | KiCad-free carrier check: `tools/kicad` tests, vendored-library hashes, schematic regenerates byte-identical, board pads match the join, the check stamp matches the committed files, every BOM part has an `lcsc` or `buy` source (`kicad.sourcing`) ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)) | No (local) |
 | `refresh-idf-locks.yml` | Monthly / manual | Regenerate every git-tracked ESP-IDF `dependencies.lock` and open one PR with the diff — see [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md) | No (local) |
 | `issue-labels.yml` | Issue and PR events / push of the taxonomy / weekly / manual | Type and routing labels (`build:`, `area:`, `core:`) from titles, quoted paths and changed files; clears `blocked` when every linked blocker closes; weekly label audit. No model. Runs with `dry-run: true`: it reports and writes nothing | `reusable-issue-labels.yml` |
+| `build-guide-check.yml` | Push/PR (path-filtered) / manual | Runs `tools/check-typst-docs.py`, then regenerates each `docs/auto/pin_defs.typ` and pinout SVG and recompiles every committed Typst document with the pinned CLI; fails on any drift — see [`.claude/rules/build-guide-drift-guard.md`](.claude/rules/build-guide-drift-guard.md) | No (local) |
+| `hardware-check.yml` | Push/PR (path-filtered) / manual | `just hardware::check` spelled out: the `tools/hardware` unit tests, then `hardware.docs --check` on every generated Markdown block | No (local) |
+| `schematics-check.yml` | Push/PR (path-filtered) / manual | The `docs/schematics` test suites, then re-renders every circuit and fails when an SVG differs from the committed one; PNG drift is only a notice | No (local) |
+| `test-melody-train.yml` | Push/PR to main/develop (path-filtered) / manual | melody-detector training package: ruff, ty, pytest, and the quantize-extra test, with `UV_LOCKED=1` | No (local) |
+| `merge-method.yml` | PR opened/edited/sync/labeled | Advisory `merge-method` check and `merge:rebase` / `merge:squash` label; never required, and a human-applied `merge:*` label overrides | `reusable-merge-method.yml` |
+| `pr-base-coverage-notice.yml` | PR opened/reopened/base edited | Comments on a PR whose base is not main/develop, since some workflows do not run for it (#487); builds and tests nothing | No (local) |
+| `notebook-doc-reminder.yml` | PR (path-filtered) | Comments with the NotebookLM notebooks a PR's changed files map to — see `docs/reference/notebook-mapping.md` | No (local) |
+| `notebook-refresh-reminder.yml` | Monthly / manual | Opens the month's NotebookLM refresh checklist issue (label `notebooks`) unless one is open | No (local) |
 
 ## Important Paths
 
