@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import re
+import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from kconfig_symbols import check, extract
 from kconfig_symbols.symbols import (
@@ -150,6 +153,10 @@ class ParserTests(unittest.TestCase):
 
     def test_an_unclosed_fence_runs_to_the_end(self):
         self.assertEqual(fenced_assignments("```\nCONFIG_A=y\n"), [(2, "A")])
+
+    def test_a_shorter_fence_inside_a_longer_one_does_not_close_it(self):
+        text = "````\n```\nCONFIG_A=y\n```\n````\nCONFIG_B=y\n"
+        self.assertEqual(fenced_assignments(text), [(3, "A")])
 
     def test_manifest_dependencies(self):
         text = """
@@ -601,6 +608,47 @@ class CheckMarkdownTests(unittest.TestCase):
         self.assertEqual(
             self.run_check("Set CONFIG_TINYUSB=y? No.\n`CONFIG_ZB_ENABLED=y`\n"), []
         )
+
+
+class MainTests(unittest.TestCase):
+    """main() over a throwaway git tree: the tests above call check_markdown
+    directly, so they cannot see main() dropping its findings."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        # GIT_DIR or GIT_INDEX_FILE from a hook would point git at the real repo.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        patcher = mock.patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        _write(self.root / "packages/p/sdkconfig.defaults", "CONFIG_FREERTOS_HZ=1000\n")
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+
+    def run_main(self, doc: str) -> tuple[int, str]:
+        _write(self.root / "docs/b.md", doc)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        repo, markdown = check.check_repo, check.check_markdown
+        err = io.StringIO()
+        with (
+            mock.patch.object(check, "check_repo", lambda: repo(self.root)),
+            mock.patch.object(check, "check_markdown", lambda: markdown(self.root)),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(err),
+        ):
+            return check.main(), err.getvalue()
+
+    def test_a_dead_symbol_in_a_snippet_fails_the_run_and_is_named(self):
+        status, err = self.run_main(
+            "```ini\nCONFIG_FREERTOS_HZ=1000\nCONFIG_TINYUSB=y\n```\n"
+        )
+        self.assertEqual(status, 1, err)
+        self.assertIn("docs/b.md:3: CONFIG_TINYUSB ", err)
+
+    def test_control_the_same_tree_without_it_passes(self):
+        status, err = self.run_main("```ini\nCONFIG_FREERTOS_HZ=1000\n```\n")
+        self.assertEqual(status, 0, err)
 
 
 if __name__ == "__main__":
