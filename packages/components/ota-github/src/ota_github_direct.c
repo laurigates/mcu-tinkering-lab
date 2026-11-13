@@ -6,9 +6,10 @@
  * Runs the download in a dedicated task so
  * the caller (typically an I2C/UART command dispatcher) is not blocked.
  *
- * Behaviour mirrors the reference implementation in
- * `robocar-main/main/ota_handler.c`, including the 4-byte SHA256 prefix
- * verification and the error-code taxonomy documented in ota_github.h.
+ * Behaviour mirrors the main controller's `ota_handler.c` of the dual-ESP32
+ * robocar, removed with that design and kept in git history, including the
+ * 4-byte SHA256 prefix verification and the error-code taxonomy documented in
+ * ota_github.h.
  */
 
 #include <stdlib.h>
@@ -180,8 +181,8 @@ esp_err_t ota_github_direct_run(const char *url, const uint8_t sha256_prefix[4])
     strncpy(p->url, url, sizeof(p->url) - 1);
     if (sha256_prefix) {
         memcpy(p->sha256_prefix, sha256_prefix, 4);
-        /* Treat an all-zero prefix as "no prefix supplied" — matches the
-         * robocar-main convention for optional I2C-provided hashes. */
+        /* Treat an all-zero prefix as "no prefix supplied" — the convention
+         * the dual-ESP32 robocar used for optional I2C-provided hashes. */
         for (int i = 0; i < 4; i++) {
             if (sha256_prefix[i] != 0) {
                 p->sha256_provided = true;
