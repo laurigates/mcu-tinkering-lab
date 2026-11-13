@@ -69,6 +69,8 @@ jobs:
               - '.clang-format'
               - 'tools/cquality.sh'
               - '.github/workflows/test.yml'
+              # Format Check installs the clang-format rev it names.
+              - '.pre-commit-config.yaml'
             any-code:
               - 'packages/**'
               - '.pre-commit-config.yaml'
@@ -399,12 +401,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
 
+      # The version is the mirrors-clang-format rev in .pre-commit-config.yaml,
+      # so this job and the pre-commit hook in Code Quality run one
+      # clang-format, and a Renovate bump of the hook moves both (#1082).
+      # Ubuntu 24.04's apt clang-format is another patch, which disagrees on
+      # brace-wrapping in macro initializers. yq is the runner's (mikefarah),
+      # read the way security-secrets.yml reads the gitleaks rev.
       - name: Install clang-format
-        # Pin to 18.1.8 to match the pre-commit hook (mirrors-clang-format v18.1.8).
-        # Ubuntu 24.04's apt clang-format is 18.1.3, which disagrees with 18.1.8 on
-        # brace-wrapping in macro initializers, causing the Format Check and
-        # Code Quality (pre-commit) jobs to contradict each other.
-        run: pipx install clang-format==18.1.8
+        run: |
+          set -euo pipefail
+          rev=$(yq '.repos[] | select(.repo == "https://github.com/pre-commit/mirrors-clang-format") | .rev' .pre-commit-config.yaml)
+          if [[ ! "$rev" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error file=.pre-commit-config.yaml::no mirrors-clang-format rev found (yq printed '${rev}')"
+            exit 1
+          fi
+          pipx install "clang-format==${rev#v}"
 
       - name: Check C/C++ formatting
         # Shared find/exclude list lives in tools/cquality.sh (same as justfile format-check-c).

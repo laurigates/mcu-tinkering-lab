@@ -854,6 +854,79 @@ class TestSuiteTest(unittest.TestCase):
                 self.assertEqual(gated, job_id not in ADVISORY_JOBS)
 
 
+class ClangFormatPinTest(unittest.TestCase):
+    """test.yml's Format Check installs the clang-format the pre-commit hook
+    pins (#1082). Its install step runs here with stub ``yq`` and ``pipx``:
+    the runner's yq is mikefarah's, which this test does not assume."""
+
+    def setUp(self):
+        config = yaml.safe_load(PRE_COMMIT.read_text())
+        (self.repo,) = [
+            r
+            for r in config["repos"]
+            if any(h["id"] == "clang-format" for h in r.get("hooks", []))
+        ]
+        job = load("test.yml")["jobs"]["format-check"]
+        (step,) = [s for s in job["steps"] if s.get("name") == "Install clang-format"]
+        self.script = step["run"]
+
+    def run_step(self, rev: str) -> tuple[int, str]:
+        """Run the step with a yq that prints ``rev`` when asked for the
+        hook's repo, and ``null`` otherwise. Returns its exit code and the
+        arguments pipx got."""
+        with tempfile.TemporaryDirectory() as scratch:
+            bin_dir = Path(scratch)
+            for name, body in (
+                (
+                    "yq",
+                    'if [[ "$1" == *"\\"$STUB_URL\\""* && "$2" == .pre-commit-config.yaml ]]; '
+                    'then echo "$STUB_REV"; else echo null; fi\n',
+                ),
+                ("pipx", 'echo "$*" >> "$PIPX_LOG"\n'),
+            ):
+                (bin_dir / name).write_text("#!/usr/bin/env bash\n" + body)
+                (bin_dir / name).chmod(0o755)
+            log = bin_dir / "pipx.log"
+            log.touch()
+            env = {
+                **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                "STUB_URL": self.repo["repo"],
+                "STUB_REV": rev,
+                "PIPX_LOG": str(log),
+            }
+            proc = subprocess.run(
+                ["bash", "-e", "-c", self.script],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            return proc.returncode, log.read_text().strip()
+
+    def test_format_check_installs_the_hooks_rev(self):
+        rev = self.repo["rev"]
+        self.assertRegex(rev, r"^v\d")
+        self.assertEqual(self.run_step(rev), (0, f"install clang-format=={rev[1:]}"))
+        self.assertNotRegex(
+            self.script, r"clang-format==\d", "read the rev, not a copy"
+        )
+
+    def test_format_check_fails_without_a_rev(self):
+        for rev in ("null", "", "18.1.8"):
+            with self.subTest(rev=rev):
+                self.assertEqual(self.run_step(rev), (1, ""))
+
+    def test_a_rev_bump_runs_format_check(self):
+        (filter_step,) = [
+            s
+            for s in load("test.yml")["jobs"]["detect-changes"]["steps"]
+            if s.get("id") == "filter"
+        ]
+        c_code = yaml.safe_load(filter_step["with"]["filters"])["c-code"]
+        self.assertIn(".pre-commit-config.yaml", c_code)
+
+
 def drift_step() -> str:
     (step,) = [
         s
