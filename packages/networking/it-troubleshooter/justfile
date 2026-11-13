@@ -47,12 +47,9 @@ clean:
 detect-port:
     "{{tools_dir}}/detect-esp32s3-port.sh"
 
-# Flash firmware to device
+# Flash firmware to device from the build's own build/flash_args
 [group: "device"]
-flash: require-port
-    cd build && esptool --chip esp32s3 -p {{port}} -b {{baud}} \
-        --before default-reset --after hard-reset \
-        write-flash @flash_args
+flash: _s3-argfile-flash
 
 # Build and flash
 [group: "device"]
@@ -64,13 +61,11 @@ deploy: build flash
 
 # Reset board via USB-Serial-JTAG CDC control signals
 [group: "device"]
-reset: require-port
-    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+reset: _s3-reset
 
 # Serial monitor with reset (Ctrl-C to stop)
 [group: "device"]
-monitor: require-port
-    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
+monitor: _s3-monitor
 
 ##########
 # Config

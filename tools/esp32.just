@@ -1,6 +1,6 @@
 # Shared ESP-IDF project configuration
-# Import this from project justfiles: import '../../../tools/esp32.just'
-# (a project nested one level deeper, packages/<domain>/<name>/<sub>/, adds one '../')
+# Project justfiles import '../../../tools/esp32-idf.just', which imports this
+# file; they do not import it themselves.
 #
 # Provides:
 #   container_cmd    — docker or podman
@@ -11,6 +11,8 @@
 #   _monitor_baud    — serial monitor baud rate (default 115200, override in project)
 #   require-port     — private recipe that fails if `port` is empty
 #   _serial-monitor  — private recipe: pyserial monitor using `port` and `_monitor_baud`
+#   _serial-monitor-on mon_port mon_baud — private recipe: the same monitor on
+#                      any port and baud, with no port check of its own
 
 # Container engine (docker or podman)
 container_cmd := env("CONTAINER_CMD", "docker")
@@ -62,14 +64,21 @@ require-port:
 
 # Serial monitor via pyserial (Ctrl-C to stop)
 [private]
-_serial-monitor: require-port
+_serial-monitor: require-port (_serial-monitor-on port _monitor_baud)
+
+# The pyserial monitor on a given port and baud. It checks no port itself:
+# a second adapter (a UART monitor) composes it behind its own port check,
+# since require-port checks `port`, which is empty when only that adapter is
+# plugged in.
+[private]
+_serial-monitor-on mon_port mon_baud:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Monitoring {{port}} @ {{_monitor_baud}} baud — Ctrl-C to stop"
+    echo "Monitoring {{mon_port}} @ {{mon_baud}} baud — Ctrl-C to stop"
     exec uvx --from pyserial python3 -c "
     import serial, sys, signal
     signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
-    s = serial.Serial('{{port}}', {{_monitor_baud}}, timeout=1)
+    s = serial.Serial('{{mon_port}}', {{mon_baud}}, timeout=1)
     try:
         while True:
             data = s.read(4096)
