@@ -21,24 +21,20 @@ project:
 
 | Artifact | Named by | Purpose | Required by |
 |---|---|---|---|
-| `<otaAssetName>` | `flasher.json` `otaAssetName` | The app binary flashed to `ota_0` / `ota_1` | Both OTA modes |
+| `<otaAssetName>` | `flasher.json` `otaAssetName` | The app binary flashed to `ota_0` / `ota_1` | TRIGGERED mode |
 | `<project-id>-manifest.json` | project directory name | Version/URL/SHA256 metadata, also served from Pages | Web flasher |
-| Release tag | release-please | Source of the semver string used for comparison | PULL mode |
+| Release tag | release-please | The download URL's directory, `releases/download/<tag>/` | TRIGGERED mode |
 
 `otaAssetName` is deliberately independent of `appBinaryName` (the name used
 inside the web-flasher's manifest) — see issue #540. Set your device's
-`cfg.triggered_asset_filename` (TRIGGERED mode) or
-`cfg.firmware_filename_match` (PULL mode) to match your project's
-`otaAssetName`, not its `appBinaryName`.
+`cfg.triggered_asset_filename` to your project's `otaAssetName`, not its
+`appBinaryName`.
 
 ### Asset naming
 
-PULL mode picks the asset with `fnmatch(cfg.firmware_filename_match,
-asset_name, 0)` — a **full-string match**, not a substring match, despite
-what this doc previously said. `cfg.firmware_filename_match = "my-project"`
-will **not** match an asset named `my-project.bin`; you need either the exact
-name (`"my-project.bin"`) or an explicit wildcard (`"my-project*"`).
-`tools/check-ota-consumer-agreement.py` (wired into pre-commit) asserts this
+TRIGGERED mode builds the download URL from `cfg.triggered_asset_filename`
+literally, so it must equal `otaAssetName` exactly; there is no pattern
+matching. `tools/check-ota-consumer-agreement.py` (wired into pre-commit) asserts this
 agreement mechanically — a mismatch here fails locally before it fails on a
 device.
 
@@ -48,7 +44,8 @@ This monorepo uses `release-please` with per-project tags in the form
 `<component>-v<semver>` (e.g. `robocar-camera-v0.3.1` — see
 `release-please-config.json`'s `component` field per package, and note it is
 not always the same as the `packages/<domain>/<project>` directory name).
-esp_ghota extracts the semver portion for comparison.
+TRIGGERED mode puts the whole tag in the download URL; the component never
+parses or compares versions.
 
 ## MQTT notify topic
 
@@ -62,15 +59,13 @@ Each project instead declares its own `otaNotifyTopic` in `flasher.json`,
 following the scheme `<component>/ota/notify` (the same `<component>` as the
 release tag). The workflow parses the component out of the release tag it
 was fired for, finds the `flasher.json` whose `otaNotifyTopic` matches, and
-publishes only there — every other project's robot is left to its own poll
-interval. Set your device's `cfg.mqtt_notify_topic` to your project's
+publishes only there — no other project's device hears it. Set your device's `cfg.mqtt_notify_topic` to your project's
 `flasher.json` `otaNotifyTopic` exactly; `tools/check-ota-consumer-agreement.py`
 checks this too.
 
 The published payload is still the bare release tag, unchanged from before —
-`ota_github_mqtt.c` in TRIGGERED mode uses the payload directly as the tag to
-download, and PULL mode ignores the payload entirely (any message triggers a
-check). Since the topic now already identifies the project, adding project id
+`ota_github_mqtt.c` uses the payload directly as the tag to download. Since
+the topic now already identifies the project, adding project id
 or version to the payload would be redundant; the tag already carries the
 version.
 

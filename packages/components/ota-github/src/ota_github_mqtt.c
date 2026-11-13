@@ -3,13 +3,10 @@
  * @brief Optional MQTT push-notify integration.
  *
  * When enabled, the component subscribes to the caller's configured
- * `mqtt_notify_topic` and triggers an immediate update check whenever a
- * message arrives. The trigger is rate-limited to at most once every 60
- * seconds to avoid churn if CI fires many notifications in quick succession.
- *
- * Supports both PULL mode (calls @ref ota_github_check_now) and TRIGGERED
- * mode (uses the message payload as the tag and triggers via
- * @ref ota_github_trigger_tag).
+ * `mqtt_notify_topic` and, whenever a message arrives, uses its payload as
+ * the release tag for @ref ota_github_trigger_tag. The trigger is
+ * rate-limited to at most once every 60 seconds to avoid churn if CI fires
+ * many notifications in quick succession.
  */
 
 #include <string.h>
@@ -35,28 +32,20 @@ static void handle_notify(const char *payload, int payload_len)
     }
     s_last_trigger_us = now;
 
-    if (g_ota_github.cfg.mode == OTA_GITHUB_MODE_PULL) {
-        ESP_LOGI(TAG, "MQTT notify received — triggering update check");
-        esp_err_t ret = ota_github_check_now();
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "ota_github_check_now: %s", esp_err_to_name(ret));
-        }
-    } else {
-        /* TRIGGERED mode — use payload as tag (e.g. "myproject@v1.2.3"). */
-        if (payload_len <= 0 || !payload) {
-            ESP_LOGW(TAG, "MQTT notify in TRIGGERED mode with empty payload — ignoring");
-            return;
-        }
-        char tag[64];
-        size_t n = (size_t)payload_len < sizeof(tag) - 1 ? (size_t)payload_len : sizeof(tag) - 1;
-        memcpy(tag, payload, n);
-        tag[n] = '\0';
+    /* Use payload as tag (e.g. "myproject@v1.2.3"). */
+    if (payload_len <= 0 || !payload) {
+        ESP_LOGW(TAG, "MQTT notify in TRIGGERED mode with empty payload — ignoring");
+        return;
+    }
+    char tag[64];
+    size_t n = (size_t)payload_len < sizeof(tag) - 1 ? (size_t)payload_len : sizeof(tag) - 1;
+    memcpy(tag, payload, n);
+    tag[n] = '\0';
 
-        ESP_LOGI(TAG, "MQTT notify received — triggering download for tag: %s", tag);
-        esp_err_t ret = ota_github_trigger_tag(NULL, tag, NULL);
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "ota_github_trigger_tag: %s", esp_err_to_name(ret));
-        }
+    ESP_LOGI(TAG, "MQTT notify received — triggering download for tag: %s", tag);
+    esp_err_t ret = ota_github_trigger_tag(NULL, tag, NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "ota_github_trigger_tag: %s", esp_err_to_name(ret));
     }
 }
 
