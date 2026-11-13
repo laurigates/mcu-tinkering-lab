@@ -125,7 +125,7 @@ jobs:
           echo "Dependencies ready"
 
       - name: Build ${{ inputs.project }}
-        uses: espressif/esp-idf-ci-action@v1.2.0
+        uses: espressif/esp-idf-ci-action@e6f5c74232b1ccd4c97ed641f1e48553853f1fd5 # v1.2.0
         # The action pastes `command` into its own shell script, so inputs
         # reach it only as variables (#855). docker run does not inherit the
         # step's env; extra_docker_args forwards each one into the container.

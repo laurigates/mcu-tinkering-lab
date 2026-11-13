@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: dorny/paths-filter@v4.0.3
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
@@ -283,7 +283,7 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7.1.1
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         if: always()
         with:
           files: packages/robotics/robocar/simulation/coverage.xml

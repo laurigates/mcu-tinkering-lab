@@ -1089,5 +1089,53 @@ class BuildGuideDriftStepTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+# A `uses:` line and its ref. Third-party actions are pinned to a full commit
+# SHA with the tag in a trailing comment, which Renovate's github-actions
+# manager keeps in step (issue #1103). GitHub's own actions/*, the
+# laurigates/.github reusables (@main by design) and local ./ refs are exempt.
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)(.*)$")
+PINNED_SUFFIX = re.compile(r"@[0-9a-f]{40}\Z")
+VERSION_COMMENT = re.compile(r"\s+#\s+v\d+\.\d+\.\d+\Z")
+UNPINNED_BY_DESIGN = ("./", "actions/", "laurigates/.github/")
+
+
+def third_party_refs() -> list[tuple[str, int, str, str]]:
+    """(file, line, ref, rest of line) for each third-party ``uses:``."""
+    files = workflow_files() + sorted(
+        (ROOT / ".github" / "actions").glob("*/action.yml")
+    )
+    refs = []
+    for path in files:
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            m = USES_LINE.match(line)
+            if m and not m.group(1).startswith(UNPINNED_BY_DESIGN):
+                refs.append((str(path.relative_to(ROOT)), n, m.group(1), m.group(2)))
+    return refs
+
+
+class ActionPinTest(unittest.TestCase):
+    def test_third_party_actions_are_pinned_to_a_commit(self):
+        refs = third_party_refs()
+        self.assertTrue(refs)
+        unpinned = [
+            f"{f}:{n}: {ref}{rest}"
+            for f, n, ref, rest in refs
+            if not (PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
+        ]
+        self.assertEqual(unpinned, [], "pin to the tag's commit SHA with # vX.Y.Z")
+
+    def test_pin_check_refuses_a_tag_and_a_bare_sha(self):
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        for ref, rest, pinned in (
+            (f"dorny/paths-filter@{sha}", " # v4.0.3", True),
+            ("dorny/paths-filter@v4.0.3", "", False),
+            (f"dorny/paths-filter@{sha}", "", False),
+            (f"dorny/paths-filter@{sha[:12]}", " # v4.0.3", False),
+        ):
+            with self.subTest(ref=ref, rest=rest):
+                ok = bool(PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
+                self.assertEqual(ok, pinned)
+
+
 if __name__ == "__main__":
     unittest.main()

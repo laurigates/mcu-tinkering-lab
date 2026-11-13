@@ -176,7 +176,7 @@ jobs:
       # check fails here instead of passing by absence (issue #556). $OLDPWD
       # is the repo root after the cd; the action runs this via `bash -c`.
       - name: Build ${{ matrix.project }}
-        uses: espressif/esp-idf-ci-action@v1.2.0
+        uses: espressif/esp-idf-ci-action@e6f5c74232b1ccd4c97ed641f1e48553853f1fd5 # v1.2.0
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}

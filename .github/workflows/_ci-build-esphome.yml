@@ -59,7 +59,7 @@ jobs:
           done
 
       - name: Build ESPHome firmware
-        uses: esphome/build-action@v7.4.0
+        uses: esphome/build-action@82ec6bded4e0998e1cda757680e5f1ac85825cfd # v7.4.0
         id: build
         with:
           yaml-file: packages/${{ inputs.project_path }}/${{ inputs.yaml_file }}
