@@ -298,15 +298,12 @@ class BuildFirmwareTest(unittest.TestCase):
             text=True,
             check=True,
         ).stdout.split()
+        # test.yml's CI Config Hooks job fetches the tags so this runs in CI;
+        # a local clone without them skips.
         if not tags:
             self.skipTest("this clone has no release tags")
         refused = [t for t in tags if self.run_resolve_tag(t)[0] != 0]
         self.assertEqual(refused, [])
-        code, values = self.run_resolve_tag("robocar-unified-v0.2.2")
-        self.assertEqual(code, 0)
-        self.assertEqual(
-            values, {"tag": "robocar-unified-v0.2.2", "component": "robocar-unified"}
-        )
 
     def test_resolve_tag_passes_robocar_tags_from_both_sides_of_the_rename(self):
         # Needs no tag in the clone. Releases up to 0.2.23 are tagged
@@ -314,6 +311,7 @@ class BuildFirmwareTest(unittest.TestCase):
         for tag, component in (
             ("robocar-v0.2.24", "robocar"),
             ("robocar-unified-v0.2.23", "robocar-unified"),
+            ("robocar-unified-v0.2.2", "robocar-unified"),
         ):
             with self.subTest(tag=tag):
                 code, values = self.run_resolve_tag(tag)
@@ -821,6 +819,16 @@ class TestSuiteTest(unittest.TestCase):
         self.assertTrue(self.config_hooks)
         unknown = self.config_hooks - {h["id"] for h in local_hooks()}
         self.assertEqual(unknown, set())
+
+    def test_config_hooks_job_fetches_the_release_tags(self):
+        # workflow-structure checks every release tag in the clone, and
+        # skips when there are none; the checkout fetches no tags.
+        steps = self.jobs[CONFIG_HOOKS_JOB]["steps"]
+        runs = [str(s.get("run", "")) for s in steps]
+        fetch = [i for i, r in enumerate(runs) if "refs/tags/*:refs/tags/*" in r]
+        hooks = [i for i, r in enumerate(runs) if "pre-commit run" in r]
+        self.assertEqual(len(fetch), 1)
+        self.assertLess(fetch[0], hooks[0])
 
     def test_a_push_runs_the_jobs_any_code_selects(self):
         # On push, the workflow's own path filter decides whether

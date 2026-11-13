@@ -138,6 +138,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
+      # workflow-structure runs build-firmware.yml's tag check over every
+      # release tag in the clone and skips when there are none, which a
+      # checkout leaves (#1103). At depth 1 the fetch takes a few seconds.
+      - name: Fetch the release tags
+        run: git fetch --no-tags --depth=1 origin 'refs/tags/*:refs/tags/*'
+
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
         with:
