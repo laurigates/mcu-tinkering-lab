@@ -133,6 +133,17 @@ repos:
         files: '^tools/(changelog-notes\.py|test_changelog_notes\.py|generate-flasher-manifests\.sh)$'
         pass_filenames: false
 
+      # release-please's simple strategy bumps version.txt but never creates
+      # it, so a package without one ships every release as its CMake
+      # fallback (issue #1078). A config-only PR runs no Code Quality Checks,
+      # so test.yml's CI Config Hooks job runs this hook too.
+      - id: release-please-versions
+        name: every release-please package has a version.txt at its manifest version
+        entry: python3 -m unittest tools/test_release_please_versions.py
+        language: system
+        files: '(^release-please-config\.json|^\.release-please-manifest\.json|(^|/)version\.txt|CMakeLists\.txt|^tools/test_release_please_versions\.py)$'
+        pass_filenames: false
+
       - id: flash-source-tests
         name: flash-source unit tests (which firmware a flash writes)
         entry: python3 -m unittest tools/test_flash_source.py
