@@ -663,7 +663,8 @@ not the overlay.
      (PRD-015 FR-033). The step is `continue-on-error`, so without it the step
      would fail silently;
    - check whether `vars.MQTT_ENABLED` lets GitHub runners publish anonymously
-     to the broker today (`build-firmware.yml:584-632`).
+     to the broker today (`build-firmware.yml`, the step "Notify the released
+     project's robot via MQTT").
 7. **Phase 0.** #853 (device: FR-024, FR-025) after steps 2–6. #854
    (concierge: FR-026, FR-027) can be built against the sandbox earlier and
    needs step 6 for the demo. #855's workflow (FR-028, FR-029) once step 1's
