@@ -386,12 +386,11 @@ Secrets:
   - `auto-resolve-conflicts.yml`, `claude.yml`, `claude-code-review.yml` and
     `security-secrets.yml`;
   - `build-firmware.yml`, whose dispatch redeploys the web flasher and the OTA
-    manifest from any tag. It also interpolates `inputs.release_tag` into
-    `run:` (`build-firmware.yml:217`, `:462`, `:485`), which would turn Actions:
-    write into its `contents: write` token. That input moves to an `env:`
-    variable in the same change and is checked against the release-please
-    tag pattern before use. It lands with the guards, so the interpolation is
-    closed before the App exists.
+    manifest from any tag. Its `inputs.release_tag` no longer reaches a
+    `run:` script: since #1084 it passes through an `env:` variable and the
+    `resolve-tag` job checks it against the release-please tag pattern before
+    any job uses it, so Actions: write cannot turn it into the workflow's
+    `contents: write` token.
 
   A re-run uses the original run's workflow file and is allowed for 30 days,
   so these guards land at least 30 days before the App is created.
