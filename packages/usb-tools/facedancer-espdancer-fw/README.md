@@ -104,6 +104,6 @@ CHECKLIST.md                 # working backlog (start here)
 - [facedancer](https://github.com/greatscottgadgets/facedancer) — the Python
   USB-emulation library this firmware serves; the `espdancer.py` backend lands
   there (Milestone 3).
-- [xbox-switch-bridge](../input-gaming/xbox-switch-bridge) — provenance;
+- [xbox-switch-bridge](../../input-gaming/xbox-switch-bridge) — provenance;
   `sdkconfig.defaults`, the build-variant system, `status_led`, `log_udp`,
   and the single-writer pattern were lifted from it.

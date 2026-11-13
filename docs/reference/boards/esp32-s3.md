@@ -7,7 +7,7 @@ Dual-core Wi-Fi + Bluetooth LE SoC with vector instructions for AI/ML accelerati
 The ESP32-S3 fills a gap that other ESP32 variants leave open:
 
 - **Dual-core + AI acceleration** — The LX7 vector instructions accelerate TensorFlow Lite Micro inference (face detection, keyword spotting) without an external accelerator.
-- **USB OTG** — Native USB 1.1 host/device (HID keyboards, CDC-ACM, MSC) without an external USB-UART bridge. This is the main reason we chose it for the [IT Troubleshooter](../../packages/networking/it-troubleshooter/) project.
+- **USB OTG** — Native USB 1.1 host/device (HID keyboards, CDC-ACM, MSC) without an external USB-UART bridge. This is the main reason we chose it for the [IT Troubleshooter](../../../packages/networking/it-troubleshooter/) project.
 - **Wi-Fi + BLE simultaneously** — Dual-core lets one core handle radio stacks while the other runs application logic uninterrupted. A single device can bridge BLE sensors to MQTT over Wi-Fi.
 - **Large PSRAM options** — Up to 16MB octal PSRAM for camera frame buffers, audio processing, or ML model weights.
 - **~$8 USD** — Boards like the Waveshare ESP32-S3-Zero start around $8.
@@ -88,7 +88,7 @@ GPIO26–32 are connected to the in-package flash on WROOM modules. **Do not use
 
 ### USB Pin Sharing
 
-The USB OTG peripheral uses GPIO19 (D-) and GPIO20 (D+). When USB OTG is active (e.g., TinyUSB for HID), the USB-Serial-JTAG debug interface is unavailable — use a separate UART adapter for logging. This constraint is documented in detail in [ADR-005](../blueprint/adrs/ADR-005-it-troubleshooter-hardware.md).
+The USB OTG peripheral uses GPIO19 (D-) and GPIO20 (D+). When USB OTG is active (e.g., TinyUSB for HID), the USB-Serial-JTAG debug interface is unavailable — use a separate UART adapter for logging. This constraint is documented in detail in [ADR-005](../../decisions/ADR-005-it-troubleshooter-hardware.md).
 
 ### USB-Serial-JTAG Reset Behavior
 
@@ -178,7 +178,7 @@ idf_component_register(
 
 The ESP32-S3 is currently used in:
 
-- **[IT Troubleshooter](../../packages/networking/it-troubleshooter/)** — USB HID keyboard emulator using the Waveshare ESP32-S3-Zero. Selected specifically for USB OTG support ([ADR-005](../blueprint/adrs/ADR-005-it-troubleshooter-hardware.md)).
+- **[IT Troubleshooter](../../../packages/networking/it-troubleshooter/)** — USB HID keyboard emulator using the Waveshare ESP32-S3-Zero. Selected specifically for USB OTG support ([ADR-005](../../decisions/ADR-005-it-troubleshooter-hardware.md)).
 
 Future candidates for ESP32-S3:
 - Robocar camera upgrade (replace ESP32-CAM with S3-based camera board for on-device ML)

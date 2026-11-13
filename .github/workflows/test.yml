@@ -124,6 +124,7 @@ jobs:
       HOOKS: >-
         workflow-structure
         kconfig-symbols
+        check-md-links
         check-flash-recipes
         check-flash-recipes-tests
         check-component-extra-paths

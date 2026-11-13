@@ -218,7 +218,7 @@ idf.py set-target esp32s3
 
 ## In This Repository
 
-The XIAO ESP32-S3 Sense variant is the target for the unified single-board robocar ([ADR-013](../blueprint/adrs/ADR-013-single-board-xiao-esp32s3.md)). The base XIAO ESP32-S3 is a candidate for:
+The XIAO ESP32-S3 Sense variant is the target for the unified single-board robocar ([ADR-013](../../decisions/ADR-013-single-board-xiao-esp32s3.md)). The base XIAO ESP32-S3 is a candidate for:
 
 - USB HID automation projects (alternative to Waveshare ESP32-S3-Zero)
 - BLE-to-WiFi gateway nodes

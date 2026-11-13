@@ -8,7 +8,7 @@ The XIAO ESP32-S3 with an expansion board that adds a DVP camera, PDM digital mi
 - **Digital microphone** — MSM261D3526H1CPM PDM mic for wake word detection (ESP-SR), audio classification, or voice recording to SD card.
 - **MicroSD card** — Up to 32 GB FAT32 for data logging, image capture, or audio recording.
 - **Detachable expansion** — The camera/mic/SD board connects via B2B connector. Remove it and you have a standard XIAO ESP32-S3. Reattach when you need sensors.
-- **Single-board robocar** — Selected as the target for unifying the dual-board robocar into one board ([ADR-013](../blueprint/adrs/ADR-013-single-board-xiao-esp32s3.md)).
+- **Single-board robocar** — Selected as the target for unifying the dual-board robocar into one board ([ADR-013](../../decisions/ADR-013-single-board-xiao-esp32s3.md)).
 
 ### When to pick something else
 
@@ -207,7 +207,7 @@ idf.py set-target esp32s3
 
 The XIAO ESP32-S3 Sense is the target for:
 
-- **[Robocar](../../../packages/robotics/robocar/)** — Single-board replacement for the dual Heltec + ESP32-CAM architecture ([ADR-013](../blueprint/adrs/ADR-013-single-board-xiao-esp32s3.md)). Camera for vision, I2C to TCA9548A/PCA9685 for motor control, WiFi for MQTT/OTA.
+- **[Robocar](../../../packages/robotics/robocar/)** — Single-board replacement for the dual Heltec + ESP32-CAM architecture ([ADR-013](../../decisions/ADR-013-single-board-xiao-esp32s3.md)). Camera for vision, I2C to TCA9548A/PCA9685 for motor control, WiFi for MQTT/OTA.
 
 Future candidates:
 - Standalone AI doorbell / security camera with on-device inference

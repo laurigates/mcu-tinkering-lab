@@ -286,6 +286,23 @@ repos:
         files: '(pin_config\.h|WIRING\.md|README\.md|build-guide\.typ|tools/check-doc-facts\.py)$'
         pass_filenames: false
 
+      # Every relative Markdown link names a tracked file (#1147). Moving or
+      # deleting the target breaks a link without touching any .md, so it runs
+      # on every commit; the scan takes well under a second.
+      - id: check-md-links
+        name: Relative Markdown links resolve to tracked files
+        entry: python3 tools/check-md-links.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-md-links-tests
+        name: check-md-links unit tests
+        entry: python3 -m unittest tools/test_check_md_links.py
+        language: system
+        files: '^tools/(check-md-links|test_check_md_links)\.py$'
+        pass_filenames: false
+
       - id: check-ota-consumer-agreement
         name: OTA firmware agrees with flasher.json asset names and topics
         entry: python3 tools/check-ota-consumer-agreement.py
