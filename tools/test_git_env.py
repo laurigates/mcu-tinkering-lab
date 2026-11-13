@@ -8,11 +8,12 @@ core.bare set to true (issue #1123). The code under test spawns git too, so
 the scrub covers the whole test process, not each call:
 
 - a test module calls ``setUpModule = gitenv.isolate`` (tools/gitenv.py), or
-  defines a setUpModule that calls ``gitenv.isolate()``; the last module-level
-  binding of setUpModule is the one checked;
-- a pytest project deletes every GIT_* variable in an autouse fixture in its
-  conftest.py, as docs/schematics/conftest.py does; the prefix test and the
-  ``monkeypatch.delenv`` call must sit in that one fixture.
+  defines a setUpModule that calls ``gitenv.isolate()`` in its own body; the
+  last module-level ``def setUpModule`` or plain ``setUpModule = ...``
+  assignment is the one checked;
+- a pytest project deletes every GIT_* variable in a module-level autouse
+  fixture in its conftest.py, as docs/schematics/conftest.py does; the prefix
+  test and the ``monkeypatch.delenv`` call must sit in that fixture's own body.
 
 This module fails when a tracked test module or conftest.py that creates a
 repository does neither. A suite that only reads the real repository
@@ -68,12 +69,16 @@ def _attr(node: ast.AST, owner: str, name: str) -> bool:
 
 
 def _calls(func: ast.AST, match) -> bool:
-    """A call in the body of ``func`` satisfies ``match``."""
-    return any(
-        isinstance(n, ast.Call) and match(n)
-        for stmt in func.body
-        for n in ast.walk(stmt)
-    )
+    """A call in the body of ``func`` satisfies ``match``. The bodies of
+    nested defs and classes are not searched: defining one runs nothing."""
+    todo = list(func.body)
+    while todo:
+        n = todo.pop()
+        if isinstance(n, ast.Call) and match(n):
+            return True
+        if not isinstance(n, (*FUNCTIONS, ast.ClassDef)):
+            todo.extend(ast.iter_child_nodes(n))
+    return False
 
 
 def _parse(source: str) -> ast.Module | None:
@@ -131,7 +136,8 @@ def _git_prefix_test(call: ast.Call) -> bool:
 
 
 def conftest_scrubs(source: str) -> bool:
-    """One autouse fixture holds both the GIT_ prefix test and the delenv."""
+    """One module-level autouse fixture holds both the GIT_ prefix test and
+    the delenv (pytest registers no fixture from a class in conftest.py)."""
     tree = _parse(source)
     if tree is None:
         return False
@@ -140,7 +146,7 @@ def conftest_scrubs(source: str) -> bool:
         and any(_autouse_fixture(d) for d in node.decorator_list)
         and _calls(node, _git_prefix_test)
         and _calls(node, lambda c: _attr(c.func, "monkeypatch", "delenv"))
-        for node in ast.walk(tree)
+        for node in tree.body
     )
 
 
@@ -281,9 +287,15 @@ class GitEnvScanTest(unittest.TestCase):
             "a/test_own_setup.py": own_setup + SPAWN,
             # The last binding wins.
             "a/test_rebound_back.py": noop_setup + ISOLATE_LINE + SPAWN,
+            # The call sits in an inner def that setUpModule never calls.
+            "a/test_inner_def.py": (
+                "def setUpModule():\n    def later():\n        gitenv.isolate()\n"
+                + SPAWN
+            ),
         }
         self.assertEqual(
-            unscrubbed(cases), ["a/test_docstring.py", "a/test_rebound.py"]
+            unscrubbed(cases),
+            ["a/test_docstring.py", "a/test_inner_def.py", "a/test_rebound.py"],
         )
 
     def test_conftest_verdict_needs_one_autouse_fixture(self) -> None:
@@ -311,9 +323,48 @@ class GitEnvScanTest(unittest.TestCase):
                 "@pytest.fixture(autouse=False)\ndef _no_git_env(monkeypatch):\n" + loop
             ),
             "d/test_not_autouse.py": SPAWN,
+            # The autouse fixture holds the prefix test; the delenv is elsewhere.
+            "e/conftest.py": (
+                "@pytest.fixture(autouse=True)\ndef _f(monkeypatch):\n"
+                "    keys = [k for k in os.environ if k.startswith('GIT_')]\n"
+                "\ndef _g(monkeypatch):\n    monkeypatch.delenv('X')\n"
+            ),
+            "e/test_prefix_only.py": SPAWN,
+            # The autouse fixture holds the delenv; the prefix test is elsewhere.
+            "f/conftest.py": (
+                "@pytest.fixture(autouse=True)\ndef _f(monkeypatch):\n"
+                "    monkeypatch.delenv('GIT_DIR')\n"
+                "\ndef _g():\n    return [k for k in os.environ if k.startswith('GIT_')]\n"
+            ),
+            "f/test_delenv_only.py": SPAWN,
+            # The scrub sits in an inner def that the fixture never calls.
+            "g/conftest.py": (
+                "@pytest.fixture(autouse=True)\ndef _f(monkeypatch):\n"
+                "    def later():\n" + textwrap.indent(loop, "    ")
+            ),
+            "g/test_inner_def.py": SPAWN,
+            # A fixture defined in a class: pytest does not register it from
+            # a conftest.py.
+            "h/conftest.py": (
+                "class Fixtures:\n"
+                + textwrap.indent(
+                    "@pytest.fixture(autouse=True)\n"
+                    "def _no_git_env(self, monkeypatch):\n" + loop,
+                    "    ",
+                )
+            ),
+            "h/test_class_method.py": SPAWN,
         }
         self.assertEqual(
-            unscrubbed(cases), ["c/test_split.py", "d/test_not_autouse.py"]
+            unscrubbed(cases),
+            [
+                "c/test_split.py",
+                "d/test_not_autouse.py",
+                "e/test_prefix_only.py",
+                "f/test_delenv_only.py",
+                "g/test_inner_def.py",
+                "h/test_class_method.py",
+            ],
         )
 
 
