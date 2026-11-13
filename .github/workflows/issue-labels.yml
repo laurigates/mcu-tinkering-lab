@@ -1,21 +1,31 @@
 name: Issue labels
 
-# Keeps issue and PR labels in step with .github/issue-labels.json, without a
-# model: see laurigates/.github reusable-issue-labels.yml for what each event
-# runs and what the workflow guarantees. The taxonomy is read from the default
-# branch, never from a PR head.
+# Keeps issue labels in step with .github/issue-labels.json, without a model:
+# see laurigates/.github reusable-issue-labels.yml for what each event runs and
+# what the workflow guarantees. The taxonomy is read from the default branch,
+# never from a PR head.
 #
-# First version: `dry-run: true` on every event, so each run prints what it
-# would change in its job summary and writes nothing. No label is created,
-# added or removed, and no audit issue is filed. Turning it off is tracked in
-# issue #1066.
+# Two calls of the same reusable workflow, split by event:
+#
+#   issue-labels (every event except pull_request) writes. A push to main
+#   provisions the build: and area: labels the taxonomy defines; an issue event
+#   adds type and routing labels; closing an issue removes `blocked` from each
+#   issue it was the last open blocker of; the Monday run files or updates the
+#   `Issue label audit` issue when the audit has findings. A manual run
+#   defaults to `dry-run: true` and writes only when the box is cleared.
+#   `pr-labels: false`: pull requests are never labelled from this call.
+#
+#   pr-labels-preview (pull_request only) is always `dry-run: true`. It prints
+#   the labels a PR would get in its job summary and writes nothing. Whether
+#   PRs get labelled, and which heads `skip-heads` leaves alone, is decided
+#   from those summaries (issue #1066 step 3).
 #
 # No `labeled` / `unlabeled` trigger: the reusable jobs ignore label events,
 # and each one would still start a run.
 #
 # pull_request `edited`: a title edit re-classifies the PR. The push paths
-# include this file because provision runs on any push to main, and the commit
-# that turns dry-run off touches only this file.
+# include this file because provision runs on any push to main, so a change to
+# this caller runs provision once with the new settings.
 
 on:
   issues:
@@ -34,6 +44,10 @@ on:
         type: choice
         options: [audit, backfill]
         default: audit
+      dry-run:
+        description: 'Print what would change and write nothing'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -42,7 +56,15 @@ permissions:
 
 jobs:
   issue-labels:
+    if: github.event_name != 'pull_request'
     uses: laurigates/.github/.github/workflows/reusable-issue-labels.yml@main
     with:
       mode: ${{ inputs.mode || 'audit' }}
+      dry-run: ${{ inputs.dry-run || false }}
+      pr-labels: false
+
+  pr-labels-preview:
+    if: github.event_name == 'pull_request'
+    uses: laurigates/.github/.github/workflows/reusable-issue-labels.yml@main
+    with:
       dry-run: true
