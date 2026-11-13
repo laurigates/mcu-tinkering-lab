@@ -47,6 +47,11 @@ STUB_RUFF = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"$RUFF_LOG"
 """
 
+# A tools/cquality.sh stand-in: records each call, like the stub ruff.
+STUB_CQUALITY = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >>"$CQUALITY_LOG"
+"""
+
 
 def git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
@@ -88,6 +93,7 @@ class PostEditLintHookTest(unittest.TestCase):
         stub.write_text(STUB_RUFF)
         stub.chmod(0o755)
         self.log = self.tmp / "ruff.log"
+        self.cquality_log = self.tmp / "cquality.log"
 
     def run_hook(
         self,
@@ -100,6 +106,7 @@ class PostEditLintHookTest(unittest.TestCase):
             **gitenv.clean_env(),
             "CLAUDE_PROJECT_DIR": str(self.project),
             "RUFF_LOG": str(self.log),
+            "CQUALITY_LOG": str(self.cquality_log),
             **(extra_env or {}),
         }
         if stub_ruff:
@@ -125,6 +132,11 @@ class PostEditLintHookTest(unittest.TestCase):
         if not self.log.exists():
             return []
         return self.log.read_text().splitlines()
+
+    def cquality_calls(self) -> list[str]:
+        if not self.cquality_log.exists():
+            return []
+        return self.cquality_log.read_text().splitlines()
 
     def write_py(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -171,6 +183,22 @@ class PostEditLintHookTest(unittest.TestCase):
         src.write_text("int main(void){return 0;}\n")
         self.run_hook(src)
         self.assertFalse(marker.exists())
+
+    def test_c_file_in_project_runs_cquality(self) -> None:
+        """Control for the test above: the C branch is reachable (issue #1130)."""
+        cq = self.project / "tools" / "cquality.sh"
+        cq.parent.mkdir(parents=True)
+        cq.write_text(STUB_CQUALITY)
+        cq.chmod(0o755)
+        self.assertTrue(os.access(cq, os.X_OK))
+        src = self.project / "main" / "main.c"
+        src.parent.mkdir(parents=True)
+        src.write_text("int main(void){return 0;}\n")
+        self.run_hook(src)
+        self.assertEqual(
+            self.cquality_calls(),
+            [f"format-file {src}", f"lint-file {src}"],
+        )
 
     def test_git_dir_in_hook_env_does_not_widen_scope(self) -> None:
         """GIT_DIR set in the hook's own environment must not adopt foreign files.
