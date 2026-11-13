@@ -46,9 +46,11 @@ What the tests hold:
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
   calls the reusable Claude scan (issue #860).
 - Every workflow declares workflow-level ``permissions:``, except the
-  reusable callers listed in ``INHERITS_REPO_DEFAULT`` (none now). Each
-  laurigates/.github reusable caller is read-only at workflow level and its
-  caller job grants exactly the scopes the reusable declares (issue #1103).
+  reusable callers listed in ``INHERITS_REPO_DEFAULT`` (none now). The five
+  laurigates/.github reusable callers in PermissionsTest's table (auto-fix
+  and the four that inherited the repo default until issue #1103) are
+  read-only at workflow level, and each caller job grants exactly the scopes
+  its reusable declares.
 - A pre-commit hook that watches CI configuration (``.github/``,
   ``.claude/hooks/``, any root file but Markdown) runs on a PR
   that changes only that file: test.yml's ``any-code`` filter covers the file,
