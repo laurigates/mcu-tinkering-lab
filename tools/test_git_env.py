@@ -7,9 +7,12 @@ acts on the repository being committed instead: stray commits, staged files,
 core.bare set to true (issue #1123). The code under test spawns git too, so
 the scrub covers the whole test process, not each call:
 
-- a test module calls ``setUpModule = gitenv.isolate`` (tools/gitenv.py);
+- a test module calls ``setUpModule = gitenv.isolate`` (tools/gitenv.py), or
+  defines a setUpModule that calls ``gitenv.isolate()``; the last module-level
+  binding of setUpModule is the one checked;
 - a pytest project deletes every GIT_* variable in an autouse fixture in its
-  conftest.py, as docs/schematics/conftest.py does.
+  conftest.py, as docs/schematics/conftest.py does; the prefix test and the
+  ``monkeypatch.delenv`` call must sit in that one fixture.
 
 This module fails when a tracked test module or conftest.py that creates a
 repository does neither. A suite that only reads the real repository
@@ -21,6 +24,7 @@ Run: python3 -m unittest tools/test_git_env.py
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
@@ -42,12 +46,7 @@ TOOLS = REPO_ROOT / "tools"
 GIT_ARGV = re.compile(r"""["']git["']""")
 INIT_ARG = re.compile(r"""["']init["']""")
 INIT_STRING = re.compile(r"""["']git\s+init\b""")
-MODULE_SCRUB = re.compile(r"^setUpModule = gitenv\.isolate$", re.MULTILINE)
-CONFTEST_SCRUB = (
-    re.compile(r"""startswith\(\s*["']GIT_["']\s*\)"""),
-    re.compile(r"monkeypatch\.delenv\("),
-    re.compile(r"autouse\s*=\s*True"),
-)
+FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 def creates_repository(source: str) -> bool:
@@ -58,12 +57,91 @@ def creates_repository(source: str) -> bool:
     )
 
 
+def _attr(node: ast.AST, owner: str, name: str) -> bool:
+    """``node`` is the expression ``owner.name``."""
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == name
+        and isinstance(node.value, ast.Name)
+        and node.value.id == owner
+    )
+
+
+def _calls(func: ast.AST, match) -> bool:
+    """A call in the body of ``func`` satisfies ``match``."""
+    return any(
+        isinstance(n, ast.Call) and match(n)
+        for stmt in func.body
+        for n in ast.walk(stmt)
+    )
+
+
+def _parse(source: str) -> ast.Module | None:
+    try:
+        return ast.parse(source)
+    except SyntaxError:
+        return None
+
+
 def module_scrubs(source: str) -> bool:
-    return bool(MODULE_SCRUB.search(source))
+    """The last module-level binding of setUpModule is ``gitenv.isolate``, or
+    a function whose body calls ``gitenv.isolate()``."""
+    tree = _parse(source)
+    if tree is None:
+        return False
+    last = None
+    for stmt in tree.body:
+        if isinstance(stmt, FUNCTIONS) and stmt.name == "setUpModule":
+            last = stmt
+        elif isinstance(stmt, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "setUpModule" for t in stmt.targets
+        ):
+            last = stmt.value
+    if isinstance(last, FUNCTIONS):
+        return _calls(last, lambda c: _attr(c.func, "gitenv", "isolate"))
+    return last is not None and _attr(last, "gitenv", "isolate")
+
+
+def _autouse_fixture(decorator: ast.AST) -> bool:
+    """``@pytest.fixture(autouse=True)`` or ``@fixture(autouse=True)``."""
+    if not isinstance(decorator, ast.Call):
+        return False
+    func = decorator.func
+    if not (
+        (isinstance(func, ast.Name) and func.id == "fixture")
+        or (isinstance(func, ast.Attribute) and func.attr == "fixture")
+    ):
+        return False
+    return any(
+        k.arg == "autouse"
+        and isinstance(k.value, ast.Constant)
+        and k.value.value is True
+        for k in decorator.keywords
+    )
+
+
+def _git_prefix_test(call: ast.Call) -> bool:
+    return (
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr == "startswith"
+        and len(call.args) == 1
+        and isinstance(call.args[0], ast.Constant)
+        and call.args[0].value == "GIT_"
+    )
 
 
 def conftest_scrubs(source: str) -> bool:
-    return all(p.search(source) for p in CONFTEST_SCRUB)
+    """One autouse fixture holds both the GIT_ prefix test and the delenv."""
+    tree = _parse(source)
+    if tree is None:
+        return False
+    return any(
+        isinstance(node, FUNCTIONS)
+        and any(_autouse_fixture(d) for d in node.decorator_list)
+        and _calls(node, _git_prefix_test)
+        and _calls(node, lambda c: _attr(c.func, "monkeypatch", "delenv"))
+        for node in ast.walk(tree)
+    )
 
 
 def tracked_test_files() -> list[str]:
@@ -189,6 +267,53 @@ class GitEnvScanTest(unittest.TestCase):
                 "c/test_uncovered.py",
                 "d/conftest.py",
             ],
+        )
+
+    def test_module_verdict_follows_the_binding_in_effect(self) -> None:
+        own_setup = "def setUpModule():\n    gitenv.isolate()\n    prepare()\n"
+        noop_setup = "def setUpModule():\n    pass\n"
+        cases = {
+            # The line, then a rebinding: the module runs unscrubbed (M7).
+            "a/test_rebound.py": ISOLATE_LINE + noop_setup + SPAWN,
+            # The line only inside a docstring binds nothing.
+            "a/test_docstring.py": '"""\n' + ISOLATE_LINE + '"""\n' + SPAWN,
+            # Its own setUpModule that calls gitenv.isolate() scrubs.
+            "a/test_own_setup.py": own_setup + SPAWN,
+            # The last binding wins.
+            "a/test_rebound_back.py": noop_setup + ISOLATE_LINE + SPAWN,
+        }
+        self.assertEqual(
+            unscrubbed(cases), ["a/test_docstring.py", "a/test_rebound.py"]
+        )
+
+    def test_conftest_verdict_needs_one_autouse_fixture(self) -> None:
+        loop = (
+            "    for key in [k for k in os.environ if k.startswith('GIT_')]:\n"
+            "        monkeypatch.delenv(key)\n"
+        )
+        cases = {
+            "b/conftest.py": (
+                "@pytest.fixture(autouse=True)\ndef _no_git_env(monkeypatch):\n" + loop
+            ),
+            "b/test_covered.py": SPAWN,
+            # The three pieces present, but the autouse fixture does
+            # something else and the scrub is never run.
+            "c/conftest.py": (
+                "@pytest.fixture(autouse=True)\n"
+                "def _other(tmp_path):\n"
+                "    yield tmp_path\n"
+                "\n"
+                "def _unused(monkeypatch):\n" + loop
+            ),
+            "c/test_split.py": SPAWN,
+            # One fixture with both calls, not autouse.
+            "d/conftest.py": (
+                "@pytest.fixture(autouse=False)\ndef _no_git_env(monkeypatch):\n" + loop
+            ),
+            "d/test_not_autouse.py": SPAWN,
+        }
+        self.assertEqual(
+            unscrubbed(cases), ["c/test_split.py", "d/test_not_autouse.py"]
         )
 
 
