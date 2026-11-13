@@ -125,9 +125,14 @@ rm -rf "$PROJECT_DIR/build" "$PROJECT_DIR/sdkconfig" "$PROJECT_DIR/sdkconfig.old
 # starts at 0.1.0, the fallback its CMakeLists uses when version.txt is absent.
 # Editor config such as robocar's .clangd stays: it works around the container
 # build's compile database and names no project.
-rm -f "$PROJECT_DIR/flasher.json" "$PROJECT_DIR/CHANGELOG.md" \
-    "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/dependencies.lock"
-rm -rf "$PROJECT_DIR/.claude"
+# NOT_COPIED lists only what the source had, for the closing summary.
+NOT_COPIED=""
+for f in flasher.json CHANGELOG.md CLAUDE.md dependencies.lock .claude/; do
+    if [ -e "$PROJECT_DIR/$f" ]; then
+        rm -rf "${PROJECT_DIR:?}/$f"
+        NOT_COPIED="${NOT_COPIED:+$NOT_COPIED, }$f"
+    fi
+done
 if [ -f "$PROJECT_DIR/version.txt" ]; then
     echo "0.1.0" > "$PROJECT_DIR/version.txt"
 fi
@@ -238,8 +243,17 @@ echo -e "     (plus ${CYAN}fetch_bluepad32: true${NC} if it vendors bluepad32)"
 echo -e "  3. Check the flash recipe: ${CYAN}python3 tools/check-flash-recipes.py${NC}"
 echo -e "  4. Build: ${CYAN}just $PROJECT_NAME::build${NC}"
 echo
-echo "Not copied from the template: flasher.json, CHANGELOG.md, CLAUDE.md, dependencies.lock."
-echo "version.txt starts at 0.1.0; the mDNS hostname is $PROJECT_NAME."
+# Each line only when it is true: a type-4 source may lack these files or the
+# mdns_hostname_set() call.
+if [ -n "$NOT_COPIED" ]; then
+    echo "Not copied from the template: $NOT_COPIED."
+fi
+if [ -f "$PROJECT_DIR/version.txt" ]; then
+    echo "version.txt starts at 0.1.0."
+fi
+if grep -rqF "mdns_hostname_set(\"$PROJECT_NAME\")" "$PROJECT_DIR/main" 2>/dev/null; then
+    echo "The mDNS hostname is $PROJECT_NAME."
+fi
 echo
 echo "Optional, to release it:"
 echo -e "  - Add a package to ${CYAN}release-please-config.json${NC} and ${CYAN}.release-please-manifest.json${NC} (\"0.1.0\");"

@@ -131,6 +131,18 @@ class DefaultTemplate(unittest.TestCase):
         self.assertIn("release-please-config.json", out)
         self.assertIn("flasher.json", out)
 
+    def test_closing_summary_states_what_was_done(self):
+        # The control for CopyFromBareSource: the template has all of these,
+        # so each line is printed here.
+        out = self.result.stdout
+        self.assertIn(
+            "Not copied from the template: "
+            "flasher.json, CHANGELOG.md, CLAUDE.md, dependencies.lock.",
+            out,
+        )
+        self.assertIn("version.txt starts at 0.1.0.", out)
+        self.assertIn("The mDNS hostname is probe-proj.", out)
+
 
 class CopyFromExisting(unittest.TestCase):
     """Project type 4: the same clean-up keyed on file names, for any source."""
@@ -179,6 +191,43 @@ class CopyFromExisting(unittest.TestCase):
         self.assertEqual(
             main_c, '// mDNS: copy-proj.local\nmdns_hostname_set("copy-proj");\n'
         )
+
+
+class CopyFromBareSource(unittest.TestCase):
+    """Project type 4 from a source with no mDNS call, no version.txt and only
+    one of the release files, as packages/audio/kids-audio-toy lacks the first
+    two. The closing summary states only what the script did."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls._tmp.name)
+        make_tree(cls.root)
+        source = cls.root / "packages" / "audio" / "bare-proj"
+        (source / "main").mkdir(parents=True)
+        (source / "flasher.json").write_text("{}\n")
+        (source / "CMakeLists.txt").write_text("project(bare-proj)\n")
+        (source / "main" / "main.c").write_text("void app_main(void) {}\n")
+        cls.result = run_scaffold(
+            cls.root, ["bare-copy", SENSORS, "4", "audio/bare-proj"]
+        )
+        cls.project = cls.root / "packages" / "sensors" / "bare-copy"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_script_succeeds(self):
+        self.assertEqual(
+            self.result.returncode, 0, self.result.stdout + self.result.stderr
+        )
+        self.assertFalse((self.project / "version.txt").exists())
+
+    def test_closing_summary_states_only_what_was_done(self):
+        out = self.result.stdout
+        self.assertIn("Not copied from the template: flasher.json.", out)
+        self.assertNotIn("version.txt starts at", out)
+        self.assertNotIn("mDNS hostname is", out)
 
 
 if __name__ == "__main__":
