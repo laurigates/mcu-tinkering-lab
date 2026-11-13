@@ -157,11 +157,8 @@ The ESP32-C6 includes hardware security capabilities:
 # Target
 CONFIG_IDF_TARGET="esp32c6"
 
-# Wi-Fi 6
-CONFIG_ESP_WIFI_11AX_SUPPORT=y
-
-# Zigbee (if using Zigbee stack)
-CONFIG_ZB_ENABLED=y
+# Wi-Fi 6 (802.11ax) needs no setting on the C6. Zigbee comes from the
+# espressif/esp-zigbee-lib managed component in main/idf_component.yml.
 
 # Thread (if using Thread/OpenThread)
 CONFIG_OPENTHREAD_ENABLED=y

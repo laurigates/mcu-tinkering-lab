@@ -182,11 +182,12 @@ repos:
       # tools/kconfig_symbols, and fails when the ESP-IDF version pins (the
       # Dockerfile, docker-compose.yml's image tag, any workflow) disagree
       # with each other or with the ESP-IDF list. No build or container needed.
+      # Fenced sdkconfig snippets in tracked Markdown are checked too (#1092).
       - id: kconfig-symbols
-        name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
+        name: sdkconfig.defaults and doc snippet symbols exist in ESP-IDF, the project or its components
         entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
         language: system
-        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|\.md|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
         pass_filenames: false
 
       # No run: script expands inputs.* or github.event.* through ${{ }}

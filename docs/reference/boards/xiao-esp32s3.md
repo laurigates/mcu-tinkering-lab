@@ -184,9 +184,9 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 
-# USB OTG (for HID/CDC projects)
-CONFIG_TINYUSB=y
-CONFIG_TINYUSB_HID_ENABLED=y
+# USB OTG (for HID/CDC projects): the espressif/esp_tinyusb managed component
+# in main/idf_component.yml brings TinyUSB in; the class counts turn classes on
+CONFIG_TINYUSB_HID_COUNT=1
 
 # USB Serial JTAG console (when not using USB OTG)
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

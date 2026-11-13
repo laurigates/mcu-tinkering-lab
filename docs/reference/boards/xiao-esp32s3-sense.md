@@ -185,8 +185,10 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 
-# Camera
-CONFIG_CAMERA_MODEL_XIAO_ESP32S3=y
+# Camera: the espressif/esp32-camera managed component in main/idf_component.yml.
+# Pins and board model go in camera_config_t; there is no board-model symbol.
+# Its per-sensor CONFIG_OV2640_SUPPORT / CONFIG_OV3660_SUPPORT / CONFIG_OV5640_SUPPORT
+# switches pick the drivers; keep the one the board's PID reads.
 
 # CPU frequency
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
