@@ -84,7 +84,7 @@ mcu-tinkering-lab/
 | Python type checker | ty (astral) |
 | Secret scanning | gitleaks |
 | Pre-commit | pre-commit (8 hooks) |
-| CI/CD | GitHub Actions (11+ workflows) |
+| CI/CD | GitHub Actions (see CI/CD Workflows below) |
 | Containers | Docker + docker-compose |
 | Carrier PCBs | KiCad 10.0.6 (local; CI is KiCad-free) |
 
