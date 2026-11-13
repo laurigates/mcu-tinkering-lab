@@ -961,5 +961,49 @@ class BuildGuideDriftStepTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class BluepadTagTest(unittest.TestCase):
+    """tools/fetch-bluepad32.sh holds the Bluepad32 tag for the CI build and
+    the xbox-switch-bridge justfile. build-firmware.yml keeps its own copy of
+    the fetch step, so the release path does not depend on the script (#1082);
+    its tag must stay the script's."""
+
+    SCRIPT = ROOT / "tools" / "fetch-bluepad32.sh"
+
+    def script_tag(self) -> str:
+        proc = subprocess.run(
+            ["bash", str(self.SCRIPT), "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        tag = proc.stdout.strip()
+        self.assertRegex(tag, r"^\S+$")
+        return tag
+
+    def test_the_release_build_clones_the_scripts_tag(self):
+        (step,) = [
+            s
+            for _, _, s in steps_of(load("build-firmware.yml"))
+            if "bluepad32.git" in str(s.get("run", ""))
+        ]
+        script = step["run"]
+        branches = set(re.findall(r"--branch\s+(\S+)", script))
+        self.assertTrue(branches, "no --branch in build-firmware.yml's fetch step")
+        named = set(re.findall(r"\brelease_v\d+(?:\.\d+)*", script))
+        self.assertEqual(branches | named, {self.script_tag()})
+
+    def test_the_ci_build_and_the_justfile_call_the_script(self):
+        callers = (
+            WORKFLOWS / "_ci-build-esp32.yml",
+            ROOT / "packages/input-gaming/xbox-switch-bridge/justfile",
+        )
+        for path in callers:
+            with self.subTest(path=path.name):
+                text = path.read_text()
+                self.assertTrue(self.SCRIPT.name in text, "does not run the script")
+                self.assertFalse(self.script_tag() in text, "names the tag itself")
+                self.assertFalse("bluepad32.git" in text, "clones Bluepad32 itself")
+
+
 if __name__ == "__main__":
     unittest.main()
