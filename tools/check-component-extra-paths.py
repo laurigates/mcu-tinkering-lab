@@ -113,6 +113,10 @@ NOT_IN_MATRIX: dict[str, str] = {
         "that `just boost-fw::setup` fetches into a git-ignored external/; no "
         "ESP-IDF, ESPHome or Pico build applies"
     ),
+    "input-gaming/lego-boost-xbox": (
+        "static Web Bluetooth page under web/, served by `just "
+        "lego-boost-xbox::serve`; no firmware and no build step"
+    ),
 }
 
 # Projects nested in a matrix entry's directory that are deliberately not in
