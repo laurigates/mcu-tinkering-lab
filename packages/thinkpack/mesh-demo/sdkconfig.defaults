@@ -9,7 +9,8 @@ CONFIG_ESP_WIFI_ENABLED=y
 
 # ESP-NOW is part of esp_wifi and has no Kconfig enable switch in ESP-IDF v5.4
 
-# Disable WiFi AMPDU (known S3 AP visibility workaround)
+# AMPDU off: inherited from a SoftAP-on-S3 workaround, but this box runs no
+# SoftAP (ESP-NOW only). Kept as is; AMPDU on is unmeasured with ESP-NOW (#1081).
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
 CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
 
