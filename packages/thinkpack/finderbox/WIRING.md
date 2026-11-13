@@ -63,7 +63,8 @@ RST=4).
 ## Hardware verification status
 
 Not yet tested on hardware. The RC522 driver timing (SPI clock, reset
-timing, TPrescaler) is inherited from
-`packages/games/nfc-scavenger-hunt/main/rc522_driver.c`, which is known
-working. The SuperMini pin allocation mirrors the `BOARD_SUPERMINI`
-branch from that driver.
+timing, TPrescaler) is inherited from the driver nfc-scavenger-hunt
+carried in its `main/rc522_driver.c` before it moved onto
+`packages/components/thinkpack-rc522`; that driver is known working. The
+SuperMini pin allocation mirrors the `BOARD_SUPERMINI` branch from that
+driver.
