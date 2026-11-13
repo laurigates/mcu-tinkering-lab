@@ -1101,6 +1101,49 @@ static void test_gaze_looks_around_when_nothing_directs_the_head(void)
     ASSERT(servo_stub_out_of_limit_attempts() == 0);
 }
 
+/* 99 s of ticks, as the test above runs. */
+#define GAZE_PATH_TICKS 3000
+
+/** The head's pan and tilt after each of GAZE_PATH_TICKS ticks, with the
+ *  gaze's random source seeded after init and before the first tick, which is
+ *  where the behaviour twin seeds it (twin_exec.c). */
+static void gaze_path(uint32_t seed, int16_t pan[GAZE_PATH_TICKS], int16_t tilt[GAZE_PATH_TICKS])
+{
+    setup_with_gaze();
+    reactive_controller_seed_gaze_for_test(seed);
+    for (int i = 0; i < GAZE_PATH_TICKS; ++i) {
+        reactive_controller_tick_for_test();
+        pan[i] = head_pan();
+        tilt[i] = head_tilt();
+    }
+}
+
+/* reactive_controller_seed_gaze_for_test() decides the gaze's draws: two seeds
+ * give two paths and one seed gives the same path twice. Seed 0 is not stored
+ * as the xorshift state, which would stay 0 and make every draw 0 (the same
+ * away pose after every dwell): its path rests on more than one away pose. */
+static void test_gaze_seed_selects_the_draws(void)
+{
+    static int16_t pan_a[GAZE_PATH_TICKS], tilt_a[GAZE_PATH_TICKS];
+    static int16_t pan_b[GAZE_PATH_TICKS], tilt_b[GAZE_PATH_TICKS];
+
+    gaze_path(1, pan_a, tilt_a);
+    gaze_path(2, pan_b, tilt_b);
+    ASSERT(memcmp(pan_a, pan_b, sizeof(pan_a)) != 0 || memcmp(tilt_a, tilt_b, sizeof(tilt_a)) != 0);
+
+    gaze_path(1, pan_b, tilt_b);
+    ASSERT(memcmp(pan_a, pan_b, sizeof(pan_a)) == 0 && memcmp(tilt_a, tilt_b, sizeof(tilt_a)) == 0);
+
+    gaze_path(0, pan_a, tilt_a);
+    bool left = false, right = false, floor_seen = false;
+    for (int i = 0; i < GAZE_PATH_TICKS; ++i) {
+        left = left || (pan_a[i] == -SCENE_POSE_SIDE_PAN_DEG && tilt_a[i] == 0);
+        right = right || (pan_a[i] == SCENE_POSE_SIDE_PAN_DEG && tilt_a[i] == 0);
+        floor_seen = floor_seen || (pan_a[i] == 0 && tilt_a[i] == SCENE_POSE_FLOOR_TILT_DEG);
+    }
+    ASSERT((int)left + (int)right + (int)floor_seen >= 2);
+}
+
 /* A fresh track goal takes the head on the very next tick. */
 static void test_track_goal_preempts_gaze(void)
 {
@@ -1535,6 +1578,7 @@ int main(void)
     test_run("drive_heading_folds_head_pan", test_drive_heading_folds_head_pan);
     test_run("gaze_looks_around_when_nothing_directs_the_head",
              test_gaze_looks_around_when_nothing_directs_the_head);
+    test_run("gaze_seed_selects_the_draws", test_gaze_seed_selects_the_draws);
     test_run("track_goal_preempts_gaze", test_track_goal_preempts_gaze);
     test_run("lease_preempts_gaze", test_lease_preempts_gaze);
     test_run("voice_turn_faces_forward", test_voice_turn_faces_forward);
