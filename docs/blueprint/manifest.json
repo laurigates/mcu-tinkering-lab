@@ -1,7 +1,7 @@
 {
   "format_version": "3.3.0",
   "created_at": "2026-04-05T00:00:00Z",
-  "updated_at": "2026-11-10T06:53:14Z",
+  "updated_at": "2026-11-13T18:58:29Z",
   "created_by": {
     "blueprint_plugin": "3.3.0"
   },
@@ -466,6 +466,12 @@
         "title": "A Shared Dimension Standard for Printed Parts",
         "status": "proposed",
         "created": "2026-11-09"
+      },
+      "ADR-036": {
+        "path": "docs/decisions/ADR-036-robocar-twin-plant-port.md",
+        "title": "Robocar Twin Executor and Plant Port",
+        "status": "accepted",
+        "created": "2026-11-13"
       },
       "PRP-hardware-in-the-loop-testing": {
         "path": "docs/prompts/hardware-in-the-loop-testing.md",
