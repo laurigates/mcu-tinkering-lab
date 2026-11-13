@@ -22,8 +22,10 @@ that job's matrix. What these tests hold:
 - One install path for uv and just (#835): only
   `.github/actions/setup-tools/action.yml` names `astral-sh/setup-uv` or
   `taiki-e/install-action`, nothing names `extractions/setup-just` (it asks
-  the Releases API at run time), the action pins both versions literally, and
-  the Renovate regex that bumps just still matches the pin.
+  the Releases API at run time), the action pins both versions literally,
+  the Renovate regex that bumps just still matches the pin, and
+  `scripts/install_pkgs.sh` installs the same just. Every
+  `python-version: 'X.Y.Z'` pin of one minor names one patch (#1082).
 - Tool suites (#838): every `test` recipe in a `tools/*/justfile` runs in CI,
   through the suites job, a workflow that runs its command and lists its
   directory in its trigger paths, or a pre-commit hook (which `test.yml`'s
@@ -466,6 +468,21 @@ class SetupAction(unittest.TestCase):
             python_suites_hook_files().search("scripts/install_pkgs.sh"),
             "add scripts/install_pkgs.sh to the python-suites hook's files:",
         )
+
+    def test_python_pins_of_one_minor_agree(self):
+        # Each workflow pins its setup-python patch, where Renovate bumps it
+        # (setup-tools/action.yml says why); pins of one minor move together
+        # (#1082).
+        pins: dict[str, dict[str, list[str]]] = {}
+        for path in ci_files():
+            for n, line in code_lines(path):
+                m = re.search(r"python-version: '((\d+\.\d+)\.\d+)'", line)
+                if m:
+                    where = pins.setdefault(m.group(2), {}).setdefault(m.group(1), [])
+                    where.append(f"{path.name}:{n}")
+        self.assertTrue(pins, "no python-version: 'X.Y.Z' pin found")
+        split = {minor: found for minor, found in pins.items() if len(found) > 1}
+        self.assertEqual(split, {}, "bump every pin of a minor together")
 
     def test_workflows_running_just_install_it(self):
         for path in sorted(WORKFLOWS.glob("*.yml")):
