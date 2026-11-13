@@ -2,11 +2,13 @@
 
 **Status**: accepted
 **Date**: 2026-11-13
-**Confidence**: 6/10 (sections 1 and 2 are built and pass their gates: the
+**Confidence**: 6/10 (sections 1 to 3 are built and pass their gates: the
 executor, the real `motor_controller.c` and `ultrasonic_core.c` link with one
 host-only setter added under `main/`, six of seven scenario traces stay
-byte-identical, and the plant has its own tests. Nothing here has run against
-the robot, and every chassis and motor figure the plant uses is an estimate)
+byte-identical, the plant has its own tests, and the wall and table-edge
+scenarios of section 4 pass against it at 40 % duty. Nothing here has run
+against the robot, and every chassis and motor figure the plant uses is an
+estimate)
 **Requirements**: [PRD-017](../requirements/PRD-017-robocar-behaviour-twin.md),
 [PRD-003](../requirements/PRD-003-robot-physics-simulation.md)
 **Amends**: [ADR-030](ADR-030-robocar-behaviour-twin.md) §3 (the world) and
@@ -319,7 +321,9 @@ the same pattern as `model_request`. The request id is the tick index.
 
 The response is the world at `at_ms + dt_ms`. It sets what the bus returns at
 the next trigger and the next cliff sample. Before the first response the
-cliff sample is invalid. Requests are strictly sequential with model requests:
+cliff sample is invalid. A range that is `null`, outside 2..400 or fractional
+is a failed read; a range of any other JSON type is a broken plant and ends
+the run, because a failed read counts as a clear path. Requests are strictly sequential with model requests:
 ticks inside a reply's latency window exchange with the plant before the reply
 is handled.
 
@@ -351,11 +355,15 @@ the scenario with the plant's stderr.
 the trace. It appends a `pose` record from each reading whose pose, `collided`
 or `off_floor` differs from the last one. Assertions are added over `wheels`,
 `head` and `pose` records, with numeric bounds and a state-at-time lookup; the
-harness README lists them.
+harness README lists them. A `pose` assertion is refused in a scripted
+scenario, which has no pose records and would pass it without checking
+anything.
 
 **Suites.** A scenario whose `plant:` is `physics` gets the pytest marker
-`physics` on `test_scenario_passes` only, derived at collection time;
-`test_scenario_validates` runs for every scenario in both suites. The marker
+`physics` on `test_scenario_passes` only, derived at collection time.
+`test_scenario_validates` is unmarked, so the light suite validates every
+scenario file, physics ones included; under `-m physics` a scenario is
+validated when its run loads it. The marker
 is registered in the harness `pyproject.toml`. `just robocar-twin::test` runs
 `pytest -m "not physics"` and stays light. `test-physics` first runs
 `uv run --project <simulation> --locked python -c "import robocar_sim.plant"`,
