@@ -23,7 +23,7 @@ current breakpoint that goes with it (see below the table).
 | Switching freq | Up to 100 kHz | Operating Range, p. 3 |
 | Control modes | CW, CCW, short brake, stop | p. 1, p. 4 |
 | Package | SSOP24 (0.65mm pitch) | p. 1 |
-| Protection | Thermal shutdown, undervoltage lockout | p. 1 |
+| Protection | Thermal shutdown, low-voltage detection | p. 1 |
 
 **The VM minimum.** The 2007-06-30 revision contradicts itself: its pin table
 on p. 2 gives VM1–VM3 as "Motor supply (2.5V~13.5V)", while its Operating Range
