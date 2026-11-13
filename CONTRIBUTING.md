@@ -23,7 +23,7 @@ Requirements:
 - Docker, or Podman with `CONTAINER_CMD=podman`. ESP-IDF builds run in the
   `espressif/idf:v5.5.6` container, so no local ESP-IDF install is needed.
 - [just](https://github.com/casey/just)
-- [uv](https://github.com/astral-sh/uv) and Python 3.11+ for the simulation and
+- [uv](https://github.com/astral-sh/uv) and Python 3.12+ for the simulation and
   Python tooling
 - [actionlint](https://github.com/rhysd/actionlint), which the `actionlint`
   pre-commit hook runs from PATH. `just install-dev-tools` prints how to
@@ -90,7 +90,7 @@ just docker-clean             # remove containers and volumes
 | robocar host tests | `just robocar::test` |
 | kids-audio-toy host tests | `just kids-audio::test` |
 | balancebot host tests | `just balancebot::test` |
-| Robocar simulation | `cd packages/robotics/robocar/simulation && uv sync && uv run pytest tests/ --cov` |
+| Robocar simulation | `cd packages/robotics/robocar/simulation && uv sync --extra dev && uv run pytest tests/ --cov` |
 | All pre-commit hooks | `pre-commit run --all-files` |
 
 Host tests compile hardware-independent firmware modules with the native

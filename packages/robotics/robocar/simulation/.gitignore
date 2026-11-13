@@ -51,6 +51,8 @@ Thumbs.db
 simulation_errors.log
 simulation_output.txt
 validation_data.json
+plant_demo_trace.jsonl
+tmp/
 
 # Test outputs
 .pytest_cache/

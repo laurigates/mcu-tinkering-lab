@@ -8,11 +8,21 @@ reviewed: 2026-11-03
 
 ```bash
 cd packages/robotics/robocar/simulation
+uv sync --extra dev          # the core (numpy, pymunk, pyyaml) and the test tools
 uv run pytest tests/ --cov
 ```
 
-- Maintain test coverage for simulation code
+- Maintain test coverage for simulation code. CI enforces
+  `--cov-fail-under=25` on the core and `dev` dependencies; the plant's tests
+  meet it, and no module is omitted from the measurement to meet it (ADR-036)
 - Run tests before committing Python changes
+- The plant (`robocar_sim.plant`) must stay deterministic: `tests/test_plant.py`
+  and `tests/test_plant_stepper.py` compare two runs in-process and across
+  processes
+- `ty` ignores unresolved imports there, so `tests/test_imports.py` is what
+  fails when a module imports one that was removed. A module that needs a
+  `viz`-extra package is listed with it in that test and skipped in CI, which
+  does not install `viz`
 
 ## Suites That Create a Git Repository
 

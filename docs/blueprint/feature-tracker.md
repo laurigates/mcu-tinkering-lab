@@ -6,12 +6,12 @@
 | FR-002 | Camera capture and Gemini vision planner | PRD-002 | active | P0 | OV3660 on the XIAO; Gemini Robotics-ER 2 planner (ADR-016); the ESP32-CAM board is removed (ADR-013) |
 | FR-003 | MQTT telemetry and logging | PRD-001 | active | P1 | robocar/status, robocar/events (ADR-033), remote commands; log forwarding open (#956); mDNS broker discovery proposed (ADR-034 §3) |
 | FR-004 | Pluggable AI backend (Claude / Ollama) | PRD-002 | deprecated | P1 | The claude_*/ollama_* backends are removed; Gemini only. A second backend would be a newly designed abstraction |
-| FR-005 | Pymunk 2D physics simulation | PRD-003 | active | P1 | Python 3.11; 18/24 tests passing |
-| FR-006 | WebSocket communication bridge | PRD-003 | active | P2 | Port 8765; bi-directional motor/sensor |
-| FR-007 | Hardware-in-the-loop (HIL) testing | PRD-003 | planned | P2 | Real ESP32 + virtual environment |
+| FR-005 | Pymunk 2D physics simulation | PRD-003 | active | P1 | Python 3.12; import package robocar_sim. The plant (robocar_sim.plant: motors, contacts, two rangefinders, two floor sensors) for the behaviour twin, plus the legacy demo (ADR-036). 194 passed, 6 skipped on the core and dev dependencies (uv run pytest tests/, 2026-11-13) |
+| FR-006 | WebSocket communication bridge | PRD-003 | deprecated | P2 | Removed by ADR-036, which withdraws PRD-003 R6-R8. The JSONL stepper python -m robocar_sim.plant is the simulation's external interface |
+| FR-007 | Hardware-in-the-loop (HIL) testing | PRD-003 | planned | P2 | Real ESP32 + virtual environment. No bridge to build on since ADR-036 removed the WebSocket and serial bridge (FR-006) |
 | FR-008 | OTA firmware updates | PRD-001 | active | P1 | Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription dropped (#1054); first check after 360 min (#1055) |
 | FR-009 | ESP32 build CI pipeline | PRD-001 | active | P0 | Parallel matrix; 4 projects; artifact archive |
-| FR-010 | Python simulation CI pipeline | PRD-003 | active | P1 | uv + pytest with coverage |
+| FR-010 | Python simulation CI pipeline | PRD-003 | active | P1 | uv + pytest with coverage (floor 25 %) on numpy, pymunk, pyyaml and the dev extra; the viz extra (Genesis, torch) is not installed in CI (ADR-036) |
 | FR-011 | Pre-commit code quality hooks | — | active | P1 | clang-format, ruff, mypy, gitleaks |
 | FR-012 | Docker development environment | — | active | P2 | ESP-IDF containerized; reproducible builds |
 | FR-013 | ESP32-CAM LLM Telegram bot | — | active | P2 | Separate project; Claude/Ollama vision |

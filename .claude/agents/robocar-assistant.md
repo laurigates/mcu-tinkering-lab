@@ -32,7 +32,7 @@ One **XIAO ESP32-S3 Sense** runs everything:
 - Firmware: `packages/robotics/robocar/` (pins: `main/pin_config.h`)
 - Integrated carrier PCB variant: `packages/robotics/robocar/integrated/`
 - Hardware self-test firmware: `packages/robotics/robocar/bringup/`
-- Physics simulation: `packages/robotics/robocar/simulation/`
+- Plant model for the behaviour twin (ADR-036), and the legacy simulation demo: `packages/robotics/robocar/simulation/`
 - Behaviour twin: `packages/robotics/robocar/twin/`
 
 ## Build Commands

@@ -2,7 +2,8 @@
 
 uv's override replaces every Pillow requirement, the project's own pin
 included, so a Renovate bump of the ``Pillow==`` line alone would not change
-the resolved version. This test fails until both lines agree.
+the resolved version. This test fails until both lines agree. The pin is in
+the ``viz`` extra, beside genesis-world, whose moviepy dependency it lifts.
 """
 
 import re
@@ -22,7 +23,7 @@ def _pin(requirements: list[str]) -> str | None:
 
 def test_pillow_override_matches_pin():
     data = tomllib.loads(PYPROJECT.read_text())
-    pin = _pin(data["project"]["dependencies"])
+    pin = _pin(data["project"]["optional-dependencies"]["viz"])
     override = _pin(data["tool"]["uv"]["override-dependencies"])
-    assert pin is not None, "no Pillow== pin in [project] dependencies"
+    assert pin is not None, "no Pillow== pin in the viz extra"
     assert override == pin, f"override pillow=={override} != pin Pillow=={pin}"

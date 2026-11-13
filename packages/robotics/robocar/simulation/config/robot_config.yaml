@@ -1,4 +1,7 @@
-# Robot Configuration for ESP-IDF Simulation
+# Robot configuration for the legacy demo (DifferentialDriveRobot, the visualiser).
+# It describes the removed dual-ESP32 car, not the current chassis. The plant
+# (robocar_sim.plant) does not read this file; its robot description is
+# src/robocar_sim/plant.yaml.
 robot:
   name: "ESP32-RoboCar"
   description: "Dual ESP32 AI-powered autonomous robot car"
@@ -75,23 +78,6 @@ robot:
       beam_angle: 15  # degrees
       update_rate: 10  # Hz
 
-  # Communication configuration
-  communication:
-    i2c:
-      address_main: 0x42
-      address_cam: 0x43
-      frequency: 100000  # Hz
-      pins:
-        sda: 15
-        scl: 14
-
-    wifi:
-      ssid: "ESP32-RoboCar"
-      password: "robocar123"
-
-    uart:
-      baudrate: 115200
-
 # Simulation settings
 simulation:
   timestep: 0.01  # seconds (100Hz)
@@ -106,25 +92,6 @@ simulation:
     fps: 20           # Match robot.sensors.camera.fps
     noise_level: 0.02
     compression_quality: 85
-
-  # WiFi simulation configuration
-  wifi:
-    enabled: false
-    auto_connect: true
-    default_ssid: "ESP32-RoboCar"
-    default_password: "robocar123"
-    connection_stability_threshold: 30.0  # seconds for OTA readiness
-    max_retry_attempts: 3
-    retry_delay_ms: 5000
-    power_save_mode: true
-
-  # OTA simulation configuration
-  ota:
-    enabled: false
-    simulate_download_speed: 50000  # bytes/s (50KB/s)
-    verification_delay: 1.0  # seconds
-    failure_probability: 0.05  # 5% chance of verification failure
-    partition_size: 1572864  # 1.5MB (0x180000)
 
   # Motor control configuration
   motor_control:
@@ -170,22 +137,3 @@ simulation:
       - type: "cylinder"
         position: [3.0, 1.0]
         radius: 0.3
-
-  # Communication bridge
-  bridge:
-    type: "websocket"
-    host: "localhost"
-    port: 8765
-
-# AI Backend Configuration
-ai_backend:
-  enabled: true
-  type: "claude"  # or "ollama"
-  api_key: "${CLAUDE_API_KEY}"
-  model: "claude-3-sonnet-20240229"
-
-  # Ollama configuration
-  ollama:
-    host: "localhost"
-    port: 11434
-    model: "llava"

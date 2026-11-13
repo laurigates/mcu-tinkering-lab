@@ -1,22 +1,27 @@
 # 3D Visualization Configuration
 
-The ESP32 Robot Car Simulation now supports configurable 3D visualization modes instead of requiring code changes.
+The viewer modes of the legacy demo (`robocar_sim.main`, see the
+[README](README.md)). The demo needs the `viz` extra: run the commands below
+from this directory after `uv sync --extra viz`, or use the
+`just sim::run`, `run-visual` and `run-browser` recipes, which pass
+`--extra viz` themselves. The plant (`robocar_sim.plant`) has no viewer; its
+demo draws a plot of the path (`just sim::plant-demo`).
 
 ## Visualization Modes
 
 ### 1. Headless Mode (Default)
 - **Description**: No visual interface, runs simulation in background
-- **Usage**: `python main.py --headless` or `python main.py --viz-mode headless`
+- **Usage**: `uv run python -m robocar_sim.main --headless` or `uv run python -m robocar_sim.main --viz-mode headless`
 - **Best for**: Server environments, performance testing, continuous integration
 
 ### 2. Visual Mode (GUI Window)
 - **Description**: Opens a GUI window with 3D visualization
-- **Usage**: `python main.py --visual` or `python main.py --viz-mode visual`
+- **Usage**: `uv run python -m robocar_sim.main --visual` or `uv run python -m robocar_sim.main --viz-mode visual`
 - **Best for**: Local development, interactive debugging
 
 ### 3. Browser Mode (Web Interface)
 - **Description**: Opens browser-based 3D visualization at http://localhost:52000
-- **Usage**: `python main.py --browser` or `python main.py --viz-mode browser`
+- **Usage**: `uv run python -m robocar_sim.main --browser` or `uv run python -m robocar_sim.main --viz-mode browser`
 - **Best for**: Remote access, sharing visualization, web integration
 
 ## Configuration Methods
@@ -24,28 +29,27 @@ The ESP32 Robot Car Simulation now supports configurable 3D visualization modes 
 ### Command Line Arguments
 ```bash
 # Explicit mode selection
-python main.py --viz-mode headless
-python main.py --viz-mode visual
-python main.py --viz-mode browser
+uv run python -m robocar_sim.main --viz-mode headless
+uv run python -m robocar_sim.main --viz-mode visual
+uv run python -m robocar_sim.main --viz-mode browser
 
 # Shorthand flags
-python main.py --headless     # or --no-viz
-python main.py --visual       # or --gui
-python main.py --browser
+uv run python -m robocar_sim.main --headless     # or --no-viz
+uv run python -m robocar_sim.main --visual       # or --gui
+uv run python -m robocar_sim.main --browser
 
 # Combined with other options
-python main.py --visual --serial /dev/ttyUSB0
-python main.py --browser --config custom_config.yaml
+uv run python -m robocar_sim.main --browser --config custom_config.yaml
 ```
 
 ### Environment Variable
 ```bash
 # Set visualization mode via environment
 export GENESIS_VIZ_MODE=visual
-python main.py
+uv run python -m robocar_sim.main
 
 # Or inline
-GENESIS_VIZ_MODE=browser python main.py
+GENESIS_VIZ_MODE=browser uv run python -m robocar_sim.main
 ```
 
 ### Priority Order
@@ -58,35 +62,17 @@ GENESIS_VIZ_MODE=browser python main.py
 
 ```bash
 # Default headless mode
-python main.py
+uv run python -m robocar_sim.main
 
 # GUI window visualization
-python main.py --visual
+uv run python -m robocar_sim.main --visual
 
 # Browser-based visualization
-python main.py --browser
+uv run python -m robocar_sim.main --browser
 
 # Environment variable control
-GENESIS_VIZ_MODE=visual python main.py
+GENESIS_VIZ_MODE=visual uv run python -m robocar_sim.main
 
-# Combined with ESP32 connection
-python main.py --visual --serial /dev/ttyUSB0
-
-# Demo mode with browser visualization
-python main.py --browser --demo-only
-```
-
-## Migration from Previous Version
-
-**Before** (required code edit):
-```python
-# Edit swift_visualizer.py line 432:
-self.env.launch(realtime=True, headless=False)  # Manual edit needed
-```
-
-**After** (configurable):
-```bash
-python main.py --visual  # No code changes needed
 ```
 
 ## Troubleshooting

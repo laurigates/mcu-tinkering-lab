@@ -42,11 +42,21 @@ without hardware in the loop.
 
 ### Communication
 
+R6–R8 are **withdrawn** by
+[ADR-036](../decisions/ADR-036-robocar-twin-plant-port.md) (2026-11-13).
+Nothing speaks that protocol since the dual-board firmware was removed, and the
+bridge that implemented them (`communication_bridge.py`) is deleted. The
+simulation's external interface is the JSONL stepper
+`python -m robocar_sim.plant` (ADR-036 §3). What depended on the bridge goes
+with it: the two Goals about the UART protocol and the WebSocket interface,
+`websockets` and `pyserial` in R15, and the `--demo-only` flag in the Success
+Criteria (the demo is the only mode left).
+
 | Req | Description |
 |-----|-------------|
-| R6 | WebSocket server on port 8765 accepting motor and servo command JSON messages |
-| R7 | Serial UART bridge for connecting a real ESP32 to the virtual environment |
-| R8 | Command protocol must match hardware: `MSG_MOVE`, `MSG_SOUND`, `MSG_SERVO` type codes |
+| ~~R6~~ | Withdrawn. WebSocket server on port 8765 accepting motor and servo command JSON messages |
+| ~~R7~~ | Withdrawn. Serial UART bridge for connecting a real ESP32 to the virtual environment |
+| ~~R8~~ | Withdrawn. Command protocol must match hardware: `MSG_MOVE`, `MSG_SOUND`, `MSG_SERVO` type codes |
 
 ### Visualization
 

@@ -9,13 +9,10 @@ from pathlib import Path
 
 import pytest
 
-# Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 
 def test_python_version():
-    """Test that we're running Python 3.11+"""
-    assert sys.version_info >= (3, 11), f"Python 3.11+ required, got {sys.version}"
+    """Test that we're running Python 3.12+ (pyproject.toml requires-python)"""
+    assert sys.version_info >= (3, 12), f"Python 3.12+ required, got {sys.version}"
 
 
 def test_basic_imports():
@@ -28,27 +25,9 @@ def test_basic_imports():
 
 
 def test_simulation_imports():
-    """Test that simulation-specific libraries can be imported"""
-    try:
-        import cv2
-
-        print(f"✓ OpenCV {cv2.__version__}")
-    except ImportError:
-        pytest.skip("OpenCV not available")
-
-    try:
-        import websockets
-
-        print(f"✓ WebSockets {websockets.__version__}")
-    except ImportError:
-        pytest.skip("WebSockets not available")
-
-    try:
-        import serial
-
-        print(f"✓ PySerial {serial.__version__}")
-    except ImportError:
-        pytest.skip("PySerial not available")
+    """Test that the camera's OpenCV can be imported (viz extra)"""
+    cv2 = pytest.importorskip("cv2", reason="OpenCV is in the viz extra")
+    print(f"✓ OpenCV {cv2.__version__}")
 
 
 def test_genesis_import():
@@ -76,13 +55,10 @@ def test_torch_import():
 
 
 def test_robot_model_import():
-    """Test that our robot model can be imported"""
-    try:
-        from robot_model import DifferentialDriveRobot  # noqa: F401
+    """Test that our robot model can be imported on the core dependencies"""
+    from robocar_sim.robot_model import DifferentialDriveRobot  # noqa: F401
 
-        print("✓ Robot model imports successfully")
-    except ImportError as e:
-        pytest.skip(f"Robot model not available: {e}")
+    print("✓ Robot model imports successfully")
 
 
 def test_config_file_exists():

@@ -3,13 +3,9 @@
 Debug script to analyze differential drive kinematics
 """
 
-import sys
-
-sys.path.append("src")
-
 import numpy as np
 
-from robot_model import DifferentialDriveRobot
+from robocar_sim.robot_model import DifferentialDriveRobot
 
 
 def analyze_differential_drive():
