@@ -28,10 +28,14 @@ def make_tree(root: Path) -> None:
     """Copy the script and the template project into a throwaway tree."""
     (root / "tools" / "scaffold").mkdir(parents=True)
     shutil.copy2(SCRIPT, root / "tools" / "scaffold" / SCRIPT.name)
+    # Ignore only build output and generated config, so sdkconfig.defaults
+    # comes along as it does from the real template.
     shutil.copytree(
         TEMPLATE,
         root / "packages" / "camera-vision" / "cam-webserver",
-        ignore=shutil.ignore_patterns("build", "managed_components", "sdkconfig*"),
+        ignore=shutil.ignore_patterns(
+            "build", "managed_components", "sdkconfig", "sdkconfig.old"
+        ),
     )
 
 
@@ -76,6 +80,8 @@ class DefaultTemplate(unittest.TestCase):
         (template / "main" / "credentials.h").write_text('#define WIFI_PASS "secret"\n')
         (template / "build").mkdir()
         (template / "build" / "esp32-cam-webserver.bin").write_bytes(b"\0")
+        (template / "sdkconfig").write_text("CONFIG_FROM_TEMPLATE=y\n")
+        (template / "sdkconfig.old").write_text("CONFIG_FROM_TEMPLATE=y\n")
         cls.result = run_scaffold(cls.root, ["probe-proj", SENSORS, "1"])
         cls.project = cls.root / "packages" / "sensors" / "probe-proj"
 
@@ -105,7 +111,13 @@ class DefaultTemplate(unittest.TestCase):
     def test_local_state_not_copied(self):
         self.assertFalse((self.project / "main" / "credentials.h").exists())
         self.assertFalse((self.project / "build").exists())
+        self.assertFalse((self.project / "sdkconfig").exists())
+        self.assertFalse((self.project / "sdkconfig.old").exists())
         self.assertTrue((self.project / "main" / "credentials.h.example").is_file())
+        self.assertEqual(
+            (self.project / "sdkconfig.defaults").read_text(),
+            (TEMPLATE / "sdkconfig.defaults").read_text(),
+        )
 
     def test_mdns_hostname_is_project_name(self):
         main_c = (self.project / "main" / "main.c").read_text()
