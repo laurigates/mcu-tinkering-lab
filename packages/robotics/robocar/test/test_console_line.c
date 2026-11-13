@@ -132,6 +132,7 @@ static void feed(const uint8_t *bytes, size_t len, bool improv_armed)
         const char *line = console_line_feed(&s_line, (char)bytes[i], s_session, s_now_ms);
         if (line != NULL) {
             TEST_ASSERT(s_line_count < 16);
+            // cppcheck-suppress arrayIndexOutOfBoundsCond ; TEST_ASSERT aborts at 16
             snprintf(s_lines[s_line_count++], CONSOLE_LINE_MAX, "%s", line);
         }
     }

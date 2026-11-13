@@ -56,8 +56,12 @@ static void test_run(const char *name, void (*fn)(void))
 static char *load_fixture(const char *filename)
 {
     char path[1024];
+    // FIXTURE_DIR is a string from CMake; cppcheck's own FIXTURE_DIR
+    // configuration (from the #ifndef above) defines it as 1.
+    // cppcheck-suppress invalidPrintfArgType_s
     int n = snprintf(path, sizeof(path), "%s/%s", FIXTURE_DIR, filename);
     if (n < 0 || (size_t)n >= sizeof(path)) {
+        // cppcheck-suppress invalidPrintfArgType_s
         printf("fixture path too long: %s/%s\n", FIXTURE_DIR, filename);
         return NULL;
     }

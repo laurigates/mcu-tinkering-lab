@@ -238,6 +238,9 @@ static char *render_pending(const pending_t *p)
     ev.breadcrumb_count = line_count;
 
     char message[48];
+    // fill_note() points ev.breadcrumbs at goals, which event_report_render()
+    // reads below, so goals has to outlive the if.
+    // cppcheck-suppress variableScope
     const char *goals[EVENT_REPORT_NOTE_GOALS];
     if (p->kind == PENDING_NOTE && p->note != NULL) {
         fill_note(&ev, p->note, goals);
@@ -498,7 +501,8 @@ esp_err_t event_report_send_reset(const char *reason_name)
     crash_info_t *crash = NULL;
     if (s_queue == NULL || s_reset_sent) {
         err = ESP_ERR_INVALID_STATE;
-    } else if ((crash = read_crash()) != NULL) {
+    } else if ((crash = read_crash()) != NULL) {  // cppcheck-suppress knownConditionTrueFalse
+        /* cppcheck analyses only the build without core dumps, where read_crash() is NULL. */
         /* A core dump is reported whatever this boot's reset reason: it may
          * be left over from a boot that crashed and then reset again before
          * the event was acknowledged. It replaces the plain reset event. */
