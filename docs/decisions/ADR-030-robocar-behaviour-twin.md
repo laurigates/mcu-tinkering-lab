@@ -10,6 +10,8 @@ bullet runs)
 [ADR-020](ADR-020-ambient-audio-speech-gate.md),
 [ADR-022](ADR-022-planner-dormancy-and-spend-ceiling.md),
 [ADR-024](ADR-024-conversational-entity-and-multimodal-voice.md)
+**Amended by**: [ADR-036](ADR-036-robocar-twin-plant-port.md) (§3: the world
+can also be a physics plant; open question 4: the simulation is kept)
 
 ---
 
@@ -192,3 +194,5 @@ packages/robotics/robocar/twin/
 3. Speech fixtures for live voice turns: record real utterances, or synthesise
    them once with Gemini TTS and commit the WAVs.
 4. Whether `packages/robotics/robocar/simulation` is retired once the twin exists.
+   Answered by [ADR-036](ADR-036-robocar-twin-plant-port.md): it is kept and
+   cut down to the plant behind the twin's plant port.

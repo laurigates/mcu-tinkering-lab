@@ -58,6 +58,7 @@ Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, p
 | ADR-033 | ADR | Robocar Error Reporting through GlitchTip | accepted | 2026-11-09 |
 | ADR-034 | ADR | Credential-Free Onboarding — Device-Flow Enrolment, BLE Improv and Broker Discovery | proposed | 2026-11-09 |
 | ADR-035 | ADR | A Shared Dimension Standard for Printed Parts | proposed | 2026-11-09 |
+| ADR-036 | ADR | Robocar Twin Executor and Plant Port | accepted | 2026-11-13 |
 | PRP-hardware-in-the-loop-testing | PRP | Hardware-in-the-Loop (HIL) Testing | planned | 2026-04-18 |
 | PRP-hierarchical-ai-controller | PRP | Hierarchical AI Controller (Planner + Reactive Executor) | draft | 2026-04-18 |
 | PRP-host-based-unit-tests | PRP | Host-Based Unit Tests Expansion | in-progress | 2026-04-18 |
