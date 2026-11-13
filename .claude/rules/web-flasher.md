@@ -119,7 +119,8 @@ robocar sets it.
   fix it asks for is the one-line partition change
   (`CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y` or a `partitions.csv`), not a
   build trimmed to the byte. A hardcoded "1.8 MB" gate was wrong for 14 of the
-  16 flasher projects, and even for the two it was written for (issue #556).
+  16 flasher projects of the time, and even for the two 4 MB robocar targets
+  it was written for, both since removed (issue #556).
 - **No credentials in CI builds**: Pre-built firmware does not include WiFi credentials. Post-flash provisioning (Improv WiFi) is required.
 
 ## File Locations
