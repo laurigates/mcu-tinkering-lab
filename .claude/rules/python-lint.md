@@ -12,7 +12,9 @@ pre-commit's then-pinned v0.15.6 failed on E402 and E731, and its
 then failed on the formatting of a file that had passed locally. Until #761,
 `ruff.toml`'s `select` sat inside `[lint.per-file-ignores]`, so every version
 ran its own default rule set; `tools/test_ruff_config.py` now holds the keys
-in `[lint]`.
+in `[lint]`. The Claude Code post-edit hook (`.claude/hooks/post-edit-lint.sh`)
+uses the PATH ruff too, but applies its fixes only when `ruff --version`
+matches the pinned rev; otherwise it formats and skips the fixes (#1130).
 
 ```sh
 pre-commit run --files <changed files>   # what CI runs; repeat until clean
