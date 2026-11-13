@@ -5,8 +5,18 @@ on:
     - cron: '0 7 * * 1'  # Mondays at 07:00 UTC
   workflow_dispatch:
 
+# Read-only by default; the caller job asks for what the reusable uses.
+permissions:
+  contents: read
+
 jobs:
   sync-rules:
+    # The scopes reusable-sync-ai-rules.yml declares at its workflow level. A
+    # called workflow gets no more than its caller job grants, so a narrower
+    # block here fails the run at startup.
+    permissions:
+      contents: write
+      pull-requests: write
     uses: laurigates/.github/.github/workflows/reusable-sync-ai-rules.yml@main
     # App token: this repo does not let GITHUB_TOKEN open pull requests, and a
     # PR opened with GITHUB_TOKEN would trigger no CI anyway.

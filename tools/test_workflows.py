@@ -46,9 +46,9 @@ What the tests hold:
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
   calls the reusable Claude scan (issue #860).
 - Every workflow declares workflow-level ``permissions:``, except the
-  reusable callers listed in ``INHERITS_REPO_DEFAULT``. auto-fix.yml's caller
-  job grants the reusable's scopes itself, since the workflow level is
-  read-only.
+  reusable callers listed in ``INHERITS_REPO_DEFAULT`` (none now). Each
+  laurigates/.github reusable caller is read-only at workflow level and its
+  caller job grants exactly the scopes the reusable declares (issue #1103).
 - A pre-commit hook that watches CI configuration (``.github/``,
   ``.claude/hooks/``, any root file but Markdown) runs on a PR
   that changes only that file: test.yml's ``any-code`` filter covers the file,
@@ -105,12 +105,7 @@ DRIFT_STEP_SUFFIX = "check for drift"
 # block here would cap the scopes that reusable declares (a startup_failure
 # if it is narrower). Give the caller job the reusable's scopes, as
 # auto-fix.yml does, then drop the file from this list.
-INHERITS_REPO_DEFAULT = {
-    "auto-resolve-conflicts.yml",
-    "claude.yml",
-    "fix-release-conflicts.yml",
-    "sync-ai-rules.yml",
-}
+INHERITS_REPO_DEFAULT: set[str] = set()
 
 # CI configuration: files whose hooks must run on a PR that changes nothing
 # else (issue #1089): .github/, the Claude Code hooks, and every root file but
@@ -643,26 +638,59 @@ class PermissionsTest(unittest.TestCase):
                 jobs = workflow["jobs"].values()
                 self.assertTrue(all("uses" in job for job in jobs))
 
-    def test_auto_fix_caller_grants_the_reusables_scopes(self):
-        # reusable-auto-fix.yml declares these at its workflow level; a called
-        # workflow gets no more than its caller job grants.
-        workflow = load("auto-fix.yml")
-        self.assertEqual(workflow["permissions"], {"contents": "read"})
-        (caller,) = [
-            job
-            for job in workflow["jobs"].values()
-            if "reusable-auto-fix.yml" in str(job.get("uses", ""))
-        ]
-        self.assertEqual(
-            caller.get("permissions"),
-            {
-                "contents": "write",
-                "pull-requests": "write",
-                "issues": "write",
-                "actions": "read",
-                "id-token": "write",
-            },
-        )
+    def test_reusable_callers_grant_the_reusables_scopes(self):
+        # Each caller, the laurigates/.github reusable it runs, and the scopes
+        # that reusable declares at its workflow level (read at @main on
+        # 2026-11-13). A called workflow gets no more than its caller job
+        # grants, so with a read-only workflow level the caller job grants
+        # exactly these. When a reusable adds a scope, its caller fails at
+        # startup until the scope is added here and in the caller.
+        callers = {
+            "auto-fix.yml": (
+                "reusable-auto-fix.yml",
+                {
+                    "contents": "write",
+                    "pull-requests": "write",
+                    "issues": "write",
+                    "actions": "read",
+                    "id-token": "write",
+                },
+            ),
+            "auto-resolve-conflicts.yml": (
+                "reusable-auto-resolve-conflicts.yml",
+                {"contents": "write", "pull-requests": "write", "issues": "write"},
+            ),
+            "claude.yml": (
+                "reusable-claude.yml",
+                {
+                    "contents": "write",
+                    "pull-requests": "write",
+                    "issues": "write",
+                    "id-token": "write",
+                    "actions": "read",
+                },
+            ),
+            "fix-release-conflicts.yml": (
+                "reusable-fix-release-conflicts.yml",
+                {"contents": "write", "pull-requests": "write", "actions": "write"},
+            ),
+            "sync-ai-rules.yml": (
+                "reusable-sync-ai-rules.yml",
+                {"contents": "write", "pull-requests": "write"},
+            ),
+        }
+        for name, (reusable, scopes) in sorted(callers.items()):
+            with self.subTest(workflow=name):
+                workflow = load(name)
+                self.assertEqual(workflow.get("permissions"), {"contents": "read"})
+                (caller,) = [
+                    job
+                    for job in workflow["jobs"].values()
+                    if str(job.get("uses", "")).startswith(
+                        f"laurigates/.github/.github/workflows/{reusable}@"
+                    )
+                ]
+                self.assertEqual(caller.get("permissions"), scopes)
 
 
 def glob_regex(glob: str) -> re.Pattern:

@@ -12,8 +12,19 @@ on:
         required: false
         type: string
 
+# Read-only by default; the caller job asks for what the reusable uses.
+permissions:
+  contents: read
+
 jobs:
   resolve-conflicts:
+    # The scopes reusable-auto-resolve-conflicts.yml declares at its workflow
+    # level. A called workflow gets no more than its caller job grants, so a
+    # narrower block here fails the run at startup.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     uses: laurigates/.github/.github/workflows/reusable-auto-resolve-conflicts.yml@main
     # App token for the push: GitHub starts no CI for a push made with
     # GITHUB_TOKEN, so a resolved head would never be built.
