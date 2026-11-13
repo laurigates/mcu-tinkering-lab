@@ -169,6 +169,15 @@
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
+    },
+    "packages/usb-tools/facedancer-espdancer-fw": {
+      "release-type": "simple",
+      "component": "facedancer-espdancer-fw",
+      "package-name": "facedancer-espdancer-fw",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   },
   "release-type": "simple",
