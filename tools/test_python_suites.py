@@ -53,6 +53,7 @@ SETUP_ACTION = REPO_ROOT / ".github" / "actions" / "setup-tools" / "action.yml"
 TEST_WORKFLOW = WORKFLOWS / "test.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
 RENOVATE = REPO_ROOT / "renovate.json"
+INSTALL_PKGS = REPO_ROOT / "scripts" / "install_pkgs.sh"
 
 # uv projects that a workflow other than the suites job installs. Each named
 # workflow must run `uv sync --locked` with this working directory.
@@ -449,6 +450,22 @@ class SetupAction(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         pinned = re.search(r"tool: just@(\S+)", text).group(1)
         self.assertEqual(hits[0].group("currentValue"), pinned)
+
+    def test_cloud_sessions_install_the_just_ci_pins(self):
+        # The `just --dry-run` text check-flash-recipes reads can change
+        # between releases, so a session and CI run one just (#1103).
+        # renovate.json groups the two pins into one PR.
+        session = re.search(
+            r'^JUST_VERSION="([^"]+)"', INSTALL_PKGS.read_text(), re.MULTILINE
+        )
+        ci = re.search(r"tool: just@(\S+)", SETUP_ACTION.read_text())
+        self.assertIsNotNone(session)
+        self.assertIsNotNone(ci)
+        self.assertEqual(session.group(1), ci.group(1))
+        self.assertTrue(
+            python_suites_hook_files().search("scripts/install_pkgs.sh"),
+            "add scripts/install_pkgs.sh to the python-suites hook's files:",
+        )
 
     def test_workflows_running_just_install_it(self):
         for path in sorted(WORKFLOWS.glob("*.yml")):
