@@ -120,11 +120,14 @@ rm -rf "$PROJECT_DIR/build" "$PROJECT_DIR/sdkconfig" "$PROJECT_DIR/sdkconfig.old
     "$PROJECT_DIR/managed_components" "$PROJECT_DIR/main/credentials.h"
 
 # Drop the template's release identity (issue #1078). flasher.json names its
-# release asset and OTA topic, CHANGELOG.md and CLAUDE.md describe it, and
-# dependencies.lock is resolved for its components. A new project starts at
-# 0.1.0, the fallback its CMakeLists uses when version.txt is absent.
+# release asset and OTA topic, CHANGELOG.md, CLAUDE.md and .claude/ describe
+# it, and dependencies.lock is resolved for its components. A new project
+# starts at 0.1.0, the fallback its CMakeLists uses when version.txt is absent.
+# Editor config such as robocar's .clangd stays: it works around the container
+# build's compile database and names no project.
 rm -f "$PROJECT_DIR/flasher.json" "$PROJECT_DIR/CHANGELOG.md" \
     "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/dependencies.lock"
+rm -rf "$PROJECT_DIR/.claude"
 if [ -f "$PROJECT_DIR/version.txt" ]; then
     echo "0.1.0" > "$PROJECT_DIR/version.txt"
 fi

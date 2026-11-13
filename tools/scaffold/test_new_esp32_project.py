@@ -146,6 +146,9 @@ class CopyFromExisting(unittest.TestCase):
             (source / name).write_text("from src-proj\n")
         (source / "version.txt").write_text("1.2.3\n")
         (source / ".gitignore").write_text("build/\n")
+        # Project-level Claude rules describe the source, as CLAUDE.md does.
+        (source / ".claude" / "rules").mkdir(parents=True)
+        (source / ".claude" / "rules" / "testing.md").write_text("src-proj\n")
         (source / "CMakeLists.txt").write_text("project(src-proj)\n")
         (source / "main" / "main.c").write_text(
             '// mDNS: src-host.local\nmdns_hostname_set("src-host");\n'
@@ -169,6 +172,7 @@ class CopyFromExisting(unittest.TestCase):
             self.assertFalse((self.project / name).exists(), name)
         self.assertEqual((self.project / "version.txt").read_text(), "0.1.0\n")
         self.assertTrue((self.project / ".gitignore").is_file())
+        self.assertFalse((self.project / ".claude").exists())
 
     def test_mdns_hostname_is_project_name(self):
         main_c = (self.project / "main" / "main.c").read_text()
