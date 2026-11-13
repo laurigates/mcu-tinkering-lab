@@ -225,14 +225,15 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Runs on a uv.lock, pyproject.toml, justfile or CI file change: those
-      # move what the test reads (tools/test_python_suites.py, issue #457).
+      # Runs on a uv.lock, pyproject.toml, justfile, CI file or component
+      # host-suite change: those move what the test reads
+      # (tools/test_python_suites.py, issues #457, #1103).
       - id: python-suites
         name: Every uv.lock is installed --locked, every tool test recipe runs in CI, uv and just come from setup-tools
         entry: python3 -m unittest tools/test_python_suites.py
         language: system
         pass_filenames: false
-        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$)'
+        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$|^packages/(.*/)?components/[^/]+/tests?/|^packages/components/host-test/)'
 
       # Ruff accepts a key placed under the wrong TOML table without a warning
       # (issue #761: select and fixable sat inside [lint.per-file-ignores]).

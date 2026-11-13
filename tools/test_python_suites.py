@@ -113,6 +113,13 @@ def just_modules() -> dict[str, str]:
     return dict(re.findall(r"^mod\s+([\w-]+)\s+'([^']+)'", text, re.MULTILINE))
 
 
+def python_suites_hook_files() -> re.Pattern:
+    """The `files:` regex of the pre-commit hook that runs this suite."""
+    text = PRE_COMMIT.read_text()
+    block = re.search(r"- id: python-suites\n((?:        .*\n)+)", text)
+    return re.compile(re.search(r"files: '([^']*)'", block.group(1)).group(1))
+
+
 def recipe_body(justfile: Path, recipe: str) -> list[str] | None:
     """The command lines of `recipe`, or None if the justfile has no such recipe."""
     lines = justfile.read_text().splitlines()
@@ -575,6 +582,19 @@ class ComponentHostSuites(unittest.TestCase):
                     [suite],
                     f"add the component to the {COMPONENTS_SUITE!r} suite's paths",
                 )
+
+    def test_the_hook_runs_on_a_component_suite_change(self):
+        # The python-suites hook's files: must take these, or a suite the
+        # recipe would not run fails only in CI (#1103).
+        files = python_suites_hook_files()
+        inputs = [
+            f
+            for f in self.files
+            if COMPONENT_TEST_DIR.match(f) or f.startswith(SHARED_STUBS + "/")
+        ]
+        self.assertTrue(inputs)
+        missed = [f for f in inputs if not files.search(f)]
+        self.assertEqual(missed, [], "extend the python-suites hook's files:")
 
     def test_no_stub_is_copied_between_suites(self):
         by_content: dict[bytes, list[str]] = {}
