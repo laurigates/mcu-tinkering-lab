@@ -1,6 +1,6 @@
 # Shared ESP-IDF project configuration
 # Project justfiles import '../../../tools/esp32-idf.just', which imports this
-# file; they do not import it themselves.
+# file; a project that builds nothing may import it directly.
 #
 # Provides:
 #   container_cmd    — docker or podman
