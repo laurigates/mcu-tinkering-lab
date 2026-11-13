@@ -132,7 +132,10 @@
     "project": "nfc-scavenger-hunt",
     "path": "games/nfc-scavenger-hunt",
     "target": "esp32s3",
-    "fetch_bluepad32": false
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/thinkpack-rc522"
+    ]
   },
   {
     "system": "esp32",

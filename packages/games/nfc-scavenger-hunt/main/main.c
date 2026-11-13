@@ -13,9 +13,9 @@
 #include "local_sounds.h"
 #include "mdns.h"
 #include "prompt_builder.h"
-#include "rc522_driver.h"
 #include "status_led.h"
 #include "tag_config.h"
+#include "thinkpack_rc522.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "main";
@@ -154,7 +154,7 @@ static void scan_task(void *arg)
         }
 
         /* Poll NFC reader */
-        if (rc522_poll_tag(uid, &uid_len)) {
+        if (thinkpack_rc522_poll_tag(uid, &uid_len)) {
             /* Debounce: skip if same tag was just scanned */
             TickType_t now = xTaskGetTickCount();
             if (is_same_tag(uid, uid_len) &&
@@ -223,7 +223,7 @@ void app_main(void)
     ESP_ERROR_CHECK(game_logic_init());
 
     /* Initialize NFC reader */
-    ESP_ERROR_CHECK(rc522_init());
+    ESP_ERROR_CHECK(thinkpack_rc522_init());
 
     /* Configure reset button with internal pull-up */
     gpio_config_t btn_conf = {
