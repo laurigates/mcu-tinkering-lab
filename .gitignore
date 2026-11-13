@@ -83,5 +83,7 @@ coverage.xml
 .env
 .env.local
 
-# Builds of other commits and staged release parts for `just <project>::flash <ref>`
-/tmp/flash/
+# Scratch output: agents' scripts and commit messages
+# (.claude/rules/multi-agent-workflows.md), test reports, and tmp/flash/, the
+# builds of other commits and staged release parts for `just <project>::flash <ref>`
+/tmp/
