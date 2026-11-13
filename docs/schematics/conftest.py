@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path as FsPath
@@ -26,6 +27,20 @@ sys.path.insert(0, str(FsPath(__file__).parent))
 
 from metrics import CircuitMetrics, measure_drawing
 from render import circuit_files, draw_circuit, load_circuit
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_git_env(monkeypatch):
+    """Run every test without the GIT_* variables of the calling process.
+
+    During a `git commit` from a linked worktree, git exports GIT_DIR and an
+    absolute GIT_INDEX_FILE to hooks. Inherited, they send the throwaway
+    repositories' git calls here, and guide_deps.py's, to the repository being
+    committed (#1123). Autouse fixtures run before the ones a test requests,
+    so a fixture that sets GIT_CONFIG_* or GIT_AUTHOR_* still does.
+    """
+    for key in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(key)
 
 
 @dataclass(frozen=True)

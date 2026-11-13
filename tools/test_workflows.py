@@ -75,6 +75,12 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_workflows.py
+    import gitenv
+setUpModule = gitenv.isolate
+
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 PRE_COMMIT = ROOT / ".pre-commit-config.yaml"

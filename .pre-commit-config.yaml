@@ -140,6 +140,15 @@ repos:
         files: '^tools/(flash-source\.py|test_flash_source\.py)$'
         pass_filenames: false
 
+      # A suite that builds a throwaway git repository scrubs the GIT_* a hook
+      # inherits during a commit from a linked worktree (#1123).
+      - id: git-env-tests
+        name: Throwaway-repository test suites scrub inherited GIT_* variables
+        entry: python3 -m unittest tools/test_git_env.py
+        language: system
+        files: '(^|/)(test_[^/]*\.py|conftest\.py)$|^tools/gitenv\.py$'
+        pass_filenames: false
+
       - id: jlc-blog-tests
         name: jlc-blog unit tests
         entry: python3 -m unittest tools/test_jlc_blog.py

@@ -26,9 +26,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import gitenv
+
 import kicad
 from kicad import paths
 from kicad.errors import KicadError
+
+setUpModule = gitenv.isolate
 
 # Modules whose main() takes project directories (paths.add_project_args).
 PROJECT_CLIS: tuple[str, ...] = (
