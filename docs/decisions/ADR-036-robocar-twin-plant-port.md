@@ -2,12 +2,11 @@
 
 **Status**: accepted
 **Date**: 2026-11-13
-**Confidence**: 6/10 (sections 1 and the twin side of 3 were rehearsed in a
-scratch copy: the executor, the real `motor_controller.c` and
-`ultrasonic_core.c` link with no change under `main/`, and six of seven
-scenario traces stay byte-identical. The plant library and the coupled
-scenarios are designed here and not yet built. Every chassis and motor figure
-the plant uses is an estimate)
+**Confidence**: 6/10 (sections 1 and 2 are built and pass their gates: the
+executor, the real `motor_controller.c` and `ultrasonic_core.c` link with one
+host-only setter added under `main/`, six of seven scenario traces stay
+byte-identical, and the plant has its own tests. Nothing here has run against
+the robot, and every chassis and motor figure the plant uses is an estimate)
 **Requirements**: [PRD-017](../requirements/PRD-017-robocar-behaviour-twin.md),
 [PRD-003](../requirements/PRD-003-robot-physics-simulation.md)
 **Amends**: [ADR-030](ADR-030-robocar-behaviour-twin.md) §3 (the world) and
@@ -178,6 +177,8 @@ feed the executor are:
 | `range_fail` | optional `sensor` |
 | `floor` | `front`, `rear` booleans (floor present under each sensor) |
 
+The loader refuses a `floor` event unless `cliff` is set: without it the floor
+sensors read as absent and the event would change nothing.
 `us-n1-note-on-reflex` is rewritten with range dips of at least one read cycle.
 
 **Host hooks.** The only new code under `main/` is a setter in the host branch
@@ -252,10 +253,12 @@ reading = plant.step(dt_ms, left=WheelCmd(drive, duty), right=WheelCmd(drive, du
 - The range ray ignores the robot's own shape, reports `None` outside the
   sensor's 2..400 cm, and exists for a front and a rear sensor.
 - The chassis does not pass through a wall or an obstacle: the pose comes from
-  the Pymunk body after contact resolution, and `collided` is set while a
-  contact holds.
+  the Pymunk body after contact resolution, and `collided` is set when a
+  contact held during any part of the step.
 - A floor sensor reads floor when its point is inside the arena's floor
-  polygon; `off_floor` is set when a wheel contact point leaves it.
+  polygon; `off_floor` is set while a wheel contact point is outside it and
+  is not latched. The plant does not model the fall.
+- Rangefinders see walls and obstacles, not the floor's edge.
 - The plant reports geometric truth every step. Read pacing, smoothing and
   fail-closed semantics stay in the firmware's `ultrasonic_core` and
   `cliff_core`.
@@ -327,13 +330,16 @@ process and relays JSONL, so the two `uv.lock` files stay independent:
 {"t":"init","seed":7,"arena":{"floor":[[-50,-60],[150,-60],[150,60],[-50,60]]},"start":{"x_cm":0,"y_cm":0,"heading_deg":0}}
 {"t":"ready"}
 {"t":"step","dt_ms":33,"left":{"drive":"forward","duty":2409},"right":{"drive":"forward","duty":2409}}
-{"t":"reading","at_ms":33,"pose":{"x_cm":0.4,"y_cm":0.0,"heading_deg":0.0},
- "range_cm":{"front":96,"rear":null},"floor":{"front":true,"rear":true},
+{"t":"reading","at_ms":33,"pose":{"x_cm":0.086,"y_cm":0.0,"heading_deg":0.0},
+ "range_cm":{"front":null,"rear":null},"floor":{"front":true,"rear":true},
  "collided":false,"off_floor":false}
 ```
 
-A bad `init` or `step` gets `{"t":"error","message":"..."}` and a non-zero
-exit. The default command is `uv run --project <simulation> --locked --quiet
+`init` and `step` carry exactly these keys; an extra or missing key is an
+error, so the harness does not forward the twin's `id` or `at_ms`. `dt_ms` and
+`duty` are JSON integers. Pose figures are rounded to 0.001, so a chassis held
+against a wall reports the same pose from tick to tick. A bad `init` or `step`
+gets `{"t":"error","message":"..."}` and a non-zero exit. The default command is `uv run --project <simulation> --locked --quiet
 python -m robocar_sim.plant`, where `<simulation>` is the directory next to
 the harness's own twin directory (`default_twin_dir().parent / "simulation"`),
 not the scenario's. `ROBOCAR_PLANT_CMD`, split with `shlex.split`, overrides it
