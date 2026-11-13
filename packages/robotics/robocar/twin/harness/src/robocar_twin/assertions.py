@@ -7,11 +7,13 @@ events. A window is ``between: [start, end]`` (inclusive), or
 given. Every failure message lists the trace records it is about, with their
 index in the trace, so a reader can find them in the JSONL.
 
-``wheels`` and ``head`` records report a state when it changes, so they get two
-assertions each: ``wheels`` counts the change records in a window that match
-its filters, and ``wheels_at`` checks the state in force at one time (the last
-record at or before it). Numeric filters take ``[lo, hi]`` (inclusive) or one
-number. A new state record is one ``_StateKind`` entry in ``_STATE_KINDS``.
+``wheels``, ``head`` and ``pose`` records report a state when it changes, so
+they get two assertions each: ``wheels`` counts the change records in a window
+that match its filters, and ``wheels_at`` checks the state in force at one time
+(the last record at or before it). Numeric filters take ``[lo, hi]``
+(inclusive) or one number. A new state record is one ``_StateKind`` entry in
+``_STATE_KINDS``. ``pose`` records exist only in a run against the physics
+plant, so the two pose assertions are refused in a scripted scenario.
 """
 
 from __future__ import annotations
@@ -288,6 +290,21 @@ _STATE_KINDS: dict[str, _StateKind] = {
         "head",
         exact={"mode": (("mode",), HEAD_MODES), "settled": (("settled",), bool)},
         numeric={"pan": ("pan_deg",), "tilt": ("tilt_deg",)},
+    ),
+    # Written by the runner from the physics plant's readings, the first one
+    # (at 33 ms) included, so there is no initial state. The pose is the axle
+    # midpoint in the arena's frame; heading_deg is within -180..180.
+    "pose": _StateKind(
+        "pose",
+        exact={
+            "collided": (("collided",), bool),
+            "off_floor": (("off_floor",), bool),
+        },
+        numeric={
+            "x_cm": ("x_cm",),
+            "y_cm": ("y_cm",),
+            "heading_deg": ("heading_deg",),
+        },
     ),
 }
 
@@ -619,6 +636,13 @@ def validate_expectation(scenario: Scenario, item: object, where: str) -> None:
         scenario.resolve_time(args["tolerance"], where=f"{w}.tolerance")
     if name in _STATE_ASSERTIONS:
         kind = _STATE_ASSERTIONS[name]
+        if kind.t == "pose" and scenario.plant is None:
+            # A scripted run has no pose records, so `pose: {count: 0}` would
+            # pass without having checked anything.
+            raise ScenarioError(
+                f"{scenario.path}: {w}: pose assertions need plant: physics; a "
+                "scripted world has no pose"
+            )
         _validate_state_filters(scenario, kind, args, w)
         if "at" in spec.required:
             scenario.resolve_time(args["at"], where=f"{w}.at")

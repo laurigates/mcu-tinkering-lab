@@ -1,8 +1,10 @@
+import itertools
 import json
 
 import pytest
 from robocar_twin.assertions import evaluate
 from robocar_twin.cli import main as cli_main
+from robocar_twin.plant import plant_for
 from robocar_twin.runner import (
     TwinError,
     TwinTimeout,
@@ -252,3 +254,252 @@ def test_state_assertion_fails_against_a_real_run(write_scenario, fake_twin_cmd)
     bad = [o for o in outcomes if not o.passed]
     assert len(bad) == 1
     assert "left is 'brake', want 'forward'" in bad[0].message
+
+
+WALL_ARENA = """\
+floor: [[-50, -60], [100, -60], [100, 60], [-50, 60]]
+walls:
+  - {from: [100, -60], to: [100, 60]}
+"""
+TABLE_ARENA = "floor: [[-40, -40], [60, -40], [60, 40], [-40, 40]]\n"
+
+# The fake twin drives at duty 2457 from the first tick after the goal (16 s)
+# and the fake plant moves 60 cm/s at full duty: 36 cm/s, 1.188 cm per tick.
+PHYSICS_LIKE = """\
+seed: 3
+duration: 30s
+world:
+  - {at: 0s, frame: {scene: hall}}
+  - {at: 5s, console: status}
+models: {planner: inline}
+plant:
+  physics:
+    arena: arenas/room.yaml
+    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+default: {status: 200, latency: 1s, call: drive,
+          args: {heading_deg: 0, distance_cm: 50, speed_pct: 60}}
+expect:
+  - requests: {count: 1}
+  - pose_at: {at: 16s, x_cm: 0, collided: false, off_floor: false}
+  - pose: {x_cm: [0.5, 100], min: 10}
+  - wheels: {left: forward, right: forward, between: [16.005s, 16.005s], count: 1}
+  - wheels: {left: brake, right: brake, count: 1}
+  - pose: {collided: true, count: 0}
+  - pose_at: {at: 30s, x_cm: [70, 91]}
+"""
+
+
+def _physics(
+    write_scenario, write_arena, arena=WALL_ARENA, body=PHYSICS_LIKE, name="phys"
+):
+    write_arena("room", arena)
+    return load_scenario(write_scenario(name, body))
+
+
+def test_physics_run_relays_the_plant_and_traces_the_pose(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    plant = plant_for(scn, cmd=fake_plant_cmd)
+    result = run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    kinds = {r["t"] for r in result.trace}
+    # The per-tick exchange is not in the trace.
+    assert "plant_request" not in kinds and "plant_response" not in kinds
+    assert result.plant == "physics"
+    assert result.plant_steps == plant.steps == 30000 // 33 + 1
+    assert plant.returncode == 0  # reaped
+    poses = [r for r in result.trace if r["t"] == "pose"]
+    # The first reading is recorded, then only changes: nothing while parked.
+    assert poses[0] == {
+        "t": "pose",
+        "at_ms": 33,
+        "x_cm": 0.0,
+        "y_cm": 0.0,
+        "heading_deg": 0.0,
+        "collided": False,
+        "off_floor": False,
+    }
+    # The first tick after the goal is 16.005 s (485 x 33); its reading is the
+    # world one tick later.
+    assert poses[1]["at_ms"] == 16005 + 33
+    assert all(a["x_cm"] < b["x_cm"] for a, b in itertools.pairwise(poses))
+    # The plant's range reached the twin: it braked before the wall.
+    assert poses[-1]["x_cm"] < 92 and not poses[-1]["collided"]
+    assert len(poses) < result.plant_steps
+    # Records stay in time order with the pose records merged in.
+    times = [r["at_ms"] for r in result.trace if r["t"] in ("pose", "wheels")]
+    assert times == sorted(times)
+    outcomes = evaluate(scn, result.trace)
+    assert all(o.passed for o in outcomes), [
+        o.message for o in outcomes if not o.passed
+    ]
+
+
+def test_pose_is_traced_when_only_a_flag_changes(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    # Reading 10 (330 ms) alone reports a contact while the robot is parked at
+    # the start pose: the flag sets and clears with x, y and heading unchanged.
+    scn = _physics(write_scenario, write_arena)
+    plant = plant_for(scn, cmd=[*fake_plant_cmd, "--bump-at", "10"])
+    result = run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    parked = [r for r in result.trace if r["t"] == "pose" and r["at_ms"] < 16000]
+    assert [(r["at_ms"], r["x_cm"], r["collided"]) for r in parked] == [
+        (33, 0.0, False),
+        (330, 0.0, True),
+        (363, 0.0, False),
+    ]
+
+
+def test_physics_latency_window_ticks_exchange_before_the_reply(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    result = run_scenario(
+        scn, fake_twin_cmd, plant=plant_for(scn, cmd=fake_plant_cmd), timeout_s=30
+    )
+    # 15 s .. 16 s is the reply's latency. Had its 30 ticks not exchanged, the
+    # plant's clock would trail the twin's and the run would have failed as out
+    # of order; and the goal is handled after them, so the wheels start at the
+    # first tick past 16 s.
+    goal = next(r for r in result.trace if r["t"] == "goal")
+    first_wheels = next(r for r in result.trace if r["t"] == "wheels")
+    assert goal["at_ms"] == 16000 and first_wheels["at_ms"] == 16005
+    assert result.trace.index(goal) < result.trace.index(first_wheels)
+
+
+def test_physics_floor_reading_reaches_the_twin(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    body = PHYSICS_LIKE.replace("  - pose_at: {at: 30s, x_cm: [70, 91]}\n", "").replace(
+        "  - pose: {collided: true, count: 0}\n",
+        "  - pose: {off_floor: true, count: 0}\n  - pose_at: {at: 30s, x_cm: [40, 60]}\n",
+    )
+    scn = _physics(write_scenario, write_arena, TABLE_ARENA, body, "table")
+    result = run_scenario(
+        scn, fake_twin_cmd, plant=plant_for(scn, cmd=fake_plant_cmd), timeout_s=30
+    )
+    outcomes = evaluate(scn, result.trace)
+    assert all(o.passed for o in outcomes), [
+        o.message for o in outcomes if not o.passed
+    ]
+
+
+def test_physics_assertions_fail_when_the_range_is_lost(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    plant = plant_for(scn, cmd=[*fake_plant_cmd, "--null-range"])
+    result = run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    bad = {o.name: o for o in evaluate(scn, result.trace) if not o.passed}
+    assert "pose(collided=True)" in bad["pose"].message
+    assert "wheels" in bad  # it never braked
+
+
+@pytest.mark.parametrize(
+    ("flag", "match"),
+    [
+        (["--exit-after", "5"], "exited with status 3"),
+        (["--error-after", "5"], r"reported an error: step\.left\.duty"),
+        (["--ready-twice"], "answered out of order"),
+        (["--skew"], "answered out of order"),
+    ],
+)
+def test_plant_failure_fails_the_scenario(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd, flag, match
+):
+    scn = _physics(write_scenario, write_arena)
+    plant = plant_for(scn, cmd=[*fake_plant_cmd, *flag])
+    with pytest.raises(TwinError, match=match) as info:
+        run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    assert str(info.value).startswith("phys: plant: ")
+    assert "plant stderr:" in str(info.value)
+    if flag[0] == "--exit-after":
+        assert "fake plant: giving up" in str(info.value)
+    assert plant.returncode is not None  # the child is reaped
+
+
+def test_plant_that_cannot_init_fails_before_the_twin_starts(
+    write_scenario, write_arena, fake_plant_cmd, tmp_path
+):
+    scn = _physics(write_scenario, write_arena, "walls: []\n")
+    plant = plant_for(scn, cmd=fake_plant_cmd)
+    # The twin command does not exist: reaching it would be a different error.
+    with pytest.raises(TwinError, match="phys: plant: the plant reported an error"):
+        run_scenario(scn, [str(tmp_path / "nope")], plant=plant, timeout_s=30)
+    assert plant.returncode == 1
+
+
+def test_hanging_plant_is_a_timeout(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    plant = plant_for(scn, cmd=[*fake_plant_cmd, "--hang"])
+    with pytest.raises(TwinTimeout, match="no 'ready' within"):
+        run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=1)
+    assert plant.returncode is not None
+
+
+def test_plant_is_reaped_when_the_twin_fails(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    scn.config.update(fake_exit=3)
+    plant = plant_for(scn, cmd=fake_plant_cmd)
+    with pytest.raises(TwinError, match="exited with status 3"):
+        run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    assert plant.returncode == 0
+
+
+def test_malformed_plant_request_is_an_error(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd
+):
+    scn = _physics(write_scenario, write_arena)
+    scn.config.update(fake_bad_plant_request=1)
+    plant = plant_for(scn, cmd=fake_plant_cmd)
+    with pytest.raises(TwinError, match="malformed plant_request"):
+        run_scenario(scn, fake_twin_cmd, plant=plant, timeout_s=30)
+    assert plant.returncode == 0
+
+
+def test_plant_request_in_a_scripted_scenario_is_an_error(
+    write_scenario, fake_twin_cmd
+):
+    # The config line of a scripted scenario never asks for a plant; a twin
+    # that sends a plant_request anyway is refused, not answered.
+    scn = _simple(write_scenario, plant="external")
+    with pytest.raises(TwinError, match="the scenario's plant is scripted"):
+        run_scenario(scn, fake_twin_cmd, timeout_s=20)
+
+
+def test_scripted_run_has_no_pose_and_no_plant(write_scenario, fake_twin_cmd):
+    scn = load_scenario(write_scenario("executor-like", EXECUTOR_LIKE))
+    result = run_scenario(scn, fake_twin_cmd, timeout_s=20)
+    assert result.plant == "scripted" and result.plant_steps == 0
+    assert not [r for r in result.trace if r["t"] == "pose"]
+
+
+def test_cli_scorecard_runs_the_plant_named_by_the_environment(
+    write_scenario, write_arena, fake_twin_cmd, fake_plant_cmd, tmp_path, monkeypatch
+):
+    phys = _physics(write_scenario, write_arena).path
+    scripted = write_scenario("a4-like", A4_LIKE)
+    monkeypatch.setenv("ROBOCAR_PLANT_CMD", " ".join(fake_plant_cmd))
+    out = tmp_path / "scorecard.json"
+    traces = tmp_path / "traces"
+    args = ["run", "--scenarios", str(phys), str(scripted), "--out", str(out)]
+    args += ["--twin", " ".join(fake_twin_cmd), "--traces", str(traces)]
+    assert cli_main(args) == 0
+    by_id = {e["id"]: e for e in json.loads(out.read_text())["scenarios"]}
+    assert by_id["phys"]["plant"] == "physics"
+    assert by_id["phys"]["plant_steps"] == 910
+    assert by_id["a4-like"]["plant"] == "scripted"
+    assert "plant_steps" not in by_id["a4-like"]
+    written = (traces / "phys.jsonl").read_text()
+    assert '"t": "pose"' in written and "plant_request" not in written
+    # A plant command that fails is a failed entry, not a crash.
+    monkeypatch.setenv("ROBOCAR_PLANT_CMD", "false")
+    assert cli_main(args) == 1
+    by_id = {e["id"]: e for e in json.loads(out.read_text())["scenarios"]}
+    assert not by_id["phys"]["passed"] and "plant" in by_id["phys"]["error"]
+    assert by_id["a4-like"]["passed"]

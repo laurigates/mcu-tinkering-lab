@@ -456,9 +456,108 @@ def test_settled_filter_does_not_match_a_number(scenario_with):
         ({"head": {"settled": 1}}, "true/false"),
         ({"head": {"pan": [0, "x"]}}, "lo, hi"),
         ({"head_at": {"at": "5s", "tilt": [1, 0]}}, "lo <= hi"),
-        ({"pose_at": {"at": "5s"}}, "unknown assertion"),
+        ({"pose_at": {"at": "5s", "x_cm": 0}}, "need plant: physics"),
+        ({"pose": {"collided": True, "count": 0}}, "need plant: physics"),
+        ({"gait_at": {"at": "5s"}}, "unknown assertion"),
     ],
 )
 def test_state_assertion_validation(scenario_with, bad, match):
     with pytest.raises(ScenarioError, match=match):
         scenario_with(bad)
+
+
+@pytest.fixture
+def physics_scenario_with(write_scenario, write_arena):
+    def _make(*expect):
+        arena = write_arena("room", "floor: [[0, 0], [100, 0], [100, 100]]\n")
+        doc = {
+            "seed": 1,
+            "duration": "60s",
+            "world": [{"at": "0s", "frame": {"scene": "room"}}],
+            "models": {"planner": "inline"},
+            "plant": {
+                "physics": {
+                    "arena": arena,
+                    "start": {"x_cm": 0, "y_cm": 0, "heading_deg": 0},
+                }
+            },
+            "default": {"status": 200},
+            "expect": list(expect),
+        }
+        return load_scenario(write_scenario("p", yaml.safe_dump(doc)))
+
+    return _make
+
+
+def pose(at, x, y=0.0, heading=0.0, collided=False, off_floor=False):
+    return {
+        "t": "pose",
+        "at_ms": at,
+        "x_cm": x,
+        "y_cm": y,
+        "heading_deg": heading,
+        "collided": collided,
+        "off_floor": off_floor,
+    }
+
+
+PATH = [
+    pose(33, 0.0),
+    pose(16038, 0.086),
+    pose(20000, 61.5, y=-0.25, heading=-1.5),
+    pose(20033, 62.004, collided=True),
+    pose(30000, 62.004, off_floor=True),
+]
+
+
+def test_pose_filters_and_bounds(physics_scenario_with):
+    scn = physics_scenario_with(
+        {"pose": {"collided": True, "count": 1}},
+        {"pose": {"off_floor": True, "between": ["0s", "29.999s"], "count": 0}},
+        {"pose": {"x_cm": [61, 62.004], "count": 3}},
+        {"pose": {"x_cm": [61.6, 62.003], "count": 0}},
+        {"pose": {"y_cm": [-1, -0.1], "heading_deg": [-2, -1], "count": 1}},
+        {"pose": {"collided": False, "off_floor": False, "min": 3}},
+    )
+    assert all(o.passed for o in evaluate(scn, PATH)), [
+        o.message for o in evaluate(scn, PATH) if not o.passed
+    ]
+
+
+def test_pose_at_looks_up_the_state(physics_scenario_with):
+    scn = physics_scenario_with(
+        {"pose_at": {"at": "15s", "x_cm": 0, "y_cm": 0, "heading_deg": 0}},
+        {"pose_at": {"at": "20.032s", "x_cm": [50, 70], "collided": False}},
+        {"pose_at": {"at": "25s", "collided": True, "off_floor": False}},
+        {"pose_at": {"at": "60s", "off_floor": True}},
+    )
+    assert all(o.passed for o in evaluate(scn, PATH))
+    wrong = physics_scenario_with({"pose_at": {"at": "25s", "collided": False}})
+    o = one(wrong, PATH)
+    assert not o.passed
+    assert "pose at 25s: collided is True, want False" in o.message
+    assert "[3]" in o.message and "20033" in o.message
+
+
+def test_pose_at_before_the_first_reading_fails(physics_scenario_with):
+    # The first pose record is the first reading, at 33 ms; there is no state
+    # before it.
+    scn = physics_scenario_with({"pose_at": {"at": "32ms", "x_cm": 0}})
+    o = one(scn, PATH)
+    assert not o.passed and "no 'pose' record at or before then" in o.message
+
+
+@pytest.mark.parametrize(
+    ("bad", "match"),
+    [
+        ({"pose": {"collided": "yes"}}, "true/false"),
+        ({"pose": {"x_cm": [5, 1]}}, "lo <= hi"),
+        ({"pose": {"x": 5}}, "unknown argument"),
+        ({"pose_at": {"at": "5s"}}, "at least one of"),
+        ({"pose_at": {"x_cm": 5}}, "missing argument"),
+        ({"pose_at": {"at": "5s", "off_floor": 0}}, "true/false"),
+    ],
+)
+def test_pose_assertion_validation(physics_scenario_with, bad, match):
+    with pytest.raises(ScenarioError, match=match):
+        physics_scenario_with(bad)

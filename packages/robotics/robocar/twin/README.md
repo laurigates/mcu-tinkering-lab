@@ -2,7 +2,9 @@
 
 The robocar's planner loop and its 30 Hz executor compiled for the host and
 run on a virtual clock, driven by scripted scenarios and checked against what
-the robot should do.
+the robot should do. A scenario's range and floor readings are scripted, or
+come from the physics plant in [`../simulation`](../simulation/README.md),
+stepped once per executor tick ([The plant](#the-plant)).
 Requirements are in [PRD-017](../../../../docs/requirements/PRD-017-robocar-behaviour-twin.md),
 the design in [ADR-030](../../../../docs/decisions/ADR-030-robocar-behaviour-twin.md)
 and [ADR-036](../../../../docs/decisions/ADR-036-robocar-twin-plant-port.md).
@@ -23,7 +25,11 @@ model's replies and reads the trace.
 harness (Python) ──JSONL stdin──▶ robocar-twin (C) ──JSONL stdout──▶ harness
  scenario world events            planner_cycle_core, the executor   assertions,
  model replies                    and firmware modules on a          scorecard
-                                  virtual clock
+ plant readings                   virtual clock
+      ▲
+      │ JSONL, one step per executor tick (only with plant: physics)
+      ▼
+ robocar_sim.plant (Python, ../simulation, its own uv project and process)
 ```
 
 ## Quickstart
@@ -32,17 +38,26 @@ Needs CMake, a C compiler, `libcjson-dev` (`brew install cjson` on macOS) and
 `uv`. From the repo root:
 
 ```sh
-just robocar-twin::test    # build, smoke test, harness unit tests, every scenario
-just robocar-twin::run     # every scenario, scorecard at build/scorecard.json
-just robocar-twin::unit    # harness unit tests only; scenario files validated, not run
-just robocar-twin::build   # build/robocar-twin
+just robocar-twin::test          # build, ctest, harness unit tests, every scripted scenario
+just robocar-twin::test-physics  # build, then the scenarios that run against the physics plant
+just robocar-twin::run           # every scenario of both kinds, scorecard at build/scorecard.json
+just robocar-twin::unit          # harness unit tests only; scenario files validated, not run
+just robocar-twin::build         # build/robocar-twin
 just robocar-twin::clean
 ```
 
-CI runs `just robocar-twin::test` in the Python Suites job of
-[`.github/workflows/test.yml`](../../../../.github/workflows/test.yml) on any
-change here, under `../main/` or to the `../test/` files the twin compiles;
-its entry and trigger paths are in
+`test` never starts the plant and installs nothing from `../simulation`.
+`test-physics` and `run` first build the plant's environment from the
+simulation's `uv.lock` (its core dependencies: numpy, pymunk and pyyaml), so
+a stale lock fails there and not inside a scenario.
+
+CI runs both in the Python Suites job of
+[`.github/workflows/test.yml`](../../../../.github/workflows/test.yml):
+`just robocar-twin::test` on any change here, under `../main/` or to the
+`../test/` files the twin compiles, and `just robocar-twin::test-physics` on
+those and on the plant's sources and lock (`../simulation/src/`,
+`pyproject.toml`, `uv.lock`). The entries and trigger paths are `robocar-twin`
+and `robocar-twin-physics` in
 [`.github/python-suites.json`](../../../../.github/python-suites.json).
 
 To keep each scenario's trace, run the harness directly:
@@ -50,6 +65,9 @@ To keep each scenario's trace, run the harness directly:
 ```sh
 cd harness && uv run python -m robocar_twin run --scenarios ../scenarios/*.yaml --traces ../build/traces
 ```
+
+That runs the physics scenarios too, so the plant must be installable; name
+only the scripted files to do without it.
 
 ## Layout
 
@@ -60,8 +78,10 @@ cd harness && uv run python -m robocar_twin run --scenarios ../scenarios/*.yaml 
 | `src/twin_signals.c` | deterministic synthetic camera luma (from the scene name) and microphone PCM (from the seed) |
 | `src/twin_sha256.c` | SHA-256 for the request key |
 | `tests/smoke.sh` | ctest smoke test: no link, no request, a `no_link` stop |
-| `harness/` | uv project: scenario loader, model ports, runner, assertions, scorecard ([harness README](harness/README.md)) |
+| `tests/plant.sh` | ctest for the plant exchange: one request per tick, and the error exits (wrong id, wrong record, closed stdin, a scripted reading with an external plant) |
+| `harness/` | uv project: scenario loader, model ports, plant ports, runner, assertions, scorecard ([harness README](harness/README.md)) |
 | `scenarios/*.yaml` | one file per user story |
+| `arenas/*.yaml` | the arenas the physics scenarios name; the schema is the plant's ([simulation README](../simulation/README.md)) |
 
 ## Protocol
 
@@ -70,8 +90,9 @@ time order, then `{"t":"run"}`.
 
 | Direction | Records |
 |---|---|
-| harness → twin, before `run` | `config` (`seed`, `duration_ms`, `planner_period_ms`, optional `plan_budget_max_requests`, `plan_budget_max_tokens`, `head`, `cliff`); world events `frame`, `range`, `range_fail`, `floor`, `sound`, `voice_turn`, `console`, `link`, each with `at_ms` |
+| harness → twin, before `run` | `config` (`seed`, `duration_ms`, `planner_period_ms`, optional `plan_budget_max_requests`, `plan_budget_max_tokens`, `head`, `cliff`, `plant`); world events `frame`, `range`, `range_fail`, `floor`, `sound`, `voice_turn`, `console`, `link`, each with `at_ms` |
 | twin → harness | `model_request` (`id`, `at_ms`, `kind`, `descriptor`, `key`), after which the twin blocks for one `model_response` (`id`, `status`, `latency_ms`, `body`) |
+| twin → harness, with `"plant":"external"` | `plant_request` (`id`, `at_ms`, `dt_ms`, `left`, `right`) after every executor tick, after which the twin blocks for one `plant_response` (`id`, `range_cm`, `floor`); see [The plant](#the-plant) |
 | twin → harness, trace | `cycle`, `goal`, `force_stop`, `utterance`, `suppressed`, `announce`, `backoff`, `speak_not_offered`, `note_offered`, `note`, `note_not_offered`, `wheels`, `head`, and a final `done` |
 
 World events whose `at_ms` falls inside a reply's latency window are applied
@@ -128,6 +149,60 @@ ramp. Both wheels coast at duty 0 after `motor_controller_init()`; that state
 is not traced. With `head` set the first `head` record is the state after
 tick 0. `mode` is `reactive_head_mode_name()`.
 
+### The plant
+
+By default the world is the scenario's script. With `"plant":"external"` in
+`config` the range and floor readings come from outside instead: after each
+executor tick, and after that tick's `wheels` and `head` records, the twin
+writes one `plant_request` and blocks for the `plant_response`, as it does for
+a model request.
+
+```json
+{"t":"plant_request","id":607,"at_ms":20031,"dt_ms":33,
+ "left":{"drive":"forward","duty":2409},"right":{"drive":"forward","duty":2409}}
+{"t":"plant_response","id":607,"range_cm":{"front":38,"rear":null},
+ "floor":{"front":true,"rear":true}}
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | the tick's index, from 0; the response must carry the same one |
+| `at_ms`, `dt_ms` | the tick's time and the executor's period, 33 ms; the response is the world at `at_ms + dt_ms` |
+| `left`, `right` | the wheels as that tick left them, in the form of a `wheels` record |
+| `range_cm.front`, `.rear` | what each rangefinder's next trigger ranges: whole centimetres in 2..400. `null`, a value outside that range or one with a fraction is a failed read |
+| `floor.front`, `.rear` | what the next tick's floor sample reads; it has an effect only with `cliff` set |
+
+Before the first response both rangefinders' reads fail and the floor sample
+is invalid, which the cliff reflex takes as no floor. A reading still takes the
+firmware's read cycle, so the first range is readable at 297 ms. Requests are
+strictly sequential with model requests: the ticks inside a reply's latency
+window each exchange with the plant before the reply is handled.
+
+With an external plant the twin refuses `range`, `range_fail` and `floor`
+world events. A `plant_response` with another id, a line of another type, or
+stdin closing while the twin waits ends the run with an error message and a
+non-zero exit status, as for a model response.
+
+The harness sets the key for a scenario whose `plant:` is `physics` and
+relays each request to `python -m robocar_sim.plant`, started as a child
+process: the plant has its own `uv.lock`, and the harness's does not depend on
+it. The exchange is not copied into the trace. What the harness adds is a
+`pose` record whenever the plant's pose, `collided` or `off_floor` changes:
+
+```json
+{"t":"pose","at_ms":19965,"x_cm":82.549,"y_cm":0.0,"heading_deg":0.0,"collided":false,"off_floor":false}
+```
+
+The pose is the midpoint of the axle in the arena's frame, in centimetres and
+degrees (heading 0 along +x, counter-clockwise positive), at the time of the
+reading, one tick after the request. `collided` is true while the chassis
+touches a wall or an obstacle and `off_floor` while a wheel is outside the
+floor polygon. Every chassis, motor and sensor-mount figure the plant uses is
+an estimate (`../simulation/src/robocar_sim/plant.yaml`), so a physics
+scenario asserts ordering and wide bounds, not distances (ADR-036 §4). The
+scenario key, the arena and the plant's command are in the
+[harness README](harness/README.md#the-plant-port).
+
 The virtual clock is 64-bit milliseconds, like `esp_timer`; firmware modules
 take their own `uint32` casts, so a run can cross the day-49 wrap. Microphone
 frames are noted at the end of their 64 ms, as `ambient_listener.c` stamps
@@ -149,8 +224,15 @@ the first. The field-level details are in the
    say in the file's header comment where each number comes from. The planner
    boots dormant, so a scenario needs an event before it plans at all; a
    `range` at 0 s is one (see [The executor](#the-executor)).
+   For a story about where the wheels take him (a wall reached, an edge
+   avoided), name the physics plant with `plant:` and an arena under
+   `arenas/`. Say in the header which numbers are the firmware's and which are
+   the plant's estimates, and assert the second kind as ordering and wide
+   bounds. Hours-long scenarios stay scripted: a coupled run exchanges about
+   1,800 messages per simulated minute.
 3. `cd harness && uv run python -m robocar_twin check --scenarios ../scenarios/<file>`
-   validates it without running it; `just robocar-twin::test` runs it.
+   validates it without running it; `just robocar-twin::test` runs it, or
+   `just robocar-twin::test-physics` if it names the plant.
 4. Check that it can fail: break the behaviour it targets under `../main/`
    (`planner_cycle_core.c` for a planner story, `reactive_controller.c`,
    `cliff_core.c` or `idle_gaze.c` for an executor one), rebuild, and confirm
@@ -188,10 +270,13 @@ builder still lives in `gemini_backend.c`, and its extraction to
   hears sounds the robot's listener would drop while the head moves.
 - **The head is modelled only with `head` set.** Without it the servos read as
   absent, the head as unavailable, and a frame's pose is the scripted one.
-- **The world does not move with the robot.** Range and floor readings are
-  what the scenario scripts, whatever the wheels do: a back-off from an edge
-  does not bring the floor back, and a drive toward a wall does not shorten
-  the range.
+- **A scripted world does not move with the robot.** In a scenario without
+  `plant: physics`, range and floor readings are what the scenario scripts,
+  whatever the wheels do: a back-off from an edge does not bring the floor
+  back, and a drive toward a wall does not shorten the range. With the plant
+  they follow the pose, and are as good as the plant's estimates: nothing in
+  `plant.yaml` is measured (ADR-036, open question 1). Camera frames, sounds
+  and voice turns are scripted either way.
 - **The boot range value reaches the planner.** Its first tick reads 400 cm
   before any rangefinder read has completed. Whether the robot's first cycle
   does the same depends on how long its first camera capture takes, which is

@@ -1,0 +1,55 @@
+# US-C5: a heading the planner reads off a frame is a heading in that frame.
+# When the frame was taken with the head turned to one side, "straight ahead"
+# in it is to that side of the body, and he drives that way.
+#
+# planner_task.c samples the head's pan and tilt when it captures the frame
+# and writes them into the goal (goal_t.head_pan_deg / head_tilt_deg,
+# planner_task.c:447-448; twin_main.c planner_tick() does the same). The
+# executor adds the capture pan to a drive goal's heading
+# (head_aim_body_heading(), execute_drive()): heading 0 seen at pan +40 is a
+# body heading of +40, a turn to the right, which slows the right wheel by
+# |heading| / 180 of the base speed.
+#
+# `head: true` fits the servos, so the idle gaze moves the head between the
+# dwell poses (idle_gaze.c). Which pose it is at when the planner ticks depends
+# on the seed's draws, so that part comes from a run and not from the
+# firmware: with seed 29 the head reaches the right pose (pan +40) at 13.002 s,
+# is settled from 13.431 s and stays past 16 s, so the 15 s tick captures its
+# frame there. The assertions name the pose letter and the inequality between
+# the wheels, not the angles or the slower wheel's duty. A different seed, or
+# a change to the gaze's timing or its random source, moves the head and this
+# scenario then needs a seed found the same way.
+#
+# The console line at 5 s wakes the planner for the 15 s tick. The reply (1 s)
+# is a drive at heading 0, 60 %, written at 16 s. 60 % is 153/255, duty 2457,
+# reached on the sixth tick of the ramp, 16.170 s (us-d1-front-reflex-brakes).
+# The left wheel runs at that; the right one at less (119/255, duty 1911, with
+# pan 40). The goal keeps the angle it was written with, so the wheels do not
+# change when the gaze moves the head on.
+id: us-c5-drive-in-frame-heading
+stories: [US-C5]
+seed: 29
+duration: 30s
+config: {head: true}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
+expect:
+  - requests: {count: 1}
+  # The frame the planner plans on is taken with the head settled to the right.
+  - model_request: {pose: R, between: [15s, 15s], count: 1}
+  - cycle: {pose: R, requested: true, between: [15s, 16s], count: 1}
+  - goals: {sequence: [drive]}
+  # Heading 0 in that frame is to the right of the body: the right wheel is
+  # the slower one.
+  - wheels_at: {at: 16.17s, left: forward, right: forward, left_duty: 2457, right_duty: [1, 2456]}
+  # The goal carries the pan it was planned at, wherever the head goes next.
+  - wheels: {between: [16.171s, 30s], count: 0}

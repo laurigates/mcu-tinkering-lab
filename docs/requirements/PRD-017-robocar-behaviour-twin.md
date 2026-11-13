@@ -102,6 +102,7 @@ source already states, written so a scenario can test it.
 | US-C2 | As a person, when I hold a ball in view, his head follows it and the wheels follow the head | `track` goals latch once per write; the executor chooses head, wheels or both | D | ADR-025 |
 | US-C3 | As an onlooker, I can tell what he is doing from his LEDs and OLED | Activity trace colours match the state timeline | D | activity-trace.md |
 | US-C4 | As a person, when I speak to him he faces me while he listens instead of looking away | While a voice turn runs the head is at centre within 20 ticks (660 ms) and holds there; the dwell starts afresh when the turn ends | D | ADR-029 §1, idle_gaze |
+| US-C5 | As a person, when he sets off after looking to one side, he goes where he was looking | A `drive` goal planned on a frame taken at a side dwell pose carries the head's pan at capture, and the executor adds it to the heading: heading 0 gives unequal wheel duties, the slower wheel on the side the head was turned to, and they do not change when the head moves on | D | ADR-025, head-aiming.md, planner_task.c |
 
 ### D. Safety
 
@@ -111,6 +112,8 @@ source already states, written so a scenario can test it.
 | US-D2 | As an owner, a stale or missing goal never leaves him driving | Goal TTL expiry holds position; camera failure forces STOP | D | ADR-016 |
 | US-D3 | As an owner, he does not back into something behind him | A rear range below `STOP_THRESHOLD_CM` brakes a reverse at the first read of a trigger that ranged it (at most 297 ms after it appears) and holds it until the rear clears; the obstacle reflex does not trip | D | #1026, reactive_controller.c |
 | US-D4 | As an owner, he stops at an edge, backs away from it and does not drive at it again | Two no-floor samples brake; after `CLIFF_BRAKE_MS` he backs off for `CLIFF_BACKOFF_MS`; motion toward a sensor with no floor is refused until three floor samples | D | cliff-sensors.md, cliff_core |
+| US-D5 | As an owner, when he is driven at a wall he stops short of it and stays there | Against the physics plant: a `drive` goal toward a wall 1 m away ends with both wheels braked, the chassis never in contact with the wall, and no movement afterwards. Ordering and wide bounds, not distances, until the plant is calibrated | D | ADR-036 §4, reactive_controller.c |
+| US-D6 | As an owner, on a table he never puts a wheel over the edge | Against the physics plant, on a floor with no walls and the cliff reflex armed: he reaches the edge, brakes, backs off and returns, and no wheel is ever outside the floor. Ordering and wide bounds, as for US-D5 | D | ADR-036 §4, cliff_core |
 
 ### E. Quiet and economy
 
@@ -132,7 +135,7 @@ source already states, written so a scenario can test it.
 
 | ID | Story | Acceptance |
 |----|-------|------------|
-| H-1 | As a developer, I run every story offline in under 2 minutes | `just robocar-twin::test` runs all D-oracle scenarios against recorded model replies; no network |
+| H-1 | As a developer, I run every story offline in under 2 minutes | `just robocar-twin::test` runs the scripted D-oracle scenarios and `::test-physics` the ones that need the plant, against recorded model replies; no network |
 | H-2 | As a developer, I see which stories a change broke and why | Per-scenario pass/fail with the failing assertion and the trace excerpt |
 | H-3 | As a developer, I compare models on identical inputs | One command runs the scenario set against N model adapters and writes a scorecard (pass rate, judge score with spread, latency, tokens, cost) |
 | H-4 | As an agent, I iterate on a prompt or persona and show the effect | Scorecard diff against the `main` baseline, attachable to a PR |
@@ -201,3 +204,18 @@ source already states, written so a scenario can test it.
    seed and is not asserted. US-C2 (a `track` goal leading the head), US-C3
    and US-D2 have no scenario yet. The kinematic stub is not built: ADR-036
    replaces it with the optional physics plant.
+   *Progress (2026-11-13, ADR-036 §3 and §4):* the plant port is built. A
+   scenario names `plant: physics` with an arena and a start pose; the twin
+   then asks for the world after every executor tick and the harness relays
+   that to `robocar_sim.plant`, run as a child process, and adds `pose`
+   records to the trace. US-D5 (a wall) and US-D6 (a table edge) pass under
+   `just robocar-twin::test-physics`, which CI runs as the
+   `robocar-twin-physics` suite; `just robocar-twin::test` runs the scripted
+   scenarios and never starts the plant. Both physics scenarios drive at 40 %:
+   on the plant's estimates the robot reaches the wall at 80 %, and the margin
+   at the table edge falls from 3.8 cm to 0.9 cm between 40 % and 80 %. None
+   of the plant's figures is measured (ADR-036, open question 1), so those are
+   properties of the estimates, not of the robot. US-C5 passes as a scripted
+   scenario: it pins the head angles the planner samples at capture, which no
+   scenario held before. The pose the head is at when the planner ticks
+   depends on the seed, so its seed was found by running it.

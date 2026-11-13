@@ -13,9 +13,18 @@ the config it writes one ``head`` record at 0 ms and frames carry no pose.
 That is enough for the runner to carry ``wheels`` and ``head`` records and for
 the assertions to be run against a trace the harness collected.
 
+With ``"plant": "external"`` in the config it ticks every 33 ms from 0, as the
+twin's executor does: each tick writes a ``wheels`` record if the drive
+changed, then one ``plant_request`` carrying the wheels, and blocks for the
+``plant_response``. A front range under 15 cm or no floor under the front
+sensor in that response brakes a drive from the next tick on. Ticks inside a
+reply's latency window exchange before the reply is handled. Like the twin it
+refuses ``range``, ``range_fail`` and ``floor`` events in that mode (exit 2).
+
 Test-only config keys: ``fake_bad_key`` (send a wrong key), ``fake_exit``
 (exit with this status before ``done``), ``fake_hang`` (sleep forever),
-``fake_garbage`` (write a non-JSON line).
+``fake_garbage`` (write a non-JSON line), ``fake_bad_plant_request`` (send
+plant requests without their wheels).
 """
 
 from __future__ import annotations
@@ -24,6 +33,9 @@ import hashlib
 import json
 import sys
 import time
+
+TICK_MS = 33
+PLANT_EVENTS = ("range", "range_fail", "floor")
 
 
 def out(obj: dict) -> None:
@@ -67,12 +79,22 @@ def main() -> int:
         sys.stdout.write("not json\n")
         sys.stdout.flush()
 
+    plant = config.get("plant") == "external"
+    if plant:
+        scripted = [e["t"] for e in events if e["t"] in PLANT_EVENTS]
+        if scripted:
+            print(
+                f"fake twin: '{scripted[0]}' event with an external plant",
+                file=sys.stderr,
+            )
+            return 2
+
     period = config.get("planner_period_ms", 15000)
     duration = config["duration_ms"]
     events.sort(key=lambda e: e["at_ms"])
     state = {"scene": None, "pose": "C", "woken": False}
     voice_windows: list[tuple[int, int]] = []
-    wheels = {"goal": "stop", "blocked": False, "drive": "coast"}
+    wheels = {"goal": "stop", "blocked": False, "drive": "coast", "duty": 0}
 
     def set_wheels(at_ms: int) -> None:
         """Write a `wheels` record if the goal and the obstacle changed the drive."""
@@ -83,9 +105,24 @@ def main() -> int:
         else:
             drive, duty = "forward", 2457
         if drive != wheels["drive"]:
-            wheels["drive"] = drive
+            wheels["drive"], wheels["duty"] = drive, duty
             side = {"drive": drive, "duty": duty}
             out({"t": "wheels", "at_ms": at_ms, "left": side, "right": side})
+
+    def exec_tick(tick: int, at_ms: int) -> None:
+        """One executor tick with a plant: wheels, then the exchange."""
+        set_wheels(at_ms)
+        request = {"t": "plant_request", "id": tick, "at_ms": at_ms, "dt_ms": TICK_MS}
+        if not config.get("fake_bad_plant_request"):
+            side = {"drive": wheels["drive"], "duty": wheels["duty"]}
+            request.update(left=side, right=side)
+        out(request)
+        resp = json.loads(sys.stdin.readline())
+        assert resp["t"] == "plant_response" and resp["id"] == tick, resp
+        front = resp["range_cm"]["front"]
+        wheels["blocked"] = (front is not None and front < 15) or not resp["floor"][
+            "front"
+        ]
 
     def apply(e: dict) -> None:
         if e["t"] in ("console", "sound"):
@@ -126,11 +163,31 @@ def main() -> int:
     next_tick = 0
     req_id = 0
     idx = 0
+    ticks = 0
     t = 0
+
+    def advance(to: int) -> None:
+        """Apply every event and, with a plant, every executor tick up to
+        ``to``, in time order; an event goes before a tick at the same instant."""
+        nonlocal idx, ticks
+        while True:
+            event_at = events[idx]["at_ms"] if idx < len(events) else None
+            tick_at = ticks * TICK_MS if plant else None
+            event_first = tick_at is None or (
+                event_at is not None and event_at <= tick_at
+            )
+            if event_first and event_at is not None and event_at <= to:
+                apply(events[idx])
+                idx += 1
+                continue
+            if tick_at is not None and tick_at <= to:
+                exec_tick(ticks, tick_at)
+                ticks += 1
+                continue
+            return
+
     while t <= duration:
-        while idx < len(events) and events[idx]["at_ms"] <= t:
-            apply(events[idx])
-            idx += 1
+        advance(t)
         if t == next_tick:
             out(
                 {
@@ -164,10 +221,9 @@ def main() -> int:
                 resp = json.loads(sys.stdin.readline())
                 assert resp["t"] == "model_response" and resp["id"] == req_id
                 handled = t + resp["latency_ms"]
-                # Events inside the latency window land before the reply is handled.
-                while idx < len(events) and events[idx]["at_ms"] <= handled:
-                    apply(events[idx])
-                    idx += 1
+                # Events inside the latency window land before the reply is
+                # handled, and so do the window's plant exchanges.
+                advance(handled)
                 if resp["status"] == 200:
                     goal, speech = parse_reply(resp["body"])
                     if speech:
@@ -192,7 +248,8 @@ def main() -> int:
                             )
                     out({"t": "goal", "at_ms": handled, "kind": goal})
                     wheels["goal"] = goal
-                    set_wheels(handled)
+                    if not plant:  # with a plant the next tick writes the wheels
+                        set_wheels(handled)
                     backoff = 0
                 else:
                     backoff = 1 if backoff == 0 else min(backoff * 2, 4)
@@ -205,6 +262,8 @@ def main() -> int:
             return int(config["fake_exit"])
         # Step to the next instant something happens (both are > t here).
         upcoming = [next_tick] + ([events[idx]["at_ms"]] if idx < len(events) else [])
+        if plant:
+            upcoming.append(ticks * TICK_MS)
         t = min(upcoming)
     out({"t": "done", "at_ms": duration})
     return 0

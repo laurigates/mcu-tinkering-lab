@@ -8,6 +8,7 @@ scenario with one event fewer and pass for the wrong reason.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,12 +34,19 @@ REMOVED_EVENT_KINDS = {
     "reflex": "a reflex is the executor's reaction to a range reading: script the "
     "obstacle with 'range', held for at least one read cycle (165 ms)",
 }
+# The readings a physics plant produces. A scenario that names one cannot also
+# script them (ADR-036 section 3).
+PLANT_EVENT_KINDS = ("range", "range_fail", "floor")
+START_KEYS = ("x_cm", "y_cm", "heading_deg")
 SENSORS = ("front", "rear")
 # The bounds ultrasonic_core_decode() accepts (main/ultrasonic_core.h
 # ULTRASONIC_MIN_RANGE_CM, ULTRASONIC_MAX_RANGE_CM). A value outside them is
 # not a distance the sensor can report, so the twin would read it as a failure.
 RANGE_MIN_CM = 2
 RANGE_MAX_CM = 400
+# The twin reads `seed` into a uint32 (twin_main.c) and the plant takes it
+# whole and refuses a negative one, so only this range means the same to both.
+SEED_MAX = 2**32 - 1
 NOTE_KINDS = ("difficulty", "behaviour", "suggestion")
 CONFIG_INT_KEYS = (
     "planner_period_ms",
@@ -64,6 +72,7 @@ _TOP_KEYS = {
     "config",
     "world",
     "models",
+    "plant",
     "responses",
     "default",
     "expect",
@@ -97,6 +106,15 @@ class InlineResponse:
     body: str
 
 
+@dataclass(frozen=True)
+class PhysicsSpec:
+    """``plant: {physics: ...}``: the arena and start pose handed to the plant."""
+
+    arena_path: Path
+    arena: dict[str, Any]
+    start: dict[str, int | float]
+
+
 @dataclass
 class Scenario:
     id: str
@@ -112,6 +130,12 @@ class Scenario:
     expect: list[dict[str, Any]] = field(default_factory=list)
     persona: str | None = None
     rubric: list[str] = field(default_factory=list)
+    # None: the scripted world (the default). Otherwise the physics plant.
+    plant: PhysicsSpec | None = None
+
+    @property
+    def plant_kind(self) -> str:
+        return "scripted" if self.plant is None else "physics"
 
     @property
     def twin_dir(self) -> Path:
@@ -127,6 +151,10 @@ class Scenario:
             "planner_period_ms": DEFAULT_PLANNER_PERIOD_MS,
         }
         cfg.update(self.config)
+        if self.plant is not None:
+            # The twin then blocks for a plant_response after every executor
+            # tick, so the key is sent only when a plant will answer.
+            cfg["plant"] = "external"
         return [cfg, *(e.to_protocol() for e in self.world)]
 
     def resolve_time(self, value: object, *, where: str) -> int:
@@ -284,8 +312,71 @@ def _event_fields(
     raise AssertionError(kind)  # unreachable: callers check EVENT_KINDS
 
 
+def _parse_plant(path: Path, raw: object) -> PhysicsSpec | None:
+    """The top-level ``plant:`` key: ``scripted``, or ``{physics: {arena, start}}``.
+
+    Only the arena file's existence and top-level type are checked here; the
+    plant owns the arena schema and validates it at ``init``.
+    """
+    if raw == "scripted":
+        return None
+    if not isinstance(raw, dict) or set(raw) != {"physics"}:
+        raise _fail(
+            path,
+            f"plant: expected 'scripted' or {{physics: {{arena, start}}}}, got {raw!r}",
+        )
+    d = _require_keys(path, raw["physics"], "plant.physics", {"arena", "start"}, set())
+    if not isinstance(d["arena"], str) or not d["arena"]:
+        raise _fail(path, "plant.physics.arena: expected a path to an arena file")
+    arena_path = Path(d["arena"])
+    if not arena_path.is_absolute():
+        # Against the scenario's twin directory, like a replay: binding.
+        arena_path = path.resolve().parent.parent / arena_path
+    if not arena_path.is_file():
+        raise _fail(path, f"plant.physics.arena: no arena file at {arena_path}")
+    try:
+        arena = yaml.safe_load(arena_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise _fail(
+            path, f"plant.physics.arena: {arena_path}: invalid YAML: {exc}"
+        ) from exc
+    if not isinstance(arena, dict):
+        raise _fail(
+            path,
+            f"plant.physics.arena: {arena_path}: expected a mapping, got {arena!r}",
+        )
+    try:
+        json.dumps(arena)
+    except (TypeError, ValueError) as exc:
+        raise _fail(
+            path,
+            f"plant.physics.arena: {arena_path}: cannot be sent to the plant as JSON ({exc})",
+        ) from exc
+    start = _require_keys(
+        path, d["start"], "plant.physics.start", set(START_KEYS), set()
+    )
+    for key in START_KEYS:
+        v = start[key]
+        if isinstance(v, bool) or not isinstance(v, int | float):
+            raise _fail(
+                path, f"plant.physics.start.{key}: expected a number, got {v!r}"
+            )
+        if not math.isfinite(v):
+            # The plant refuses it, and only once a physics run starts.
+            raise _fail(
+                path, f"plant.physics.start.{key}: expected a finite number, got {v!r}"
+            )
+    return PhysicsSpec(
+        arena_path=arena_path, arena=arena, start={k: start[k] for k in START_KEYS}
+    )
+
+
 def _parse_world(
-    path: Path, raw: object, duration_ms: int, config: dict[str, int | bool]
+    path: Path,
+    raw: object,
+    duration_ms: int,
+    config: dict[str, int | bool],
+    physics: bool = False,
 ) -> list[WorldEvent]:
     if not isinstance(raw, list) or not raw:
         raise _fail(path, "world: expected a non-empty list of events")
@@ -314,6 +405,12 @@ def _parse_world(
         if "at" not in item:
             raise _fail(path, f"{where}: missing 'at'")
         kind = kinds[0]
+        if physics and kind in PLANT_EVENT_KINDS:
+            raise _fail(
+                path,
+                f"{where}: '{kind}' events are not allowed with plant: physics: the "
+                "plant produces the range and floor readings",
+            )
         at = _ms(path, item["at"], f"{where}.at")
         fields = _event_fields(path, kind, item[kind], f"{where}.{kind}", config)
         times = [at]
@@ -463,6 +560,8 @@ def load_scenario(path: str | Path) -> Scenario:
     if not isinstance(stories, list) or not all(isinstance(s, str) for s in stories):
         raise _fail(path, "stories: expected a list of story IDs")
     seed = _int(path, raw["seed"], "seed")
+    if not 0 <= seed <= SEED_MAX:
+        raise _fail(path, f"seed: expected 0..{SEED_MAX}, got {seed}")
     duration_ms = _ms(path, raw["duration"], "duration")
     if duration_ms <= 0:
         raise _fail(path, "duration: must be > 0")
@@ -478,7 +577,10 @@ def load_scenario(path: str | Path) -> Scenario:
         for k, v in config_raw.items()
     }
 
-    world = _parse_world(path, raw["world"], duration_ms, config)
+    plant = _parse_plant(path, raw.get("plant", "scripted"))
+    world = _parse_world(
+        path, raw["world"], duration_ms, config, physics=plant is not None
+    )
 
     models = _require_keys(path, raw["models"], "models", {"planner"}, set())
     binding = models["planner"]
@@ -536,6 +638,7 @@ def load_scenario(path: str | Path) -> Scenario:
         expect=list(expect),
         persona=persona,
         rubric=list(rubric),
+        plant=plant,
     )
     for i, item in enumerate(expect):
         validate_expectation(scenario, item, f"expect[{i}]")

@@ -1,0 +1,11 @@
+# A wall 1 m ahead of the origin, across the far end of the floor it stands on.
+# Units are centimetres; heading 0 points along +x (robocar_sim.arena owns the
+# schema, ADR-036 section 2). Scenarios start the robot at the origin facing
+# the wall.
+floor:
+  - [-50, -60]
+  - [100, -60]
+  - [100, 60]
+  - [-50, 60]
+walls:
+  - {from: [100, -60], to: [100, 60]}

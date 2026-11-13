@@ -1,9 +1,15 @@
 """Drive one twin process through one scenario over the JSONL protocol.
 
 stdin (harness -> twin): ``config``, every world event, ``{"t":"run"}``, then one
-``model_response`` per ``model_request`` the twin emits. stdout (twin ->
-harness): trace records, ``model_request`` lines (after which the twin blocks
-on stdin), and ``done``. stderr is drained and kept for error messages.
+``model_response`` per ``model_request`` the twin emits and, when the scenario
+names a physics plant, one ``plant_response`` per ``plant_request``. stdout
+(twin -> harness): trace records, ``model_request`` and ``plant_request`` lines
+(after each of which the twin blocks on stdin), and ``done``. stderr is drained
+and kept for error messages.
+
+The per-tick plant exchange is not copied into the trace. The runner appends a
+``pose`` record from each plant reading whose pose, ``collided`` or
+``off_floor`` differs from the one before, the first reading included.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .plant import PlantError, PlantPort, PlantRequest, PlantTimeout, plant_for
 from .ports import ModelPort, ModelPortError, ModelRequest, descriptor_key, port_for
 from .scenario import Scenario
 
@@ -55,6 +62,8 @@ class RunResult:
     stderr: str = ""
     wall_s: float = 0.0
     requests: list[dict[str, Any]] = field(default_factory=list)
+    plant: str = "scripted"
+    plant_steps: int = 0
 
     @property
     def request_count(self) -> int:
@@ -86,21 +95,45 @@ def run_scenario(
     twin_cmd: list[str] | None = None,
     *,
     port: ModelPort | None = None,
+    plant: PlantPort | None = None,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     strict_keys: bool = True,
 ) -> RunResult:
     """Run ``scenario`` through the twin and return the collected trace.
 
-    Raises TwinError on a protocol violation, a model-port failure, a non-zero
-    exit or a missing ``done``; TwinTimeout when the wall-clock budget runs out.
-    ``strict_keys`` checks every request's key against sha256 of the canonical
-    descriptor, so a twin and harness that disagree on canonical form fail here
-    rather than as a cassette that is never found.
+    Raises TwinError on a protocol violation, a model-port or plant failure, a
+    non-zero exit or a missing ``done``; TwinTimeout when the wall-clock budget
+    runs out. ``strict_keys`` checks every request's key against sha256 of the
+    canonical descriptor, so a twin and harness that disagree on canonical form
+    fail here rather than as a cassette that is never found. ``plant`` answers
+    the twin's plant requests; the default is the one the scenario's ``plant:``
+    key names. It is closed, and a plant process reaped, before this returns or
+    raises.
     """
     cmd = twin_cmd or [str(resolve_twin_bin(scenario.twin_dir))]
     port = port or port_for(scenario)
+    plant = plant or plant_for(scenario)
+    try:
+        return _run(scenario, cmd, port, plant, timeout_s, strict_keys)
+    finally:
+        plant.close()
+
+
+def _run(
+    scenario: Scenario,
+    cmd: list[str],
+    port: ModelPort,
+    plant: PlantPort,
+    timeout_s: float,
+    strict_keys: bool,
+) -> RunResult:
     start = time.monotonic()
     deadline = start + timeout_s
+    try:
+        plant.start(timeout_s)
+    except PlantError as exc:
+        exc_type = TwinTimeout if isinstance(exc, PlantTimeout) else TwinError
+        raise exc_type(f"{scenario.id}: {exc}") from exc
     try:
         proc = subprocess.Popen(
             cmd,
@@ -138,6 +171,8 @@ def run_scenario(
     trace: list[dict[str, Any]] = []
     requests: list[dict[str, Any]] = []
     done = False
+    plant_steps = 0
+    last_pose: dict[str, Any] | None = None
 
     def cleanup() -> None:
         if proc.poll() is None:
@@ -197,6 +232,25 @@ def run_scenario(
             raise fail(f"twin record has no 't' field: {text[:200]!r}")
         if rec["t"] != "done" and "at_ms" not in rec:
             raise fail(f"twin record has no 'at_ms': {text[:200]!r}")
+
+        if rec["t"] == "plant_request":
+            try:
+                step = PlantRequest.from_record(rec)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise fail(f"malformed plant_request ({exc}): {text[:200]!r}") from exc
+            try:
+                reading = plant.step(step, deadline - time.monotonic())
+            except PlantTimeout as exc:
+                raise fail(str(exc), TwinTimeout) from exc
+            except PlantError as exc:
+                raise fail(str(exc)) from exc
+            send(reading.to_protocol(step.id))
+            plant_steps += 1
+            pose = reading.pose_state()
+            if pose != last_pose:
+                last_pose = pose
+                trace.append({"t": "pose", "at_ms": reading.at_ms, **pose})
+            continue
         trace.append(rec)
 
         if rec["t"] == "model_request":
@@ -259,4 +313,6 @@ def run_scenario(
         stderr="".join(stderr_chunks),
         wall_s=time.monotonic() - start,
         requests=requests,
+        plant=plant.name,
+        plant_steps=plant_steps,
     )

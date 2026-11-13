@@ -25,6 +25,7 @@ def score_scenario(
         "id": scenario.id,
         "stories": scenario.stories,
         "model": scenario.planner_binding,
+        "plant": scenario.plant_kind,
     }
     try:
         result = run_scenario(scenario, twin_cmd, timeout_s=timeout_s)
@@ -43,6 +44,8 @@ def score_scenario(
         latency_ms_p50=latencies[len(latencies) // 2] if latencies else None,
         wall_s=round(result.wall_s, 3),
     )
+    if scenario.plant is not None:
+        entry["plant_steps"] = result.plant_steps
     if trace_dir is not None:
         trace_dir.mkdir(parents=True, exist_ok=True)
         path = trace_dir / f"{scenario.id}.jsonl"

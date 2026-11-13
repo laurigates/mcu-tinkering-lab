@@ -106,3 +106,5 @@ target_link_libraries(robocar-twin PRIVATE ${CJSON_LIBRARIES} Threads::Threads m
 enable_testing()
 add_test(NAME twin_smoke
     COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke.sh" "$<TARGET_FILE:robocar-twin>")
+add_test(NAME twin_plant_protocol
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/plant.sh" "$<TARGET_FILE:robocar-twin>")
