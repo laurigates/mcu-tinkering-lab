@@ -130,3 +130,47 @@ A cloud session has no `gh` CLI for issue or PR reads. An agent told to run
 `gh issue view` there fails or guesses. Say in the brief to read issues with
 the GitHub MCP tool `mcp__github__issue_read` (methods `get` and
 `get_comments`), and keep pushes and PR creation in the main session.
+
+## One tree, disjoint ownership, for a change that cannot be split
+
+A repo-wide rename cannot land as separate branches: every unit's gates need
+the others' edits. On the robocar re-home (#1142, 2026-11-12) the
+orchestrator ran the mechanical step first, by script (`git mv` and an
+anchored sweep). Four implementers then worked in the one tree, each owning a
+list of paths, and reported an edit outside their list as `needs_other_owner`
+with the exact text. One integrator applied those, regenerated the derived
+files, ran pre-commit once and ran every gate. Four read-only reviewers and
+one repair agent followed. No file was edited by two agents.
+
+- Name the first unblocking edit and its owner. Until the nested justfile
+  imports were fixed, `just` did not parse for anyone, so the other three
+  were told to call tools directly.
+- Forbid `git add`, `pre-commit` and the generators that rewrite shared
+  outputs (`hardware::gen`, `schematics::render-all`) in the implementers'
+  prompts. Only the integrator runs them.
+- A mapping run before the edit pays for itself when its readers rehearse the
+  move in scratch clones: six readers and a critic found that the schematic
+  UUIDs derive from the directory path and that the firmware hardcodes the
+  Pages directory. Neither is visible from a text search for the old name.
+
+## Agents share one disk
+
+The session's writable disk is one allowance for every agent. On #1142 one
+agent's `docker pull kicad/kicad:10.0.6` took it to 0 MB free for about 25
+seconds while nine others were writing; the mapping run's rehearsal clones
+held 8.4 GB of the scratchpad. Tell agents not to pull images or install
+toolchains without saying so first, and delete rehearsal clones when the run
+that made them ends.
+
+## Implementers and repair agents widen the change unless told the limit
+
+"Apply the map's edits" and "apply the confirmed findings" were both read as
+licence to add checks. On #1142 the release implementer and the repair agent
+between them added 1,005 lines to seven check and test files (`git show
+--numstat 331e8f9` for `check-component-extra-paths.py`,
+`check-ota-consumer-agreement.py` and the tests for those two, the workflows,
+the label taxonomy and the kconfig symbols), in a change whose brief was a
+move and a rename. They were kept, and listed
+in the PR as the orchestrator's choice. If new checks are not wanted, say in
+the prompt that an edit or a finding is closed by the smallest change to
+existing files, and that a proposed new check is returned as a follow-up.
