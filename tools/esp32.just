@@ -35,8 +35,13 @@ tools_dir := source_directory()
 # Auto-detect USB-serial adapter (CH340/CP2102/FTDI)
 _detected_serial := `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`
 
-# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a)
-_detected_s3 := `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`
+# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a), through the
+# one copy of the ioreg pipeline in detect-esp32s3-port.sh. Every recipe of every
+# importing module evaluates this at load, so it must print nothing and succeed
+# when no board is attached: --quiet, stderr dropped, `|| true`. shell() rather
+# than a backtick, because a backtick runs in the importing module's directory
+# and the script's path has to come from this file's source_directory().
+_detected_s3 := shell('"$1" --quiet 2>/dev/null || true', source_directory() / "detect-esp32s3-port.sh")
 
 # Auto-detect CP2102/FTDI USB-UART adapter (for secondary UART connections)
 _detected_uart := `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`
