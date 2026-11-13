@@ -1,21 +1,21 @@
 cmake_minimum_required(VERSION 3.16)
 
-# Generate a stub secrets.h for CI / web-flasher builds where the real secrets.h
+# Generate a stub credentials.h for CI / web-flasher builds where the real credentials.h
 # has not been created from the template.  Release binaries ship credential-free;
 # provide WiFi/API values at runtime or reflash locally.
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/secrets.h")
-    message(STATUS "secrets.h not found — generating credential-free stub for CI build")
-    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/main/secrets.h"
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
+    message(STATUS "credentials.h not found — generating credential-free stub for CI build")
+    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h"
 "/**\n"
-" * Auto-generated stub secrets.h for credential-free CI / web-flasher builds.\n"
-" * DO NOT add real credentials here — use main/secrets.h.example as a template.\n"
+" * Auto-generated stub credentials.h for credential-free CI / web-flasher builds.\n"
+" * DO NOT add real credentials here — use main/credentials.h.example as a template.\n"
 " */\n"
-"#ifndef SECRETS_H\n"
-"#define SECRETS_H\n"
+"#ifndef CREDENTIALS_H\n"
+"#define CREDENTIALS_H\n"
 "#define WIFI_SSID \"\"\n"
 "#define WIFI_PASSWORD \"\"\n"
 "#define GEMINI_API_KEY \"\"\n"
-"#endif  // SECRETS_H\n")
+"#endif  // CREDENTIALS_H\n")
 endif()
 
 # Read version from release-please managed version.txt
