@@ -3,7 +3,8 @@
 **Status**: accepted
 **Date**: 2026-04-12
 **Amended**: 2026-09-13 (see Update below — the CI half of this decision
-never shipped; `build-firmware.yml` is the live release path instead)
+never shipped; `build-firmware.yml` is the live release path instead);
+2026-11-13 (PULL mode and esp_ghota removed, see the last Update)
 **Supersedes**: — (refines ADR-004)
 **Confidence**: 9/10
 
@@ -268,3 +269,31 @@ at 5% — fitting, green, one feature from the same failure, with ESP-IDF's
 `APP_PARTITION_MIN_FREE_PCT` percent free (default 5, ESP-IDF's own warning
 threshold; 0 disables) the build fails and names the partition change to
 make. A warning inside a green job is not a guard; this turns it into one.
+
+## Update (2026-11-13): PULL mode and esp_ghota removed
+
+Decision point 1 no longer holds: the component has one mode, TRIGGERED.
+`OTA_GITHUB_MODE_PULL`, `src/ota_github_pull.c`, `ota_github_check_now`,
+`ota_github_pull_get_client_handle`, the `firmware_filename_match` and
+`poll_interval_min` fields, the `on_update_available` hook and the
+`fishwaldo/esp_ghota` dependency are gone (#1081). `OTA_GITHUB_MODE_TRIGGERED`
+keeps its value 1, `OTA_GITHUB_CONFIG_DEFAULT()` now selects it, and
+`ota_github_init` rejects any other mode. Event ids 0 and 1
+(`UPDATE_AVAILABLE`, `NO_UPDATE`) were posted only by PULL mode and are left
+unused, so the remaining ids keep their values.
+
+Why: #539 found that esp_ghota could not complete an update in this
+monorepo. It called the wrong API host, its filename match could never hit,
+and release-please's `<component>-v<semver>` tags do not parse as semver.
+robocar replaced it with a poll of the web flasher's manifest
+(`packages/robotics/robocar/main/ota_manager.c`), and no consumer used PULL
+mode afterwards; brainbox, the only consumer outside the component, uses
+TRIGGERED. Moving robocar's manifest poll into the component was the other
+option and was not chosen: it would change released firmware and needs a
+bench OTA cycle. A project that needs to poll copies robocar's code.
+
+This also retires the negative consequences above about esp_ghota being a
+transitive download for every consumer and the escape-hatch accessor, and
+alternative 3's reason for keeping esp_ghota. The camera and main-controller
+files under "Files Changed" belong to the dual-ESP32 robocar, which has been
+removed and remains in git history.

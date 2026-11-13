@@ -2,8 +2,8 @@
  * @file ota_github_direct.c
  * @brief TRIGGERED mode — direct HTTPS firmware download via esp_https_ota.
  *
- * Used by @ref ota_github_trigger_url (and its tag-based convenience wrapper)
- * in both PULL and TRIGGERED mode. Runs the download in a dedicated task so
+ * Used by @ref ota_github_trigger_url (and its tag-based convenience wrapper).
+ * Runs the download in a dedicated task so
  * the caller (typically an I2C/UART command dispatcher) is not blocked.
  *
  * Behaviour mirrors the reference implementation in
