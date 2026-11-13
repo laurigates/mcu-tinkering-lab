@@ -1,0 +1,18 @@
+menu "UDP log sink (log-udp)"
+
+    config LOG_UDP_AP_SSID
+        string "SoftAP SSID"
+        default "esp32-log"
+        help
+            Name of the access point log_udp_init() starts, 1 to 32 bytes.
+            Each consuming project sets its own in sdkconfig.defaults, so a
+            phone that saved one project's network does not join another's.
+
+    config LOG_UDP_AP_PASSWORD
+        string "SoftAP WPA2 password"
+        default "esp32-log"
+        help
+            WPA2-PSK passphrase of the access point, 8 to 63 characters.
+            Each consuming project sets its own in sdkconfig.defaults.
+
+endmenu
