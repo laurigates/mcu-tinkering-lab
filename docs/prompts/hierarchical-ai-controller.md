@@ -134,7 +134,7 @@ Each gate must pass before the next phase merges.
 - **Ultrasonic cone + blind zones** — one forward-facing sensor only covers a ~15° cone. Side/rear obstacles are invisible. Acceptable for this phase; note in ADR.
 - **Gemini function-calling reliability** — ER 1.6 is new. Fixture-based tests will flag schema drift early.
 - **Claude/Ollama removal is one-way** — if Gemini becomes unavailable or too expensive later, re-introducing a backend requires a real abstraction, not resurrecting the old code. ADR should flag this as accepted risk.
-- **Simulation** — `robocar-simulation` is a Pymunk physics sim; it has no Gemini call in the loop. E's task includes a stub planner that emits goals on a schedule so the executor can be exercised in sim.
+- **Simulation** — `robocar-simulation` is a Pymunk physics sim; it has no Gemini call in the loop. E's task includes a stub planner that emits goals on a schedule so the executor can be exercised in sim. The stub planner was removed by ADR-036; the behaviour twin runs the real planner.
 
 ## Acceptance criteria
 

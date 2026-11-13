@@ -20,7 +20,7 @@ mcu-tinkering-lab/
 │   │   │   ├── integrated/         # Carrier PCB variant with the breakout chips on board (hardware only)
 │   │   │   ├── bringup/            # Hardware self-test firmware
 │   │   │   ├── simulation/         # Python 3.12 plant model for the behaviour twin (Pymunk, ADR-036) and the legacy demo
-│   │   │   └── twin/               # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
+│   │   │   └── twin/               # Behaviour twin: planner and executor C on a virtual clock + scenario harness (ADR-030, ADR-036)
 │   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + MPU6050 + steppers, Pico SDK)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
 │   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
