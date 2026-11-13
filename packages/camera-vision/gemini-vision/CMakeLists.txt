@@ -15,8 +15,5 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
 "#endif\n")
 endif()
 
-set(CONFIG_PARTITION_TABLE_CUSTOM ON)
-set(CONFIG_PARTITION_TABLE_CUSTOM_FILENAME "partitions.csv")
-
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp32s3-gemini-vision)
