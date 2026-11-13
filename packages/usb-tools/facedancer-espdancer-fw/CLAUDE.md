@@ -25,7 +25,8 @@ ESP32-S3 with native USB-OTG works).
 
 - **xbox-switch-bridge** (`packages/input-gaming/xbox-switch-bridge`) —
   provenance; this scaffold lifts its `sdkconfig.defaults`, build-variant
-  system, `components/status_led`, `components/log_udp`, justfile/Makefile, and
+  system, `components/status_led`, `log_udp` (since promoted to the shared
+  `packages/components/log-udp`), justfile/Makefile, and
   the single-writer pattern, dropping all BLE/controller logic.
 - **external/facedancer** — upstream facedancer clone; the Python backend
   `facedancer/backends/espdancer.py` (Milestone 3) lands there, not here.

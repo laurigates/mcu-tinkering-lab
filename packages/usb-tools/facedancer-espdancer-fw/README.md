@@ -91,8 +91,8 @@ See [`docs/rpc-protocol.md`](docs/rpc-protocol.md) for the full wire contract.
 main/main.c                  # entry: LED + WiFi AP + rpc task + idle
 components/
 ├── status_led/              # WS2812 RMT (non-DMA) — emulator-state indicator
-├── log_udp/                 # SoftAP "espdancer-log" + UDP log broadcast
 └── usb_rpc/                 # TCP server + framed-TLV dispatcher (host iface)
+../../components/log-udp/    # shared: SoftAP "espdancer-log" + UDP log broadcast
 docs/
 ├── adrs/                    # ADRs 0001–0005
 └── rpc-protocol.md          # host↔device wire contract
