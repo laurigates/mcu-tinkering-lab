@@ -476,7 +476,8 @@ class SetupAction(unittest.TestCase):
         pins: dict[str, dict[str, list[str]]] = {}
         for path in ci_files():
             for n, line in code_lines(path):
-                m = re.search(r"python-version: '((\d+\.\d+)\.\d+)'", line)
+                # Quoted either way or bare: YAML reads all three as the pin.
+                m = re.search(r"""python-version:\s*['"]?((\d+\.\d+)\.\d+)\b""", line)
                 if m:
                     where = pins.setdefault(m.group(2), {}).setdefault(m.group(1), [])
                     where.append(f"{path.name}:{n}")
