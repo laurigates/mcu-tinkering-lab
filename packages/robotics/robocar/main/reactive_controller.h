@@ -399,6 +399,30 @@ void reactive_controller_set_hold(bool on);
 /** Whether the hold is on. */
 bool reactive_controller_hold_active(void);
 
+#ifdef REACTIVE_CONTROLLER_HOST_TEST
+/* =========================================================================
+ * Host-build hooks (test/test_reactive_controller.c, twin/, ADR-036)
+ * =========================================================================
+ * Defined only in the host branch of reactive_controller.c; the target build
+ * has no task-less tick and takes its inputs from voice_turn and esp_random().
+ */
+
+/** One executor iteration: reactive_task()'s loop body without FreeRTOS timing.
+ *  Each call advances the host clock by REACTIVE_LOOP_PERIOD_MS. */
+void reactive_controller_tick_for_test(void);
+
+/** Stand-in for voice_turn_is_busy(): while true the idle gaze faces forward. */
+void reactive_controller_set_face_forward_for_test(bool face_forward);
+
+/**
+ * Seed the idle gaze's random source, which stands in for esp_random().
+ *
+ * Call after reactive_controller_init(), which resets the generator. Any seed
+ * is accepted, 0 included: it is mapped to a non-zero generator state.
+ */
+void reactive_controller_seed_gaze_for_test(uint32_t seed);
+#endif /* REACTIVE_CONTROLLER_HOST_TEST */
+
 #ifdef __cplusplus
 }
 #endif

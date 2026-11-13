@@ -1341,6 +1341,15 @@ void reactive_controller_set_face_forward_for_test(bool face_forward)
     s_test_face_forward = face_forward;
 }
 
+void reactive_controller_seed_gaze_for_test(uint32_t seed)
+{
+    /* xorshift32 stays at 0 once it is 0, which would fix every draw. The
+     * multiply spreads neighbouring seeds (1, 2, 3) over the state space; the
+     * one seed it maps to 0 gets the init value. */
+    const uint32_t state = seed * 2654435761u + 0x9E3779B9u;
+    s_test_rng_state = (state != 0u) ? state : 0x12345678u;
+}
+
 static uint32_t ms_to_ticks(uint32_t ms)
 {
     return (ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS;
