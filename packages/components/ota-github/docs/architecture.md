@@ -44,7 +44,7 @@ stateDiagram-v2
 Source: [diagrams/state-machine.mmd](diagrams/state-machine.mmd).
 
 The `MAINTENANCE_MODE` status is not produced by the component itself — it's
-reserved for callers (like the robocar main controller) that want to report
+reserved for callers that want to report
 a "we're out of service while a peer updates us" state over the same
 reporting API.
 
@@ -171,7 +171,7 @@ to run the bad image on the next reset.
 - All status/progress getters take a 50 ms mutex — safe to call from any
   task including interrupt-level code via `xSemaphoreTakeFromISR` variants
   (not currently exposed; open an issue if you need it).
-- The MQTT event handler may run on a separate task; they only touch
+- The MQTT event handler may run on a separate task; it only touches
   state through the public helpers, which acquire the mutex.
 - `ota_github_init` is NOT thread-safe — call it once during startup.
 

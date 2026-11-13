@@ -65,9 +65,9 @@ typedef enum {
 /**
  * @brief High-level state reported by @ref ota_github_get_status.
  *
- * Values intentionally match the robocar I2C protocol's `ota_status_t` so
- * they can be forwarded unchanged across the bus. The numeric values are
- * part of the ABI — do not renumber.
+ * Values match the `ota_status_t` of the dual-ESP32 robocar's I2C protocol,
+ * which forwarded them unchanged across the bus; that design is removed. The
+ * numeric values are part of the ABI — do not renumber.
  */
 typedef enum {
     OTA_GITHUB_STATUS_IDLE = 0x00,
