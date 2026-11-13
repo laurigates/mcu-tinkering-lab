@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-10-25
+reviewed: 2026-11-13
 ---
 
 # Multi-Agent Workflows: Fair Inputs, Guarded Barriers, Clean Checkpoints
@@ -96,3 +96,37 @@ Linux-only `bash -c` argument-length fix, correct and kept). Run
 so a commit nobody in the session wrote is read first. `auto-resolve-conflicts.yml`
 runs on every push to `main` and can fail on a branch that is being merged at
 that moment; check that the next run passes before reading it as a defect.
+
+## Have agents report follow-ups, then verify them once and file
+
+Tell implementers and verifiers to return out-of-scope defects in their
+result, not to file them. An issue sweep whose agents file issues refills the
+queue it is draining, and nobody has checked what they filed. On the
+2026-11-11 run (#1115-#1121, 18 agents) the seven units returned about forty
+follow-ups. After the PRs merged, one pass over `main` re-checked each claim
+and filed nine issues (#1123-#1131). The rest were too small or already moot.
+
+Reproduce the headline claim of each issue before filing, with a control:
+
+- #1124: a cut line holding `inf` never returned from `validate_config`
+  within 60 s, while the zero-length control returned its error.
+- #1127: a mutant that unlocked before the flag update still passed the host
+  suite three times out of three, after the unmutated control passed.
+
+Mark in the issue body what was reproduced and what is only reported.
+
+## Rebuild the PR body after a repair
+
+An implementer drafts the PR body before its verifier runs. A repair commit
+then changes the test counts and adds a fix the body does not mention: on
+#1119 the body still said 802 tests and "8 failures, 3 errors" after the
+repair made it 803 and 4, and on #1121 it said 8 tests where the suite had
+18. The verifier's verdict lists these. Read each verdict's defect list for
+"PR body" entries and correct the body before opening the PR.
+
+## In a cloud session, tell agents how to read issues
+
+A cloud session has no `gh` CLI for issue or PR reads. An agent told to run
+`gh issue view` there fails or guesses. Say in the brief to read issues with
+the GitHub MCP tool `mcp__github__issue_read` (methods `get` and
+`get_comments`), and keep pushes and PR creation in the main session.
