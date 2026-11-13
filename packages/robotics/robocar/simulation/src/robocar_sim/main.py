@@ -15,12 +15,18 @@ import threading
 import time
 from pathlib import Path
 
-# Add src directory to path
-sys.path.append(str(Path(__file__).parent))
-
-from communication_bridge import ESP32CommunicationBridge
-from genesis_visualizer import HAS_GENESIS, GenesisSimulation
-from robot_model import DifferentialDriveRobot
+try:
+    from .genesis_visualizer import HAS_GENESIS, GenesisSimulation
+except ModuleNotFoundError as exc:
+    # The console scripts are installed in every environment; the visualiser's
+    # packages only with the viz extra.
+    if exc.name is None or exc.name.split(".")[0] == "robocar_sim":
+        raise
+    raise SystemExit(
+        f"robocar_sim.main is the legacy demo and needs the viz extra ({exc.name} is not "
+        "installed): run it with `uv run --extra viz python -m robocar_sim.main`"
+    ) from None
+from .robot_model import DifferentialDriveRobot
 
 
 class SimulationManager:
@@ -30,26 +36,20 @@ class SimulationManager:
         self,
         config_path: str,
         enable_visualizer: bool = True,
-        enable_bridge: bool = True,
-        serial_port: str | None = None,
         viz_mode: str = "headless",
     ):
         self.config_path = config_path
         self.enable_visualizer = enable_visualizer
-        self.enable_bridge = enable_bridge
-        self.serial_port = serial_port
         self.viz_mode = viz_mode
 
         # Components
         self.robot = DifferentialDriveRobot(config_path)
         self.robot.enable_subsystems_from_config()
-        self.bridge = None
         self.visualizer = None
         self.swift_sim = None
 
         # Control
         self.running = False
-        self.bridge_task = None
 
         # Setup signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -63,11 +63,6 @@ class SimulationManager:
     def initialize(self):
         """Initialize all simulation components"""
         print("Initializing ESP32 Robot Car Simulation...")
-
-        # Initialize communication bridge
-        if self.enable_bridge:
-            self.bridge = ESP32CommunicationBridge(self.config_path, self.robot)
-            print("✓ Communication bridge initialized")
 
         # Initialize Genesis visualizer
         if self.enable_visualizer:
@@ -122,12 +117,6 @@ class SimulationManager:
             and viz.viz_mode in ("visual", "browser")
         )
 
-        # Start communication bridge
-        if self.bridge:
-            bridge_task = asyncio.create_task(self.bridge.start(self.serial_port))
-            tasks.append(bridge_task)
-            print("✓ Communication bridge started")
-
         # For matplotlib fallback, start visualization on main thread
         if self.swift_sim and using_fallback:
             if self.swift_sim.visualizer.fallback_viz.enabled:
@@ -135,29 +124,26 @@ class SimulationManager:
                 self.swift_sim.visualizer.fallback_viz.start_update_loop()
                 print("✓ Matplotlib visualization started on main thread")
 
-        # Robot update driver: exactly one component may call robot.update().
-        # The bridge's update_loop drives it when the bridge is active;
-        # otherwise a dedicated background thread does.
-        if not self.bridge:
-            try:
-                update_thread = threading.Thread(target=self._run_robot_update_loop, daemon=True)
-                update_thread.start()
-                print("✓ Robot update loop started")
-            except RuntimeError as e:
-                print(f"⚠ Failed to start robot update thread: {e}")
+        # Robot update driver: exactly one component may call robot.update(),
+        # and that is this background thread.
+        try:
+            update_thread = threading.Thread(target=self._run_robot_update_loop, daemon=True)
+            update_thread.start()
+            print("✓ Robot update loop started")
+        except RuntimeError as e:
+            print(f"⚠ Failed to start robot update thread: {e}")
 
-        # Start demo movement if no bridge
-        if not self.bridge:
-            if is_genesis_gui:
-                # GUI mode: run synchronous demo in background thread so the
-                # main thread stays free for the Genesis viewer event loop.
-                demo_thread = threading.Thread(target=self._run_sync_demo, daemon=True)
-                demo_thread.start()
-                print("✓ Demo movement started")
-            else:
-                demo_task = asyncio.create_task(self._demo_movement())
-                tasks.append(demo_task)
-                print("✓ Demo movement started")
+        # Start the demo movement pattern
+        if is_genesis_gui:
+            # GUI mode: run synchronous demo in background thread so the
+            # main thread stays free for the Genesis viewer event loop.
+            demo_thread = threading.Thread(target=self._run_sync_demo, daemon=True)
+            demo_thread.start()
+            print("✓ Demo movement started")
+        else:
+            demo_task = asyncio.create_task(self._demo_movement())
+            tasks.append(demo_task)
+            print("✓ Demo movement started")
 
         # Run async tasks in a background thread when Genesis owns the main thread.
         if is_genesis_gui and tasks:
@@ -184,7 +170,7 @@ class SimulationManager:
                 print("Matplotlib GUI mode: keeping main thread active...")
                 try:
                     # Keep the main thread alive for matplotlib GUI while
-                    # yielding to the event loop so bridge/demo tasks run.
+                    # yielding to the event loop so the demo task runs.
                     while self.running:
                         plt.pause(0.05)  # Process GUI events
                         await asyncio.sleep(0.05)
@@ -218,9 +204,7 @@ class SimulationManager:
     def _run_robot_update_loop(self):
         """Drive robot.update() in a background thread.
 
-        Started whenever the communication bridge is not active — the bridge's
-        update_loop is the single update driver otherwise. Motor commands come
-        from the demo pattern (which always runs when the bridge is off).
+        Motor commands come from the demo pattern.
         """
         try:
             start_time = time.time()
@@ -236,7 +220,7 @@ class SimulationManager:
             print(f"Robot update loop error: {e}")
 
     async def _demo_movement(self) -> None:
-        """Demo movement pattern when no ESP32 is connected"""
+        """Demo movement pattern"""
         print("Running demo movement pattern...")
 
         movement_patterns = [
@@ -326,9 +310,6 @@ class SimulationManager:
         print("\nStopping simulation...")
         self.running = False
 
-        if self.bridge:
-            self.bridge.stop()
-
         if self.swift_sim:
             try:
                 if hasattr(self.swift_sim, "visualizer") and self.swift_sim.visualizer:
@@ -358,40 +339,33 @@ def main():
         epilog="""
 Examples:
   # Run with default headless mode
-  python main.py
+  python -m robocar_sim.main
 
   # Run with GUI window visualization
-  python main.py --visual
+  python -m robocar_sim.main --visual
 
   # Run with browser-based visualization
-  python main.py --browser
+  python -m robocar_sim.main --browser
 
   # Run with specific visualization mode
-  python main.py --viz-mode visual
-
-  # Run with serial connection to ESP32
-  python main.py --serial /dev/ttyUSB0 --visual
+  python -m robocar_sim.main --viz-mode visual
 
   # Run completely headless (no visualization)
-  python main.py --headless
+  python -m robocar_sim.main --headless
 
   # Use environment variable for visualization mode
-  GENESIS_VIZ_MODE=browser python main.py
+  GENESIS_VIZ_MODE=browser python -m robocar_sim.main
 
   # Run with custom configuration
-  python main.py --config ../config/custom_config.yaml --visual
+  python -m robocar_sim.main --config config/custom_config.yaml --visual
         """,
     )
 
-    # Default config path relative to this script's location
-    default_config = Path(__file__).parent.parent / "config" / "robot_config.yaml"
+    # Default config path relative to the project directory (src/robocar_sim/ -> project)
+    default_config = Path(__file__).resolve().parents[2] / "config" / "robot_config.yaml"
 
     parser.add_argument(
         "--config", "-c", default=str(default_config), help="Configuration file path"
-    )
-
-    parser.add_argument(
-        "--serial", "-s", help="Serial port for ESP32 connection (e.g., /dev/ttyUSB0, COM3)"
     )
 
     parser.add_argument(
@@ -410,12 +384,6 @@ Examples:
         "--viz-mode",
         choices=["headless", "visual", "browser"],
         help="Visualization mode: headless (no window), visual (GUI window), or browser (web-based)",
-    )
-
-    parser.add_argument("--no-bridge", action="store_true", help="Run without communication bridge")
-
-    parser.add_argument(
-        "--demo-only", action="store_true", help="Run demo movement only (no communication)"
     )
 
     args = parser.parse_args()
@@ -450,19 +418,12 @@ Examples:
     print("=" * 60)
     print(f"Configuration: {config_path}")
     print(f"Visualization: {viz_mode.title() if viz_mode != 'headless' else 'Headless'}")
-    print(
-        f"Communication: {'Enabled' if (not args.no_bridge and not args.demo_only) else 'Disabled'}"
-    )
-    if args.serial:
-        print(f"Serial Port: {args.serial}")
     print("=" * 60)
 
     # Create simulation manager
     sim_manager = SimulationManager(
         config_path=str(config_path),
         enable_visualizer=viz_mode != "headless",
-        enable_bridge=not args.no_bridge and not args.demo_only,
-        serial_port=args.serial,
         viz_mode=viz_mode,
     )
 
@@ -473,10 +434,6 @@ Examples:
         # Print instructions
         print("\nSimulation Controls:")
         print("- Ctrl+C: Stop simulation")
-        if not args.no_bridge:
-            print("- Connect ESP32 via serial or WebSocket (ws://localhost:8765)")
-            print("- Send motor commands via WebSocket JSON:")
-            print('  {"type": "motor_command", "payload": {"left_pwm": 100, "right_pwm": 100}}')
 
         # Print visualization guidance
         if viz_mode != "headless" and HAS_GENESIS:

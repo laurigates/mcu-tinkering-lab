@@ -1,4 +1,5 @@
-# ESP32 Robot Car Simulation
+# Robocar simulation: the plant the behaviour twin steps (ADR-036) and the
+# legacy demo of the removed dual-ESP32 car.
 # Run `just --list` to see available recipes
 
 default:
@@ -8,13 +9,13 @@ default:
 # setup
 ##########
 
-# Verify all core dependencies are importable
+# Verify the core dependencies and the plant are importable
 [group: "setup"]
 check-deps:
     #!/usr/bin/env bash
     set -euo pipefail
-    uv run python -c "import numpy, scipy, matplotlib, websockets, serial, yaml, trimesh, pymunk, cv2" \
-        && echo "All core dependencies available" \
+    uv run python -c "import numpy, pymunk, yaml, robocar_sim.plant" \
+        && echo "Core dependencies available" \
         || { echo "Missing dependencies — run 'uv sync --extra dev'"; exit 1; }
 
 # Validate robot config YAML and check deps
@@ -22,105 +23,96 @@ check-deps:
 setup: check-deps check-config
     @echo ""
     @echo "Setup complete! Try:"
-    @echo "  just run          # Start simulation"
+    @echo "  just plant-demo   # Step the plant through a scripted drive"
     @echo "  just test         # Run tests"
     @echo "  just info         # Show system info"
 
 ##########
-# run
+# plant
 ##########
 
-# Run simulation in headless mode
+# Run the plant's JSONL stepper on stdin/stdout (ADR-036 section 3: the command the twin harness starts)
+[group: "plant"]
+plant:
+    uv run --locked --quiet python -m robocar_sim.plant
+
+# Step the plant through scripted wheel commands: pose trace to tmp/, and a plot where the viz extra is installed
+[group: "plant"]
+plant-demo *args:
+    mkdir -p tmp
+    uv run --locked python -m robocar_sim.plant_demo --out tmp/plant_demo_trace.jsonl --plot tmp/plant_demo.png {{args}}
+
+##########
+# run (legacy demo; needs the viz extra)
+##########
+
+# Run the legacy demo in headless mode
 [group: "run"]
 run:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --headless
+    PYTHONUNBUFFERED=1 uv run --extra viz python -m robocar_sim.main --headless
 
-# Run simulation with GUI window
+# Run the legacy demo with a GUI window
 [group: "run"]
 run-visual:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --visual
+    PYTHONUNBUFFERED=1 uv run --extra viz python -m robocar_sim.main --visual
 
-# Run simulation with browser interface (http://localhost:52000)
+# Run the legacy demo with the browser interface (http://localhost:52000)
 [group: "run"]
 run-browser:
     @echo "Access visualization at: http://localhost:52000"
-    PYTHONUNBUFFERED=1 uv run python src/main.py --browser
+    PYTHONUNBUFFERED=1 uv run --extra viz python -m robocar_sim.main --browser
 
-# Run headless simulation (explicit alias for run)
+# Run the legacy demo headless (explicit alias for run)
 [group: "run"]
 run-headless:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --headless
-
-# Run demo movement pattern in headless mode
-[group: "run"]
-run-demo:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --demo-only --headless
-
-# Run visual demo with GUI window
-[group: "run"]
-demo-visual:
-    @echo "Watch the robot move in the 3D visualization window!"
-    PYTHONUNBUFFERED=1 uv run python src/main.py --demo-only --visual
-
-# Run demo with browser interface (http://localhost:52000)
-[group: "run"]
-demo-browser:
-    @echo "Access visualization at: http://localhost:52000"
-    PYTHONUNBUFFERED=1 uv run python src/main.py --demo-only --browser
-
-# Run with ESP32 serial connection (headless)
-[group: "run"]
-run-serial serial_port:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --serial {{serial_port}} --headless
-
-# Run with ESP32 serial connection and GUI visualization
-[group: "run"]
-serial-visual serial_port:
-    @echo "Watch the robot move based on ESP32 commands!"
-    PYTHONUNBUFFERED=1 uv run python src/main.py --serial {{serial_port}} --visual
+    PYTHONUNBUFFERED=1 uv run --extra viz python -m robocar_sim.main --headless
 
 ##########
 # test
 ##########
 
+# The test, lint and type-check recipes name the dev extra: the twin's plant
+# recipes build this environment without it, and `uv run` would then fall back
+# to whatever pytest or ruff is on PATH.
+
 # Run all tests
 [group: "test"]
 test:
-    uv run pytest tests/ -v
+    uv run --extra dev pytest tests/ -v
 
 # Test robot model only
 [group: "test"]
 test-robot:
-    uv run pytest tests/test_robot_model.py::TestDifferentialDriveRobot -v
+    uv run --extra dev pytest tests/test_robot_model.py::TestDifferentialDriveRobot -v
 
 # Test motor dynamics
 [group: "test"]
 test-motor:
-    uv run pytest tests/test_robot_model.py::TestDCMotor -v
+    uv run --extra dev pytest tests/test_robot_model.py::TestDCMotor -v
 
 # Test simulation accuracy
 [group: "test"]
 test-accuracy:
-    uv run pytest tests/test_robot_model.py::TestSimulationAccuracy -v
+    uv run --extra dev pytest tests/test_robot_model.py::TestSimulationAccuracy -v
 
-# Test communication bridge imports
+# Test the plant, its arena schema and its stepper
 [group: "test"]
-test-comm:
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from communication_bridge import ESP32CommunicationBridge; print('Communication bridge imports OK')"
+test-plant:
+    uv run --extra dev pytest tests/test_plant.py tests/test_arena.py tests/test_plant_stepper.py -v
 
-# Test visualization availability
+# Test visualization availability (viz extra)
 [group: "test"]
 test-viz:
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from swift_visualizer import SwiftSimulation, HAS_SWIFT; print(f'Swift available: {HAS_SWIFT}')"
+    uv run --extra viz python -c "from robocar_sim.genesis_visualizer import HAS_GENESIS; print(f'Genesis available: {HAS_GENESIS}')"
 
 # Quick smoke tests for core components
 [group: "test"]
 test-quick:
     #!/usr/bin/env bash
     set -euo pipefail
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from robot_model import DifferentialDriveRobot; print('Robot model OK')"
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from communication_bridge import ESP32CommunicationBridge; print('Communication bridge OK')"
-    uv run python -c "import numpy, scipy, matplotlib, yaml; print('Core dependencies OK')"
+    uv run python -c "from robocar_sim.plant import Plant; print('Plant OK')"
+    uv run python -c "from robocar_sim.robot_model import DifferentialDriveRobot; print('Robot model OK')"
+    uv run python -c "import numpy, pymunk, yaml; print('Core dependencies OK')"
 
 ##########
 # dev
@@ -129,32 +121,28 @@ test-quick:
 # Run linter (ruff)
 [group: "dev"]
 lint:
-    uv run ruff check src/ tests/
+    uv run --extra dev ruff check src/ tests/
 
 # Format code with ruff
 [group: "dev"]
 format:
-    uv run ruff format src/ tests/
+    uv run --extra dev ruff format src/ tests/
 
 # Run type checking with ty (astral)
 [group: "dev"]
 type-check:
-    uv run ty check src/
+    uv run --extra dev ty check src/
 
-# Validate robot config YAML
+# Validate the legacy robot config YAML and the plant's robot description
 [group: "dev"]
 check-config:
-    uv run python -c "import yaml; yaml.safe_load(open('config/robot_config.yaml')); print('Configuration valid')"
+    uv run python -c "import yaml; yaml.safe_load(open('config/robot_config.yaml')); print('Legacy configuration valid')"
+    uv run python -c "from robocar_sim.plant import Plant; Plant({'floor': [[0, 0], [100, 0], [100, 100]]}, 0, config=None); print('plant.yaml valid')"
 
 # Run performance benchmarks
 [group: "dev"]
 benchmark:
-    uv run pytest tests/test_robot_model.py::TestSimulationAccuracy::test_simulation_stability -v -s
-
-# Validate simulation against hardware
-[group: "dev"]
-validate serial_port:
-    PYTHONUNBUFFERED=1 uv run python src/main.py --serial {{serial_port}} --validate
+    uv run --extra dev pytest tests/test_robot_model.py::TestSimulationAccuracy::test_simulation_stability -v -s
 
 # Clean Python cache and temp files
 [group: "dev"]
@@ -173,18 +161,16 @@ clean:
 # info
 ##########
 
-# Show simulation information and available serial ports
+# Show simulation information
 [group: "info"]
 info:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "ESP32 Robot Car Simulation"
+    echo "Robocar simulation"
     echo "Python version: $(uv run python --version)"
     echo "Working directory: $(pwd)"
-    echo "Configuration: config/robot_config.yaml"
-    echo ""
-    echo "Available serial ports:"
-    uv run python -c "import serial.tools.list_ports; [print(f'  {p.device}: {p.description}') for p in serial.tools.list_ports.comports()]" 2>/dev/null || echo "  pyserial not installed"
+    echo "Plant robot description: src/robocar_sim/plant.yaml"
+    echo "Legacy demo configuration: config/robot_config.yaml"
 
 # Component status check
 [group: "info"]
@@ -192,11 +178,11 @@ status:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Simulation Status"
-    printf "Robot model:          "
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from robot_model import DifferentialDriveRobot; print('OK')" 2>/dev/null || echo "Error"
-    printf "Communication bridge: "
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from communication_bridge import ESP32CommunicationBridge; print('OK')" 2>/dev/null || echo "Error"
+    printf "Plant:                "
+    uv run python -c "from robocar_sim.plant import Plant; print('OK')" 2>/dev/null || echo "Error"
+    printf "Robot model (legacy): "
+    uv run python -c "from robocar_sim.robot_model import DifferentialDriveRobot; print('OK')" 2>/dev/null || echo "Error"
     printf "Genesis visualizer:   "
-    uv run python -c "import sys; sys.path.insert(0, 'src'); from genesis_visualizer import HAS_GENESIS; print('Available' if HAS_GENESIS else 'Not available (matplotlib fallback active)')" 2>/dev/null || echo "Error"
+    uv run python -c "from robocar_sim.genesis_visualizer import HAS_GENESIS; print('Available' if HAS_GENESIS else 'Not available (matplotlib fallback active)')" 2>/dev/null || echo "viz extra not installed"
     printf "Configuration:        "
     uv run python -c "import yaml; yaml.safe_load(open('config/robot_config.yaml')); print('Valid')" 2>/dev/null || echo "Invalid"

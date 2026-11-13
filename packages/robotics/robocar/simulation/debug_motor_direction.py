@@ -3,12 +3,7 @@
 Debug script to analyze motor direction issues
 """
 
-import sys
-
-sys.path.append("src")
-
-
-from robot_model import DifferentialDriveRobot
+from robocar_sim.robot_model import DifferentialDriveRobot
 
 
 def analyze_motor_direction():

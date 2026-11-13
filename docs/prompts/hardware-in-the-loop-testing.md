@@ -5,6 +5,12 @@
 **Priority**: P2
 **Confidence**: 6/10
 
+> **2026-11-13:** the WebSocket and serial bridge this plan builds on was
+> removed by [ADR-036](../decisions/ADR-036-robocar-twin-plant-port.md), which
+> withdraws PRD-003 R6–R8. The simulation's external interface is now the JSONL
+> stepper `python -m robocar_sim.plant`. The plan below is kept as written and
+> has no bridge to build on.
+
 ---
 
 ## Goal

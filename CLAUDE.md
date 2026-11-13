@@ -19,7 +19,7 @@ mcu-tinkering-lab/
 │   │   ├── robocar/                # AI robot car: firmware (XIAO ESP32-S3 Sense) and its socketed carrier PCB
 │   │   │   ├── integrated/         # Carrier PCB variant with the breakout chips on board (hardware only)
 │   │   │   ├── bringup/            # Hardware self-test firmware
-│   │   │   ├── simulation/         # Python 3.12 physics simulation (Pymunk)
+│   │   │   ├── simulation/         # Python 3.12 plant model for the behaviour twin (Pymunk, ADR-036) and the legacy demo
 │   │   │   └── twin/               # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
 │   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + MPU6050 + steppers, Pico SDK)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
@@ -129,8 +129,9 @@ pre-commit run --all-files
 
 ```bash
 cd packages/robotics/robocar/simulation
-uv sync                      # Install dependencies
+uv sync --extra dev          # numpy, pymunk, pyyaml and the test tools
 uv run pytest tests/ --cov   # Run tests with coverage
+just plant-demo              # Step the plant alone; the legacy viewer needs --extra viz
 ```
 
 ### Docker (all ESP-IDF builds are containerized — no local ESP-IDF needed)

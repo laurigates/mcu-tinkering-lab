@@ -3,13 +3,9 @@
 Debug script to analyze motor dynamics and energy transitions
 """
 
-import sys
-
-sys.path.append("src")
-
 import numpy as np
 
-from robot_model import DifferentialDriveRobot
+from robocar_sim.robot_model import DifferentialDriveRobot
 
 
 def analyze_motor_dynamics():
@@ -51,9 +47,9 @@ def analyze_motor_dynamics():
 
     print("\nMotor friction analysis:")
     motor = robot.motor_left
-    print(f"Static friction: {motor.friction_static:.6f} N⋅m")
-    print(f"Kinetic friction: {motor.friction_kinetic:.6f} N⋅m")
-    print(f"Viscous friction: {motor.friction_viscous:.6f} N⋅m⋅s/rad")
+    print(f"Static friction: {motor.FRICTION_STATIC:.6f} N⋅m")
+    print(f"Kinetic friction: {motor.FRICTION_KINETIC:.6f} N⋅m")
+    print(f"Viscous friction: {motor.FRICTION_VISCOUS:.6f} N⋅m⋅s/rad")
     print("Motor rotor inertia: 0.001 kg⋅m²")
     print("Load torque: 0.01 N⋅m")
     print(f"Max angular velocity: {motor.max_rpm * 2 * np.pi / 60:.2f} rad/s")

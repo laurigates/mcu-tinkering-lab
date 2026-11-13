@@ -17,8 +17,8 @@ import numpy as np
 import yaml
 from spatialmath import SE3
 
-from error_handling import get_error_handler
-from robot_model import RobotState
+from .error_handling import get_error_handler
+from .robot_model import RobotState
 
 CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations
 
@@ -138,7 +138,7 @@ class CameraSimulation:
         """Load configuration from YAML file"""
         config_file = Path(config_path)
         if not config_file.exists():
-            config_file = Path(__file__).parent.parent / "config" / "robot_config.yaml"
+            config_file = Path(__file__).resolve().parents[2] / "config" / "robot_config.yaml"
 
         with open(config_file) as f:
             return yaml.safe_load(f)
@@ -578,10 +578,10 @@ class CameraSimulation:
 
 def main():
     """Test the camera simulation"""
-    from robot_model import DifferentialDriveRobot
+    from .robot_model import DifferentialDriveRobot
 
     # Test configuration
-    config_path = "../config/robot_config.yaml"
+    config_path = str(Path(__file__).resolve().parents[2] / "config" / "robot_config.yaml")
 
     # Create robot and camera simulation
     robot = DifferentialDriveRobot(config_path)

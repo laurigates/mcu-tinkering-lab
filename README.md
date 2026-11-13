@@ -38,7 +38,7 @@ Build, test and CI details are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Domain | Projects |
 |---|---|
-| `robotics/` | [AI robot car](packages/robotics/robocar/README.md): single-board firmware (XIAO ESP32-S3 Sense), its [integrated carrier](packages/robotics/robocar/integrated/README.md), [bring-up self-test](packages/robotics/robocar/bringup/README.md), a [Pymunk simulation](packages/robotics/robocar/simulation/README.md) and a [behaviour twin](packages/robotics/robocar/twin/README.md). [Self-balancing robot](packages/robotics/balancebot/README.md) (XIAO RP2350, Pico SDK) |
+| `robotics/` | [AI robot car](packages/robotics/robocar/README.md): single-board firmware (XIAO ESP32-S3 Sense), its [integrated carrier](packages/robotics/robocar/integrated/README.md), [bring-up self-test](packages/robotics/robocar/bringup/README.md), a [Pymunk plant model](packages/robotics/robocar/simulation/README.md) and a [behaviour twin](packages/robotics/robocar/twin/README.md). [Self-balancing robot](packages/robotics/balancebot/README.md) (XIAO RP2350, Pico SDK) |
 | `thinkpack/` | ESP-NOW mesh of companion boxes: brainbox (LLM coordinator), boombox, chatterbox, finderbox, glowbug, mesh-demo |
 | `camera-vision/` | MJPEG webserver, camera + I2S audio, LLM Telegram bot, Gemini object detection |
 | `audio/` | BLE gamepad synth, kids' audio toy, melody detector, RFID audiobook player (ESPHome) |

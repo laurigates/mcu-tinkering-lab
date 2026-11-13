@@ -52,15 +52,15 @@
       "prd": "PRD-003",
       "status": "active",
       "priority": "P1",
-      "notes": "Python 3.11; 18/24 tests passing"
+      "notes": "Python 3.12; import package robocar_sim. The plant (robocar_sim.plant: motors, contacts, two rangefinders, two floor sensors) for the behaviour twin, plus the legacy demo (ADR-036). 194 passed, 6 skipped on the core and dev dependencies (uv run pytest tests/, 2026-11-13)"
     },
     {
       "id": "FR-006",
       "name": "WebSocket communication bridge",
       "prd": "PRD-003",
-      "status": "active",
+      "status": "deprecated",
       "priority": "P2",
-      "notes": "Port 8765; bi-directional motor/sensor"
+      "notes": "Removed by ADR-036, which withdraws PRD-003 R6-R8. The JSONL stepper python -m robocar_sim.plant is the simulation's external interface"
     },
     {
       "id": "FR-007",
@@ -68,7 +68,7 @@
       "prd": "PRD-003",
       "status": "planned",
       "priority": "P2",
-      "notes": "Real ESP32 + virtual environment"
+      "notes": "Real ESP32 + virtual environment. No bridge to build on since ADR-036 removed the WebSocket and serial bridge (FR-006)"
     },
     {
       "id": "FR-008",
@@ -92,7 +92,7 @@
       "prd": "PRD-003",
       "status": "active",
       "priority": "P1",
-      "notes": "uv + pytest with coverage"
+      "notes": "uv + pytest with coverage (floor 25 %) on numpy, pymunk, pyyaml and the dev extra; the viz extra (Genesis, torch) is not installed in CI (ADR-036)"
     },
     {
       "id": "FR-011",
@@ -433,10 +433,10 @@
   ],
   "summary": {
     "total": 52,
-    "active": 15,
+    "active": 14,
     "planned": 35,
     "in_progress": 1,
     "blocked": 0,
-    "deprecated": 1
+    "deprecated": 2
   }
 }

@@ -240,6 +240,12 @@ jobs:
       # ty only sees unresolved-import and silently skips the real type errors,
       # making the gate a no-op in CI while it is RED for a developer with the
       # sim deps installed (local<->CI parity gap, issue #369).
+      # Since ADR-036 this installs the core (numpy, pymunk, pyyaml) and the dev
+      # extra, not the viz extra. ty therefore resolves everything the plant,
+      # the arena and the robot model import, and does not resolve cv2,
+      # matplotlib, genesis, trimesh or spatialmath: calls into those from the
+      # legacy camera_simulation.py, genesis_visualizer.py and main.py are
+      # unchecked here, and checked for a developer who has synced `--extra viz`.
       - name: Sync simulation dev dependencies (for ty pre-commit hook)
         working-directory: packages/robotics/robocar/simulation
         # --locked: install the committed uv.lock and fail if pyproject.toml

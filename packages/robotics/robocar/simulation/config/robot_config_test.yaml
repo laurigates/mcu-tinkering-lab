@@ -1,5 +1,6 @@
 # Robot Configuration for Testing
-# All optional subsystems disabled to prevent thread leaks and startup delays.
+# The camera is disabled so no background thread starts. Legacy demo model
+# only; the plant's robot description is src/robocar_sim/plant.yaml.
 robot:
   name: "ESP32-RoboCar"
   description: "Dual ESP32 AI-powered autonomous robot car"
@@ -76,30 +77,13 @@ robot:
       beam_angle: 15
       update_rate: 10
 
-  # Communication configuration
-  communication:
-    i2c:
-      address_main: 0x42
-      address_cam: 0x43
-      frequency: 100000
-      pins:
-        sda: 15
-        scl: 14
-
-    wifi:
-      ssid: "ESP32-RoboCar"
-      password: "robocar123"
-
-    uart:
-      baudrate: 115200
-
 # Simulation settings
 simulation:
   timestep: 0.01  # seconds (100Hz)
   physics_engine: ""  # Disabled for pure kinematics tests (no Pymunk)
   visualization: "headless"
 
-  # All optional subsystems disabled to prevent background threads
+  # Camera disabled so no background thread starts
   camera:
     enabled: false
     resolution: [640, 480]
@@ -107,23 +91,6 @@ simulation:
     fps: 20
     noise_level: 0.02
     compression_quality: 85
-
-  wifi:
-    enabled: false
-    auto_connect: false
-    default_ssid: "ESP32-RoboCar"
-    default_password: "robocar123"
-    connection_stability_threshold: 30.0
-    max_retry_attempts: 3
-    retry_delay_ms: 5000
-    power_save_mode: true
-
-  ota:
-    enabled: false
-    simulate_download_speed: 50000
-    verification_delay: 1.0
-    failure_probability: 0.05
-    partition_size: 1572864
 
   # Motor control configuration
   motor_control:
@@ -165,21 +132,3 @@ simulation:
       - type: "cylinder"
         position: [3.0, 1.0]
         radius: 0.3
-
-  # Communication bridge
-  bridge:
-    type: "websocket"
-    host: "localhost"
-    port: 8765
-
-# AI Backend Configuration
-ai_backend:
-  enabled: false
-  type: "claude"
-  api_key: ""
-  model: "claude-3-sonnet-20240229"
-
-  ollama:
-    host: "localhost"
-    port: 11434
-    model: "llava"

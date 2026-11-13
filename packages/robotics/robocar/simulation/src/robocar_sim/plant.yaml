@@ -1,0 +1,107 @@
+# Robot description for robocar_sim.plant (ADR-036).
+#
+# Loaded from the package, never from the working directory. Every key is
+# required and an unknown key is an error.
+#
+# The repo holds no measured track width, wheel diameter, mass, motor speed or
+# sensor position for the current chassis ("2WD car chassis" with two "~3-6 V
+# hobby" DC gear motors, docs/build-guide.typ). Every figure marked ESTIMATE
+# below is a guess at such a kit, with the measurement that replaces it. A
+# scenario that asserts a distance or a time from this plant asserts these
+# guesses until they are measured (ADR-036 open question 1).
+
+# Motor supply: the LM2596 buck's 5 V output feeds the TB6612FNG's VM
+# (WIRING.md). This is the regulator's set point. Under two stalled motors the
+# rail sags (WIRING.md, "The 5 V current budget"), which is not modelled.
+supply_v: 5.0
+
+# The pose is the point midway between the two drive wheels; the robot turns
+# about it. x is forward, y is left.
+chassis:
+  # ESTIMATE. Measure: axle line to the front edge of the chassis plate, with
+  # anything that sticks out past it (a sensor bracket, the head).
+  front_overhang_cm: 8.0
+  # ESTIMATE. Measure: axle line to the rearmost edge.
+  rear_overhang_cm: 13.0
+  # ESTIMATE. Measure: the widest point across the chassis, wheels included.
+  width_cm: 15.0
+
+wheels:
+  # ESTIMATE. Measure: centre of the left tyre's tread to the centre of the
+  # right one. It sets the yaw rate for a given wheel speed difference.
+  track_cm: 13.0
+  # ESTIMATE. Measure: tyre diameter under the robot's weight, or the distance
+  # rolled in ten wheel turns divided by ten pi.
+  diameter_cm: 6.5
+
+# One description for both motors, as seen at the wheel (after the gearbox).
+motor:
+  # ESTIMATE, the legacy robot_config.yaml winding (3 ohm); WIRING.md's 5 V
+  # current budget quotes the 1.7 A stall current it gives at 5 V.
+  # Measure: supply voltage over stall current at the wheel, which includes
+  # the TB6612FNG's on-resistance.
+  resistance_ohm: 3.0
+  # ESTIMATE. It sets only the current lag (about 10 ms with this model),
+  # which a 33 ms tick does not resolve. The plant refuses a value below
+  # resistance_ohm * 0.0001 H, where its 1 ms integration step would overshoot.
+  inductance_h: 0.003
+  # ESTIMATE, chosen for about 175 rpm at the wheel with no load at 5 V.
+  # Measure: wheel rpm off the ground at full duty; this is
+  # (supply_v - resistance_ohm * no-load current) / speed in rad/s.
+  back_emf_v_s_per_rad: 0.25
+  # ESTIMATE. Measure: force at the tyre with the wheel held, times the wheel
+  # radius, at full duty.
+  stall_torque_nm: 0.08
+  # ESTIMATE, supply_v / resistance_ohm (the "about 1.7 A" in WIRING.md).
+  # Measure: current through one motor with its wheel held at full duty.
+  # stall_torque_nm / stall_current_a is the torque constant, and the model
+  # clips the winding current here.
+  stall_current_a: 1.67
+  # Not a motor figure: the model clips the wheel speed here. Keep it above
+  # the no-load speed so the clip never acts.
+  speed_limit_rpm: 300.0
+  # ESTIMATE. The inertia each motor accelerates, at the wheel: the rotor and
+  # gearbox reflected through the gear ratio, plus half the robot's mass times
+  # the wheel radius squared (0.6 kg assumed). Measure: fit it to the time the
+  # robot takes to reach speed, or to the distance it rolls after a brake.
+  inertia_kg_m2: 0.0005
+  # ESTIMATE. Torque at the wheel that opposes rolling (tyre, bearing, caster).
+  # With the motor model's own friction it sets how far the robot coasts and
+  # the duty below which it does not start (about 6 % here). Measure: the
+  # distance the robot coasts from a known speed, or the lowest duty that
+  # moves it.
+  rolling_resistance_nm: 0.004
+
+# Two RCWL-1601 rangefinders, each modelled as one ray along its axis. The
+# beam's width is not in the repo and is not modelled.
+rangefinders:
+  # The bounds ultrasonic_core_decode() accepts (main/ultrasonic_core.h). A
+  # distance outside them reads as no echo (null).
+  # ESTIMATE, for what happens below min_cm. The datasheet page gives a blind
+  # zone under 2 cm (docs/reference/datasheets/sensor--rcwl-1601.md) and not
+  # what the sensor returns inside it. The firmware takes a failed read for a
+  # clear path, so this decides whether a robot already against a wall keeps
+  # its reflex. Measure: what the I2C read returns with a target inside 2 cm
+  # and with one touching the transducers.
+  min_cm: 2
+  max_cm: 400
+  # ESTIMATE. Standard deviation of the noise added to each reading before it
+  # is rounded to a whole centimetre, drawn from the seeded generator.
+  # Measure: the spread of logged readings against a fixed wall.
+  noise_cm: 0.3
+  # ESTIMATE: at the front edge, on the centre line, facing forward. Measure:
+  # the transducer face's position from the axle midpoint and its direction.
+  front: {x_cm: 8.0, y_cm: 0.0, heading_deg: 0.0}
+  # ESTIMATE: at the rear edge, on the centre line, facing backward.
+  rear: {x_cm: -13.0, y_cm: 0.0, heading_deg: 180.0}
+
+# Two floor sensors. Each reads floor when its point is inside the arena's
+# floor polygon. docs/firmware/cliff-sensors.md places them at the front and
+# rear edges, ahead of the wheels; it gives no distance.
+floor_sensors:
+  # ESTIMATE: 1 cm inside the front edge, so a chassis resting against a wall
+  # that stands on the floor's boundary still reads floor. Measure: the
+  # sensor's position from the axle midpoint.
+  front: {x_cm: 7.0, y_cm: 0.0}
+  # ESTIMATE: 1 cm inside the rear edge.
+  rear: {x_cm: -12.0, y_cm: 0.0}

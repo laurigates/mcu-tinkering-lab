@@ -27,7 +27,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-from robot_model import DifferentialDriveRobot, RobotState
+from .robot_model import DifferentialDriveRobot, RobotState
 
 # Detect Genesis availability WITHOUT importing the heavy stack (genesis pulls
 # torch, adding ~2s to import time). The actual import is deferred to
@@ -825,7 +825,9 @@ SwiftSimulation = GenesisSimulation
 
 def main():
     """Main function for testing Genesis visualization"""
-    config_path = "../config/robot_config.yaml"
+    config_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "robot_config.yaml"
+    )
 
     try:
         # Create simulation

@@ -6,14 +6,19 @@ differential drive kinematics, motor dynamics, and sensor simulation.
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pymunk
 import yaml
 
-from error_handling import ErrorEvent, ErrorSeverity, get_error_handler
-from ota_simulation import OTASimulation
-from wifi_simulation import WiFiManagerSimulation
+from .error_handling import ErrorEvent, ErrorSeverity, get_error_handler
+
+if TYPE_CHECKING:
+    # camera_simulation needs OpenCV and spatialmath (the viz extra), so it is
+    # imported at run time only by enable_camera().
+    from .camera_simulation import CameraSimulation
 
 
 @dataclass
@@ -63,6 +68,10 @@ class DCMotor:
         self.stall_torque = config["stall_torque"]  # N⋅m
         self.no_load_current = config["no_load_current"]  # A
         self.stall_current = config["stall_current"]  # A
+        # Inertia the motor torque accelerates (kg⋅m²). The default is the
+        # value this model always used for a small DC motor rotor; the plant
+        # sets it to the inertia reflected to the wheel.
+        self.inertia = config.get("inertia", 0.001)
 
         # State variables
         self.current = 0.0  # A
@@ -79,32 +88,41 @@ class DCMotor:
             return np.sign(motor_torque - load_torque) * self.FRICTION_STATIC
         return motor_torque - load_torque  # Static friction prevents motion
 
-    def update(self, voltage: float, load_torque: float, dt: float) -> tuple[float, float]:
+    def update(
+        self, voltage: float, load_torque: float, dt: float, open_circuit: bool = False
+    ) -> tuple[float, float]:
         """
         Update motor state based on applied voltage and load torque
 
         Args:
-            voltage: Applied voltage (V)
+            voltage: Applied voltage (V). 0 V is a shorted winding: the back
+                EMF drives a current that brakes the motor.
             load_torque: External load torque (N⋅m)
-            dt: Time step (s)
+            dt: Time step (s). The current update overshoots when dt exceeds
+                10 * inductance / resistance; callers sub-step below that.
+            open_circuit: The winding is open (the driver coasts): no current
+                flows whatever the voltage, and only friction acts.
 
         Returns:
             Tuple of (angular_velocity, torque)
         """
-        # Back EMF
-        back_emf = self.back_emf_constant * self.angular_velocity
+        if open_circuit:
+            self.current = 0.0
+        else:
+            # Back EMF
+            back_emf = self.back_emf_constant * self.angular_velocity
 
-        # Current calculation using more stable integration
-        # di/dt = (V - back_emf - R*i) / L
-        # Use implicit integration for better stability
-        time_constant = self.inductance / self.resistance
-        target_current = (voltage - back_emf) / self.resistance
-        self.current += (
-            (target_current - self.current) * (dt / time_constant) * 0.1
-        )  # Damping factor for stability
+            # Current calculation using more stable integration
+            # di/dt = (V - back_emf - R*i) / L
+            # Use implicit integration for better stability
+            time_constant = self.inductance / self.resistance
+            target_current = (voltage - back_emf) / self.resistance
+            self.current += (
+                (target_current - self.current) * (dt / time_constant) * 0.1
+            )  # Damping factor for stability
 
-        # Limit current to stall current
-        self.current = np.clip(self.current, -self.stall_current, self.stall_current)
+            # Limit current to stall current
+            self.current = np.clip(self.current, -self.stall_current, self.stall_current)
 
         # Motor torque
         motor_torque = self.torque_constant * self.current
@@ -117,10 +135,8 @@ class DCMotor:
         # Net torque
         net_torque = motor_torque - load_torque - friction_torque - viscous_torque
 
-        # Angular acceleration with proper motor inertia
-        # J * dw/dt = net_torque, where J is motor rotor inertia
-        motor_inertia = 0.001  # kg⋅m² - realistic value for small DC motor rotor
-        angular_acceleration = net_torque / motor_inertia
+        # Angular acceleration: J * dw/dt = net_torque
+        angular_acceleration = net_torque / self.inertia
         self.angular_velocity += angular_acceleration * dt
 
         # Limit to maximum RPM
@@ -153,7 +169,17 @@ class PhysicsEngine:
 
     def _setup_environment(self):
         """Set up environment boundaries and obstacles"""
-        env_size = self.environment_config["size"]
+        # Boundary walls exist only when the environment gives a size. The
+        # plant leaves it out and adds its own walls with add_wall().
+        if "size" in self.environment_config:
+            self._create_boundary(self.environment_config["size"])
+
+        # Add obstacles
+        for obstacle in self.environment_config.get("obstacles", []):
+            self._create_obstacle(obstacle)
+
+    def _create_boundary(self, env_size):
+        """Create the four boundary walls around a rectangular environment"""
         width, height = env_size[0], env_size[1]
 
         # Add a small margin around the configured environment so the robot can
@@ -187,9 +213,15 @@ class PhysicsEngine:
             wall.collision_type = 1  # Wall collision type
             self.space.add(wall)
 
-        # Add obstacles
-        for obstacle in self.environment_config.get("obstacles", []):
-            self._create_obstacle(obstacle)
+    def add_wall(
+        self, start: tuple[float, float], end: tuple[float, float], radius: float = 0.0
+    ) -> pymunk.Segment:
+        """Add a static wall segment. With radius 0 its face is the line itself."""
+        wall = pymunk.Segment(self.space.static_body, start, end, radius)
+        wall.friction = 0.7
+        wall.collision_type = 1  # Wall collision type
+        self.space.add(wall)
+        return wall
 
     def _create_obstacle(self, obstacle_config: dict):
         """Create a physics obstacle from configuration"""
@@ -202,6 +234,7 @@ class PhysicsEngine:
             moment = pymunk.moment_for_box(mass, size)
             body = pymunk.Body(mass, moment, body_type=pymunk.Body.STATIC)
             body.position = pos
+            body.angle = obstacle_config.get("angle", 0.0)  # radians
 
             # Create box shape
             shape = pymunk.Poly.create_box(body, size)
@@ -235,8 +268,14 @@ class PhysicsEngine:
         mass: float,
         dimensions: dict,
         position: tuple[float, float] = (0.0, 0.0),
+        offset: tuple[float, float] = (0.0, 0.0),
     ):
-        """Add a robot to the physics simulation"""
+        """Add a robot to the physics simulation.
+
+        ``offset`` is where the centre of the chassis rectangle sits in the
+        body frame. The body turns about its origin, so a non-zero offset
+        puts the rectangle off the turning centre.
+        """
         # Robot dimensions
         length = dimensions["length"]
         width = dimensions["width"]
@@ -247,7 +286,20 @@ class PhysicsEngine:
         body.position = position
 
         # Create robot shape (rectangle)
-        shape = pymunk.Poly.create_box(body, (length, width))
+        if offset == (0.0, 0.0):
+            shape = pymunk.Poly.create_box(body, (length, width))
+        else:
+            half_l, half_w = length / 2.0, width / 2.0
+            ox, oy = offset
+            shape = pymunk.Poly(
+                body,
+                [
+                    (ox - half_l, oy - half_w),
+                    (ox + half_l, oy - half_w),
+                    (ox + half_l, oy + half_w),
+                    (ox - half_l, oy + half_w),
+                ],
+            )
         shape.friction = 0.3
         shape.collision_type = 3  # Robot collision type
 
@@ -276,27 +328,50 @@ class PhysicsEngine:
             "angular_velocity": body.angular_velocity,
         }
 
-    def raycast_sensor(
-        self, start_pos: tuple[float, float], direction: float, max_range: float
-    ) -> float:
-        """Perform raycast for ultrasonic sensor simulation"""
+    def raycast_distance(
+        self,
+        start_pos: tuple[float, float],
+        direction: float,
+        max_range: float,
+        shape_filter: pymunk.ShapeFilter | None = None,
+        radius: float = 0.0,
+    ) -> float | None:
+        """Distance along a ray to the first shape it hits, or None within max_range.
+
+        The default filter matches every shape, the robot's own included. A
+        ray that starts inside the chassis then stops there at once; pass a
+        filter in the robot shape's group to look past it.
+
+        A ray of radius 0 that passes exactly through a polygon's corner
+        misses the polygon; a small radius does not.
+        """
         end_pos = (
             start_pos[0] + max_range * np.cos(direction),
             start_pos[1] + max_range * np.sin(direction),
         )
+        if shape_filter is None:
+            shape_filter = pymunk.ShapeFilter()
 
         # Perform segment query (raycast)
-        query_info = self.space.segment_query_first(start_pos, end_pos, 0, pymunk.ShapeFilter())
+        query_info = self.space.segment_query_first(start_pos, end_pos, radius, shape_filter)
 
         if query_info is not None and query_info.shape:
             # Calculate distance to hit point
             hit_point = query_info.point
-            distance = np.sqrt(
-                (hit_point.x - start_pos[0]) ** 2 + (hit_point.y - start_pos[1]) ** 2
+            return float(
+                np.sqrt((hit_point.x - start_pos[0]) ** 2 + (hit_point.y - start_pos[1]) ** 2)
             )
-            return max(0.02, distance)  # Minimum 2cm
 
-        return max_range  # No collision detected
+        return None  # No collision detected
+
+    def raycast_sensor(
+        self, start_pos: tuple[float, float], direction: float, max_range: float
+    ) -> float:
+        """Perform raycast for ultrasonic sensor simulation"""
+        distance = self.raycast_distance(start_pos, direction, max_range)
+        if distance is None:
+            return max_range  # No collision detected
+        return max(0.02, distance)  # Minimum 2cm
 
     def step(self, dt: float):
         """Step the physics simulation"""
@@ -309,10 +384,9 @@ class DifferentialDriveRobot:
     def __init__(self, config_path: str):
         """Initialize robot model from configuration file.
 
-        Subsystems (WiFi, OTA, camera) are NOT started here. Call
-        ``enable_wifi()``, ``enable_ota()``, and ``enable_camera()``
+        The camera is NOT started here. Call ``enable_camera()``
         explicitly, or use :meth:`enable_subsystems_from_config` to
-        activate them based on the configuration file.
+        activate it based on the configuration file.
         """
         # Initialize error handling
         self.error_handler = get_error_handler()
@@ -339,7 +413,7 @@ class DifferentialDriveRobot:
         self.use_motor_controllers = (
             self.config["simulation"].get("motor_control", {}).get("enabled", False)
         )
-        from motor_controller import MotorController
+        from .motor_controller import MotorController
 
         self.motor_left_controller: MotorController | None = None
         self.motor_right_controller: MotorController | None = None
@@ -378,12 +452,8 @@ class DifferentialDriveRobot:
             self.robot_body.position = (self.state.x, self.state.y)
             self.robot_body.angle = self.state.theta
 
-        # Subsystem placeholders — activated via enable_camera() / enable_wifi() / enable_ota()
-        from camera_simulation import CameraSimulation
-
+        # Camera placeholder, activated via enable_camera()
         self.camera_simulation: CameraSimulation | None = None
-        self.wifi_simulation: WiFiManagerSimulation | None = None
-        self.ota_simulation: OTASimulation | None = None
 
     def _register_recovery_strategies(self):
         """Register recovery strategies for robot model errors"""
@@ -448,60 +518,29 @@ class DifferentialDriveRobot:
     # ------------------------------------------------------------------
 
     def enable_camera(self) -> None:
-        """Start the camera simulation subsystem.
+        """Start the camera simulation subsystem (needs the ``viz`` extra).
 
         Safe to call multiple times — subsequent calls are no-ops.
         """
         if self.camera_simulation is not None:
             return
-        from camera_simulation import CameraSimulation
+        from .camera_simulation import CameraSimulation
 
         self.camera_simulation = CameraSimulation(self.config_path)
         self.camera_simulation.start_capture(lambda: self.state)
         print("Robot: camera simulation initialized")
 
-    def enable_wifi(self) -> None:
-        """Start the WiFi simulation subsystem.
-
-        Safe to call multiple times — subsequent calls are no-ops.
-        """
-        if self.wifi_simulation is not None:
-            return
-        self.wifi_simulation = WiFiManagerSimulation(self.config_path)
-        self.wifi_simulation.init()
-        print("Robot: WiFi simulation initialized")
-
-    def enable_ota(self) -> None:
-        """Start the OTA simulation subsystem.
-
-        Automatically calls :meth:`enable_wifi` if WiFi has not been
-        started yet, because OTA depends on a WiFi connection.
-        Safe to call multiple times — subsequent calls are no-ops.
-        """
-        if self.ota_simulation is not None:
-            return
-        if self.wifi_simulation is None:
-            self.enable_wifi()
-        self.ota_simulation = OTASimulation(self.config_path)
-        self.ota_simulation.set_wifi_manager(self.wifi_simulation)
-        print("Robot: OTA simulation initialized")
-
     def enable_subsystems_from_config(self) -> None:
         """Activate subsystems according to the ``simulation`` section of the config.
 
-        Reads the ``enabled`` flag for ``camera``, ``wifi``, and ``ota``
-        and calls the corresponding ``enable_*`` method for each one that
-        is set to ``true``.  This is a convenience helper for callers such
-        as :class:`~main.SimulationManager` that want to honour the config
-        without manually inspecting it.
+        Reads ``simulation.camera.enabled`` and calls :meth:`enable_camera`
+        when it is ``true``. This is a convenience helper for callers such
+        as :class:`~robocar_sim.main.SimulationManager` that want to honour
+        the config without inspecting it.
         """
         sim_cfg = self.config.get("simulation", {})
         if sim_cfg.get("camera", {}).get("enabled", False):
             self.enable_camera()
-        if sim_cfg.get("wifi", {}).get("enabled", False):
-            self.enable_wifi()
-        if sim_cfg.get("ota", {}).get("enabled", False):
-            self.enable_ota()
 
     def pwm_to_voltage(self, pwm: float | int) -> float:
         """Convert PWM value to voltage (assuming 3.3V logic, 7.4V motor supply)"""
@@ -785,7 +824,7 @@ class DifferentialDriveRobot:
 
 if __name__ == "__main__":
     # Test the robot model
-    config_path = "../config/robot_config.yaml"
+    config_path = str(Path(__file__).resolve().parents[2] / "config" / "robot_config.yaml")
     robot = DifferentialDriveRobot(config_path)
 
     print("ESP32 Robot Car Simulation Test")

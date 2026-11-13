@@ -3,12 +3,7 @@
 Debug script to analyze energy conservation in robot simulation
 """
 
-import sys
-
-sys.path.append("src")
-
-
-from robot_model import DifferentialDriveRobot
+from robocar_sim.robot_model import DifferentialDriveRobot
 
 
 def analyze_energy_conservation():
@@ -81,9 +76,9 @@ def analyze_energy_conservation():
 
     # Print motor friction analysis
     print("\nMotor friction analysis:")
-    print(f"Static friction: {robot.motor_left.friction_static:.6f} N⋅m")
-    print(f"Kinetic friction: {robot.motor_left.friction_kinetic:.6f} N⋅m")
-    print(f"Viscous friction: {robot.motor_left.friction_viscous:.6f} N⋅m⋅s/rad")
+    print(f"Static friction: {robot.motor_left.FRICTION_STATIC:.6f} N⋅m")
+    print(f"Kinetic friction: {robot.motor_left.FRICTION_KINETIC:.6f} N⋅m")
+    print(f"Viscous friction: {robot.motor_left.FRICTION_VISCOUS:.6f} N⋅m⋅s/rad")
     print("Load torque: 0.01 N⋅m")
     print(f"Motor torque constant: {robot.motor_left.torque_constant:.6f} N⋅m/A")
 
