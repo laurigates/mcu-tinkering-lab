@@ -712,8 +712,8 @@ static void integrate_right_stick_filter(int16_t ry, int16_t rx)
     synth_set_filter(true, s_tweak_cutoff_hz, s_tweak_resonance);
 
     /* Rate-limit the bump blip so it doesn't spam while pinned at a limit. */
-    static uint32_t last_bump_ms = 0;
     if (bumped) {
+        static uint32_t last_bump_ms = 0;
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
         if (now - last_bump_ms > 400) {
             synth_blip(BLIP_FREQ_NEUTRAL * 0.5f); /* low "thud" */
@@ -922,8 +922,8 @@ static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
                                 INTEGRATION_DT);
         bumped |= integrate_lin(&s_tweak_feedback, stick_rate(gp->axis_rx), 0.5f, 0.0f, 0.9f,
                                 INTEGRATION_DT);
-        static uint32_t last_bump_ms = 0;
         if (bumped) {
+            static uint32_t last_bump_ms = 0;
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - last_bump_ms > 400) {
                 synth_blip(BLIP_FREQ_NEUTRAL * 0.5f);
@@ -1021,8 +1021,8 @@ static void voicing_melody(const gamepad_state_t *gp, uint16_t face_pressed)
                                 INTEGRATION_DT);
         bumped |= integrate_lin(&s_tweak_feedback, stick_rate(gp->axis_rx), 0.5f, 0.0f, 0.9f,
                                 INTEGRATION_DT);
-        static uint32_t last_bump_ms = 0;
         if (bumped) {
+            static uint32_t last_bump_ms = 0;
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - last_bump_ms > 400) {
                 synth_blip(BLIP_FREQ_NEUTRAL * 0.5f);

@@ -90,7 +90,7 @@ static void test_out_of_order_and_duplicates(void)
     TEST_ASSERT_EQUAL(
         ESP_OK, thinkpack_ota_chunk_state_init(&s, &m, g_image, IMG_SIZE, g_bitmap, BITMAP_WORDS));
 
-    uint16_t order[IMG_CHUNKS] = {3, 1, 0, 2};
+    const uint16_t order[IMG_CHUNKS] = {3, 1, 0, 2};
     for (int i = 0; i < IMG_CHUNKS; ++i) {
         ota_chunk_payload_t c;
         make_chunk(&c, order[i], g_reconstructed, IMG_SIZE);

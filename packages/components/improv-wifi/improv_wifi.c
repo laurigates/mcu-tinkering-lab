@@ -158,7 +158,7 @@ static void handle_send_wifi_creds(const uint8_t *payload, uint8_t length)
     // Payload layout: [ssid_len, ssid..., pass_len, pass...]
     unsigned int idx = 0;  // unsigned int, so idx + len cannot wrap a uint8_t
 
-    if (idx >= (unsigned int)length) {
+    if (length == 0) {
         improv_wifi_send_error(IMPROV_ERROR_INVALID_RPC);
         return;
     }

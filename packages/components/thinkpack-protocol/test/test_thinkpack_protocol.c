@@ -332,7 +332,7 @@ static void test_priority_zero_capabilities(void)
 {
     /* Only MAC tiebreaker */
     uint32_t p = thinkpack_priority_for_capabilities(0, TEST_MAC);
-    uint32_t expected = (0u << 16) | 0x0102u;
+    uint32_t expected = 0x0102u; /* score 0 in the high half, MAC tiebreaker in the low */
     TEST_ASSERT_EQUAL(expected, p);
 }
 
@@ -367,7 +367,7 @@ static void test_priority_unscored_caps_do_not_add_score(void)
     /* CAP_NFC, CAP_POTS, etc. are not in the priority table — score stays 0 */
     uint16_t caps = CAP_NFC | CAP_POTS | CAP_TOUCH | CAP_RHYTHM | CAP_STORAGE;
     uint32_t p = thinkpack_priority_for_capabilities(caps, TEST_MAC);
-    uint32_t expected = (0u << 16) | 0x0102u;
+    uint32_t expected = 0x0102u; /* score 0 in the high half, MAC tiebreaker in the low */
     TEST_ASSERT_EQUAL(expected, p);
 }
 
