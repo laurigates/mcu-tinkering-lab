@@ -13,6 +13,7 @@ on:
       - '.gitleaks.toml'
       - '.github/issue-labels.json'
       - 'renovate.json'
+      - 'ruff.toml'
       - 'tools/**'
       - 'docker-compose.yml'
       - 'Dockerfile'
@@ -73,6 +74,7 @@ jobs:
               - '.pre-commit-config.yaml'
               - '.clang-format'
               - '.gitleaks.toml'
+              - 'ruff.toml'
               - 'tools/**'
 
       # .github/python-suites.json lists each suite and the paths that select
@@ -109,10 +111,12 @@ jobs:
   # The pre-commit hooks that guard CI configuration: the workflows (#855's
   # untrusted-text rule), every ESP-IDF version pin against the Kconfig symbol
   # list and the built-in partition tables, the root justfile's module list,
-  # project-matrix.json and the just pin in setup-tools, which decides the
-  # `just --dry-run` text check-flash-recipes reads. any-code does not list
-  # those files, so a workflow-, Dockerfile- or justfile-only PR used to run
-  # none of these hooks (#1089). Widening any-code would run Code Quality
+  # project-matrix.json, the just pin in setup-tools, which decides the
+  # `just --dry-run` text check-flash-recipes reads, the release-please
+  # component the OTA notify topic is built from (#1148) and the Claude Code
+  # post-edit hook (#1130). any-code does not list those files, so a
+  # workflow-, Dockerfile- or justfile-only PR used to run none of these
+  # hooks (#1089). Widening any-code would run Code Quality
   # Checks (about 2 minutes) on every such PR; these hooks take a few seconds,
   # so they run here on every event. Commands live in .pre-commit-config.yaml;
   # this list names hooks. tools/test_workflows.py fails when a hook that
@@ -128,6 +132,9 @@ jobs:
         check-flash-recipes-tests
         check-component-extra-paths
         check-component-extra-paths-tests
+        check-ota-consumer-agreement
+        check-ota-consumer-agreement-tests
+        post-edit-lint-hook
     steps:
       - uses: actions/checkout@v7.0.1
 

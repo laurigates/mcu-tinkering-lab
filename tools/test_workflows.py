@@ -50,7 +50,7 @@ What the tests hold:
   job grants the reusable's scopes itself, since the workflow level is
   read-only.
 - A pre-commit hook that watches CI configuration (``.github/``,
-  ``Dockerfile``, ``docker-compose.yml``, the root ``justfile``) runs on a PR
+  ``.claude/hooks/``, any root file but Markdown) runs on a PR
   that changes only that file: test.yml's ``any-code`` filter covers the file,
   or an always-on job in test.yml runs the hook (issue #1089). Every job but
   the advisory C/C++ lint reaches Test Summary's failure check.
@@ -113,9 +113,12 @@ INHERITS_REPO_DEFAULT = {
 }
 
 # CI configuration: files whose hooks must run on a PR that changes nothing
-# else (issue #1089). Docs (*.md, docs/) stay out on purpose: a docs-only PR
-# should not pay for Code Quality Checks.
-CI_CONFIG = re.compile(r"^(\.github/|Dockerfile$|docker-compose\.yml$|justfile$)")
+# else (issue #1089): .github/, the Claude Code hooks, and every root file but
+# Markdown. Root files rather than a list of names: a list of four missed
+# release-please-config.json, which the OTA-agreement hooks read (#1148), and
+# ruff.toml. Docs (*.md, docs/) stay out on purpose: a docs-only PR should not
+# pay for Code Quality Checks.
+CI_CONFIG = re.compile(r"^(\.github/|\.claude/hooks/|[^/]+(?<!\.md)$)")
 CONFIG_HOOKS_JOB = "config-hooks"
 # Advisory: its result is reported but never fails the summary.
 ADVISORY_JOBS = {"lint-c"}
@@ -787,6 +790,11 @@ class TestSuiteTest(unittest.TestCase):
             "check-flash-recipes: .github/actions/setup-tools/action.yml",
             "check-flash-recipes-tests: Dockerfile",
             "python-suites: .github/python-suites.json",
+            # A root config file and a Claude hook, outside .github/ (#1148,
+            # #1130).
+            "check-ota-consumer-agreement: release-please-config.json",
+            "check-ota-consumer-agreement-tests: release-please-config.json",
+            "post-edit-lint-hook: .claude/hooks/post-edit-lint.sh",
         ):
             self.assertIn(expected, gaps)
         typst_docs = "python3 tools/check-typst-docs.py"
@@ -813,6 +821,17 @@ class TestSuiteTest(unittest.TestCase):
         self.assertTrue(self.config_hooks)
         unknown = self.config_hooks - {h["id"] for h in local_hooks()}
         self.assertEqual(unknown, set())
+
+    def test_a_push_runs_the_jobs_any_code_selects(self):
+        # On push, the workflow's own path filter decides whether
+        # detect-changes runs at all, so every any-code glob must be in it.
+        paths = load("test.yml")[True]["push"]["paths"]
+        (filter_step,) = [
+            s for s in self.jobs["detect-changes"]["steps"] if s.get("id") == "filter"
+        ]
+        globs = yaml.safe_load(filter_step["with"]["filters"])["any-code"]
+        self.assertIn("ruff.toml", globs)
+        self.assertEqual([g for g in globs if g not in paths], [])
 
     def test_every_gating_job_reaches_the_summary_check(self):
         summary = self.jobs["test-summary"]
