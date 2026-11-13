@@ -1,0 +1,65 @@
+# US-D3: he does not back into something behind him. A rear reading below
+# STOP_THRESHOLD_CM (15 cm) brakes a reverse and holds it for as long as the
+# obstacle is there; the rear sensor never trips the obstacle reflex (#1026,
+# wheels_held_by_rangers() and rangers_rear_blocked() in reactive_controller.c).
+#
+# Read cycle and waking are as in us-d1-front-reflex-brakes: both rangefinders
+# are triggered on tick 0 and every 165 ms after, each read 132 ms after its
+# trigger; the 15 s planner tick requests because the front range moved from
+# the boot value (400 cm) to 120 cm.
+#
+# The reply is a drive at heading 180, which the executor runs in reverse
+# (drive_reverses(): past +-90 a drive goal backs up, issue #1025), 60 % =
+# duty 2457 after the 300 ms ramp (16.005 s .. 16.170 s).
+#
+# Rear obstacle: 8 cm behind from 20 s. The rear trigger at 20.130 s
+# (122 x 165) ranges it and the read at 20.262 s brakes the reverse on that
+# tick: the rear reading is used unsmoothed. The planner asks again at 30 s
+# (the goal still moves the wheels) and writes the same reverse at 31 s; it
+# stays braked.
+#
+# Release: clear behind from 36 s. The trigger at 36.135 s (219 x 165) ranges
+# 120 cm, the read at 36.267 s releases the hold, and the goal written at 31 s
+# (TTL 22.5 s) ramps the reverse up again: 546 at 36.267 s, 2457 at 36.432 s.
+#
+# The front reflex is not involved: reflex_trips stays 0, so the `note` tool is
+# never offered.
+id: us-d3-rear-holds-reverse
+stories: [US-D3]
+seed: 7
+duration: 44s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 0s, range: 120}
+  - {at: 0s, range: {cm: 120, sensor: rear}}
+  - {at: 20s, range: {cm: 8, sensor: rear}}
+  - {at: 36s, range: {cm: 120, sensor: rear}}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 180, distance_cm: 50, speed_pct: 60}
+expect:
+  - requests: {count: 2}
+  - goals: {sequence: [drive, drive]}
+  # Backing up at 60 % before the obstacle.
+  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [16.005s, 16.005s], count: 1}
+  - wheels_at: {at: "range[2]", left: reverse, right: reverse, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: forward, count: 0}
+  # Braked at the first read of a trigger that ranged the obstacle, at most
+  # 297 ms after it appears (REACTIVE_REFLEX_WORST_CASE_MS, the same pacing).
+  - wheels: {left: brake, right: brake, after: "range[2]", within: 297ms, count: 1}
+  - wheels_at: {at: 20.262s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  # Held through the second reverse goal (31 s) until the rear clears.
+  - wheels: {left: reverse, between: [20.262s, 36.266s], count: 0}
+  - wheels_at: {at: 35.999s, left: brake, right: brake}
+  # Released on the first clear rear reading.
+  - wheels: {left: reverse, right: reverse, after: "range[3]", within: 297ms, min: 1}
+  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [36.267s, 36.267s], count: 1}
+  - wheels_at: {at: 36.432s, left: reverse, right: reverse, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: brake, count: 1}
+  # Not the obstacle reflex: nothing for the planner to note.
+  - note_offered: {count: 0}

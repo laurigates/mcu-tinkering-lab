@@ -22,18 +22,33 @@ EVENT_KINDS = (
     "frame",
     "range",
     "range_fail",
+    "floor",
     "sound",
     "voice_turn",
     "console",
     "link",
-    "reflex",
 )
+# Removed event kinds, with what to write instead (ADR-036 section 1).
+REMOVED_EVENT_KINDS = {
+    "reflex": "a reflex is the executor's reaction to a range reading: script the "
+    "obstacle with 'range', held for at least one read cycle (165 ms)",
+}
+SENSORS = ("front", "rear")
+# The bounds ultrasonic_core_decode() accepts (main/ultrasonic_core.h
+# ULTRASONIC_MIN_RANGE_CM, ULTRASONIC_MAX_RANGE_CM). A value outside them is
+# not a distance the sensor can report, so the twin would read it as a failure.
+RANGE_MIN_CM = 2
+RANGE_MAX_CM = 400
 NOTE_KINDS = ("difficulty", "behaviour", "suggestion")
-CONFIG_KEYS = (
+CONFIG_INT_KEYS = (
     "planner_period_ms",
     "plan_budget_max_requests",
     "plan_budget_max_tokens",
 )
+# Executor inputs that are off unless a scenario asks for them (ADR-036 section
+# 1): `head` fits the servos, `cliff` arms the cliff reflex.
+CONFIG_BOOL_KEYS = ("head", "cliff")
+CONFIG_KEYS = CONFIG_INT_KEYS + CONFIG_BOOL_KEYS
 MOTION_CALLS = ("stop", "drive", "track", "rotate")
 DEFAULT_PLANNER_PERIOD_MS = 15000
 DEFAULT_PROMPT_TOKENS = 1200
@@ -89,7 +104,7 @@ class Scenario:
     stories: list[str]
     seed: int
     duration_ms: int
-    config: dict[str, int]
+    config: dict[str, int | bool]
     world: list[WorldEvent]
     planner_binding: str
     responses: list[InlineResponse] = field(default_factory=list)
@@ -167,27 +182,72 @@ def _int(path: Path, value: object, where: str) -> int:
     return value
 
 
-def _event_fields(path: Path, kind: str, spec: object, where: str) -> dict[str, Any]:
+def _bool(path: Path, value: object, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise _fail(path, f"{where}: expected true/false, got {value!r}")
+    return value
+
+
+def _sensor(path: Path, d: dict[str, Any], where: str) -> str:
+    sensor = d.get("sensor", "front")
+    if sensor not in SENSORS:
+        raise _fail(path, f"{where}.sensor: expected one of {SENSORS}, got {sensor!r}")
+    return sensor
+
+
+def _event_fields(
+    path: Path, kind: str, spec: object, where: str, config: dict[str, int | bool]
+) -> dict[str, Any]:
     if kind == "frame":
         d = _require_keys(path, spec, where, {"scene"}, {"pose"})
         if not isinstance(d["scene"], str) or not d["scene"]:
             raise _fail(path, f"{where}.scene: expected a non-empty string")
+        if config.get("head"):
+            # The pose is where the servos are when the planner captures the
+            # frame, so a scripted one would be ignored.
+            if "pose" in d:
+                raise _fail(
+                    path,
+                    f"{where}.pose: not allowed with config.head: the frame's pose "
+                    "comes from the head position at the planner tick",
+                )
+            return {"scene": d["scene"]}
         pose = d.get("pose", "C")
         if pose not in POSES:
             raise _fail(path, f"{where}.pose: expected one of {POSES}, got {pose!r}")
         return {"scene": d["scene"], "pose": pose}
     if kind == "range":
-        if isinstance(spec, dict):
-            spec = _require_keys(path, spec, where, {"cm"}, set())["cm"]
-        cm = _int(path, spec, f"{where}.cm")
-        if cm < 0:
-            raise _fail(path, f"{where}.cm: must be >= 0")
-        return {"cm": cm}
-    if kind in ("range_fail", "reflex"):
-        # reflex: one latch of the obstacle reflex (twin_main.c EV_REFLEX).
-        if spec not in (None, True, {}):
-            raise _fail(path, f"{where}: {kind} takes no fields, got {spec!r}")
-        return {}
+        # A bare integer is the front sensor.
+        d = (
+            _require_keys(path, spec, where, {"cm"}, {"sensor"})
+            if isinstance(spec, dict)
+            else {"cm": spec}
+        )
+        cm = _int(path, d["cm"], f"{where}.cm")
+        if not RANGE_MIN_CM <= cm <= RANGE_MAX_CM:
+            raise _fail(
+                path,
+                f"{where}.cm: must be in {RANGE_MIN_CM}..{RANGE_MAX_CM} (the range the "
+                f"rangefinder reports), got {cm}; use range_fail for a failed read",
+            )
+        return {"cm": cm, "sensor": _sensor(path, d, where)}
+    if kind == "range_fail":
+        if spec in (None, True):
+            spec = {}
+        d = _require_keys(path, spec, where, set(), {"sensor"})
+        return {"sensor": _sensor(path, d, where)}
+    if kind == "floor":
+        if not config.get("cliff"):
+            raise _fail(
+                path,
+                f"{where}: floor events need config.cliff: without it the cliff "
+                "reflex is not armed and the reading has no effect",
+            )
+        d = _require_keys(path, spec, where, {"front", "rear"}, set())
+        return {
+            "front": _bool(path, d["front"], f"{where}.front"),
+            "rear": _bool(path, d["rear"], f"{where}.rear"),
+        }
     if kind == "sound":
         d = _require_keys(path, spec, where, {"peak_db", "dur"}, set())
         return {
@@ -217,14 +277,16 @@ def _event_fields(path: Path, kind: str, spec: object, where: str) -> dict[str, 
         return {"line": spec}
     if kind == "link":
         d = _require_keys(path, spec, where, {"wifi", "key"}, set())
-        for k in ("wifi", "key"):
-            if not isinstance(d[k], bool):
-                raise _fail(path, f"{where}.{k}: expected true/false, got {d[k]!r}")
-        return {"wifi": d["wifi"], "key": d["key"]}
+        return {
+            "wifi": _bool(path, d["wifi"], f"{where}.wifi"),
+            "key": _bool(path, d["key"], f"{where}.key"),
+        }
     raise AssertionError(kind)  # unreachable: callers check EVENT_KINDS
 
 
-def _parse_world(path: Path, raw: object, duration_ms: int) -> list[WorldEvent]:
+def _parse_world(
+    path: Path, raw: object, duration_ms: int, config: dict[str, int | bool]
+) -> list[WorldEvent]:
     if not isinstance(raw, list) or not raw:
         raise _fail(path, "world: expected a non-empty list of events")
     events: list[WorldEvent] = []
@@ -233,6 +295,12 @@ def _parse_world(path: Path, raw: object, duration_ms: int) -> list[WorldEvent]:
         if not isinstance(item, dict):
             raise _fail(path, f"{where}: expected a mapping, got {item!r}")
         kinds = [k for k in item if k in EVENT_KINDS]
+        for k in item:
+            if k in REMOVED_EVENT_KINDS:
+                raise _fail(
+                    path,
+                    f"{where}: '{k}' events were removed: {REMOVED_EVENT_KINDS[k]}",
+                )
         unknown = set(item) - set(EVENT_KINDS) - {"at", "every", "until"}
         if unknown:
             raise _fail(
@@ -247,7 +315,7 @@ def _parse_world(path: Path, raw: object, duration_ms: int) -> list[WorldEvent]:
             raise _fail(path, f"{where}: missing 'at'")
         kind = kinds[0]
         at = _ms(path, item["at"], f"{where}.at")
-        fields = _event_fields(path, kind, item[kind], f"{where}.{kind}")
+        fields = _event_fields(path, kind, item[kind], f"{where}.{kind}", config)
         times = [at]
         if "every" in item or "until" in item:
             if "every" not in item or "until" not in item:
@@ -401,9 +469,16 @@ def load_scenario(path: str | Path) -> Scenario:
 
     config_raw = raw.get("config") or {}
     _require_keys(path, config_raw, "config", set(), set(CONFIG_KEYS))
-    config = {k: _int(path, v, f"config.{k}") for k, v in config_raw.items()}
+    config: dict[str, int | bool] = {
+        k: (
+            _bool(path, v, f"config.{k}")
+            if k in CONFIG_BOOL_KEYS
+            else _int(path, v, f"config.{k}")
+        )
+        for k, v in config_raw.items()
+    }
 
-    world = _parse_world(path, raw["world"], duration_ms)
+    world = _parse_world(path, raw["world"], duration_ms, config)
 
     models = _require_keys(path, raw["models"], "models", {"planner"}, set())
     binding = models["planner"]

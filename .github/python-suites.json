@@ -50,7 +50,8 @@
     "paths": [
       "packages/robotics/robocar/twin/**",
       "packages/robotics/robocar/main/**",
-      "packages/robotics/robocar/test/include/**"
+      "packages/robotics/robocar/test/include/**",
+      "packages/robotics/robocar/test/servo_controller_stub.c"
     ]
   },
   {

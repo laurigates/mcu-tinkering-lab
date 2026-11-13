@@ -1,0 +1,80 @@
+# US-D1: he brakes before hitting something in front of him, within
+# REACTIVE_REFLEX_WORST_CASE_MS (297 ms, reactive_controller.h) of the obstacle
+# appearing, and drives on once it is gone.
+#
+# The executor ticks every 33 ms from 0 (REACTIVE_LOOP_PERIOD_MS). The front
+# rangefinder is triggered on tick 0 and then every 165 ms: the read falls on
+# the first tick at or past ULTRASONIC_CONVERSION_MS (120 ms), which is 132 ms
+# after the trigger, and the next trigger is the tick after that
+# (ultrasonic_core.c). A trigger ranges what is ahead at that moment.
+#
+# Waking: the planner boots dormant. Its tick at 0 reads the executor's boot
+# range (400 cm, rangers_reset()), which plan_activity adopts as its reference.
+# The 120 cm scripted at 0 is read at 132 ms, so the 15 s tick sees the range
+# 280 cm off the reference, past PLAN_RANGE_THRESHOLD_CM_DEFAULT (20), and
+# requests (ADR-036 §1 "Planner inputs"). The reply (1 s) is a forward drive at
+# 60 %, written at 16 s.
+#
+# Wheels: the first tick after 16 s is 16.005 s. 60 % is 153/255, PCA9685 duty
+# 2457. motor_controller.c limits a rise to full scale in 300 ms
+# (MOTOR_RAMP_FULL_SCALE_MS): 546 on the first write, then 450 per 33 ms tick,
+# so the duty reaches 2457 on the sixth tick, 16.170 s.
+#
+# Obstacle: 8 cm ahead (below STOP_THRESHOLD_CM, 15) from 19.966 s, 1 ms after
+# the trigger at 19.965 s (121 x 165), which ranged the clear path. That is the
+# worst case: the read at 20.097 s is still 120 cm, the next trigger at
+# 20.130 s ranges the obstacle and its read at 20.262 s trips the reflex on
+# that tick, 296 ms after the obstacle appeared. The reflex trips on one
+# reading (rangers_reflex()), so there is no wait for the 3-reading mean.
+#
+# Release: the path is clear again from 21.120 s, the instant of the trigger
+# (128 x 165, tick 640). A world event is applied before an executor tick at
+# the same instant (ADR-036 section 1, "Tick"), so that trigger ranges 120 cm
+# and is read at 21.252 s. The latest reading and the
+# mean of the last three (8, 8, 120 = 45 cm) are then both at or above 15 cm,
+# so the reflex releases on that tick and the drive goal, still fresh (TTL
+# 22.5 s from 16 s), ramps up again: 546 at 21.252 s, 2457 at 21.417 s.
+#
+# Planner: the 30 s tick requests because the robot is moving
+# (goal_moves_wheels()), and that request is offered the `note` tool: the
+# executor's reflex_trips went up since the last request (note_gate.h).
+id: us-d1-front-reflex-brakes
+stories: [US-D1]
+seed: 7
+duration: 40s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 0s, range: 120}
+  - {at: 19.966s, range: 8}
+  - {at: 21.12s, range: 120}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
+expect:
+  - requests: {count: 2}
+  - goals: {sequence: [drive, drive]}
+  # Parked until the goal, then the ramp to 60 %.
+  - wheels_at: {at: 16s, left: coast, right: coast, left_duty: 0, right_duty: 0}
+  - wheels: {left: forward, right: forward, left_duty: 546, between: [16.005s, 16.005s], count: 1}
+  - wheels_at: {at: 16.17s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # Still driving at full duty when the obstacle appears.
+  - wheels_at: {at: "range[1]", left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # The brake, inside the bound and not before the obstacle could be read.
+  - wheels: {left: brake, right: brake, after: "range[1]", within: 297ms, count: 1}
+  - wheels: {left: brake, between: [0s, 20.261s], count: 0}
+  - wheels_at: {at: 20.262s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  # Held for as long as the obstacle is there.
+  - wheels: {left: forward, between: [20.262s, 21.251s], count: 0}
+  - wheels_at: {at: 21.251s, left: brake, right: brake}
+  # Released on the first clear reading, and back at 60 %.
+  - wheels: {left: forward, right: forward, after: "range[2]", within: 297ms, min: 1}
+  - wheels: {left: forward, right: forward, left_duty: 546, between: [21.252s, 21.252s], count: 1}
+  - wheels_at: {at: 21.417s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: brake, count: 1}
+  # The planner hears of the trip from the executor's telemetry.
+  - note_offered: {trigger: reflex, between: [30s, 30s], count: 1}

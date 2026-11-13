@@ -1,0 +1,92 @@
+# US-C1, US-C4: with nothing directing it the head looks around, resting only
+# on the dwell poses the scene gates know, and while a person is being listened
+# to it faces forward (ADR-029 §1, idle_gaze.c, head_aim.c).
+#
+# `head: true` fits the servos, so the executor runs the idle gaze: centre
+# (pan 0, tilt 0), left and right (pan -+SCENE_POSE_SIDE_PAN_DEG = 40), floor
+# (tilt SCENE_POSE_FLOOR_TILT_DEG = -20). It starts at centre, dwells
+# GAZE_DWELL_MIN_MS..GAZE_DWELL_MAX_MS (3..8 s), moves to a pose drawn from the
+# seed, dwells, returns to centre, and so on. A move slews 2 degrees per 33 ms
+# tick (HEAD_GAZE_SLEW_DEG_PER_TICK), so the longest, 40 degrees, takes 20
+# ticks. The head counts as settled once it has been still for HEAD_SETTLE_MS
+# (400): 13 ticks, 429 ms.
+#
+# Which pose the head visits when depends on the seed. Every assertion below
+# holds for any seed; with seed 9 the head is dwelling at the left pose when
+# the voice turn starts, so the trace shows it being brought back.
+#
+# Boot: the tick at 0 finds the head at centre and starts the first dwell, so
+# the first `head` record is centre, unsettled; settled follows at 429 ms. The
+# planner's frame at 0 is captured before the head settled, so its pose is
+# none ("-", planner_task.c: a frame gets a dwell pose only while the executor
+# reports head_settled).
+#
+# First move: the dwell ends between 3.000 s and 8.000 s, and the head leaves
+# centre on the first tick at or past that: 3.003 s (91 x 33) at the earliest,
+# 8.019 s (243 x 33) at the latest.
+#
+# Voice turn, 20 s .. 32 s: head_face_forward() is voice_turn_is_busy(), and
+# while it is true the gaze target is centre. The first tick that sees it is
+# 20.031 s (607 x 33); from 40 degrees away the head is at centre 19 ticks
+# later, 20.658 s, and settled 13 ticks after that, 21.087 s. It stays there
+# for the rest of the turn, which is longer than the longest dwell plus a
+# move, so a gaze that ignored the turn would be off centre at some point in
+# it whatever the seed.
+#
+# After the turn: the dwell starts afresh on the first tick past its end,
+# 32.010 s (970 x 33) (idle_gaze_step(): "held, not dwelt"), so the head does
+# not move before 35.010 s and has left centre by 40.029 s (1213 x 33, the
+# first tick at or past 40.010 s).
+#
+# Planner: a console line at 25 s wakes it for the 30 s tick. That frame is
+# captured with the head settled at centre, so the request carries pose C.
+id: us-c1-idle-gaze
+stories: [US-C1, US-C4]
+seed: 9
+duration: 60s
+config: {head: true}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: living-room}}
+  - {at: 20s, voice_turn: {dur: 12s, record: 2s, reply: "A cup and a bowl."}}
+  - {at: 25s, console: status}
+models:
+  planner: inline
+default: {status: 200, latency: 1s, call: stop}
+expect:
+  # Boot: centre, the gaze has the head, settled after HEAD_SETTLE_MS.
+  - head_at: {at: 0s, pan: 0, tilt: 0, mode: gaze, settled: false}
+  - head_at: {at: 429ms, pan: 0, tilt: 0, settled: true}
+  - head: {between: [1ms, 428ms], count: 0}
+  - cycle: {pose: "-", between: [0s, 0s], count: 1}
+  # The first dwell is 3..8 s: still until then, moving by the end of it.
+  - head: {between: [430ms, 3.002s], count: 0}
+  - head: {settled: false, between: [3.003s, 8.019s], min: 1}
+  # The head rests only on dwell poses: never settled between them...
+  - head: {settled: true, pan: [-39, -1], count: 0}
+  - head: {settled: true, pan: [1, 39], count: 0}
+  - head: {settled: true, tilt: [-19, -1], count: 0}
+  # ...never past them, and never panned and tilted at once.
+  - head: {pan: [41, 90], count: 0}
+  - head: {pan: [-90, -41], count: 0}
+  - head: {tilt: [1, 90], count: 0}
+  - head: {tilt: [-90, -21], count: 0}
+  - head: {pan: [1, 90], tilt: [-90, -1], count: 0}
+  - head: {pan: [-90, -1], tilt: [-90, -1], count: 0}
+  # It is the gaze that moves it: no other head mode appears.
+  - head: {mode: gaze, min: 1}
+  - head: {mode: centre, count: 0}
+  - head: {mode: aim, count: 0}
+  - head: {mode: unavailable, count: 0}
+  # Voice turn: centre within 20 ticks of the first tick that sees it, settled
+  # 13 ticks later, and nothing moves until the turn is over.
+  - head_at: {at: 20.658s, pan: 0, tilt: 0}
+  - head_at: {at: 21.087s, pan: 0, tilt: 0, settled: true}
+  - head: {between: [21.088s, 32s], count: 0}
+  # The frame at the 30 s tick is taken at the centre pose.
+  - requests: {between: [0s, 29s], count: 0}
+  - model_request: {pose: C, between: [30s, 30s], count: 1}
+  - cycle: {pose: C, requested: true, between: [30s, 31s], count: 1}
+  # After the turn the dwell starts afresh: still for 3 s, moving within 8 s.
+  - head: {between: [32s, 35.009s], count: 0}
+  - head: {settled: false, between: [35.01s, 40.029s], min: 1}

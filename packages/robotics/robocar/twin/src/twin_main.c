@@ -1,21 +1,26 @@
 /**
  * @file twin_main.c
- * @brief robocar-twin: the robocar's planner loop on a virtual clock (ADR-030, PRD-017).
+ * @brief robocar-twin: the robocar's planner and executor on a virtual clock
+ *        (ADR-030, ADR-036, PRD-017).
  *
  * Every decision below is a call into firmware code compiled for the host:
  * planner_cycle_core.c for the planner cycle, plan_activity / plan_budget /
  * scene_change / ambient_audio / speech_budget / dialogue_style for the gates,
- * gemini_parse.c for the model's reply and goal_state.c for the goal. This file
- * owns only what planner_task.c, gemini_backend.c, ambient_listener.c and
+ * gemini_parse.c for the model's reply, goal_state.c for the goal, and
+ * reactive_controller.c with motor_controller.c, ultrasonic_core.c, head_aim.c,
+ * idle_gaze.c and cliff_core.c for the executor (ADR-036 §1). This file owns
+ * only what planner_task.c, gemini_backend.c, ambient_listener.c and
  * voice_turn.c own on the robot: sequencing, I/O and time. Where it mirrors one
- * of those, the comment names the firmware lines it follows.
+ * of those, the comment names the firmware lines it follows. What sits under
+ * the executor (the rangefinder bus, the PCA9685, the floor sensors) is in
+ * twin_exec.c.
  *
  * Protocol (one JSON object per line):
  *   stdin:  config, world events, {"t":"run"}, then one model_response per
  *           model_request.
  *   stdout: trace records (cycle, goal, force_stop, utterance, suppressed,
- *           announce, backoff, note_offered, note, note_not_offered),
- *           model_request, and a final done.
+ *           announce, backoff, note_offered, note, note_not_offered, wheels,
+ *           head), model_request, and a final done.
  *
  * Firmware modules log with printf on the host (goal_state.c's host branch), so
  * stdout is moved to stderr at start and the trace goes to a private dup of the
@@ -42,9 +47,12 @@
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_cycle_core.h"
+#include "reactive_controller.h"
 #include "scene_change.h"
+#include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h" /* SPEECH_TEXT_MAX */
+#include "twin_exec.h"
 #include "twin_sha256.h"
 #include "twin_signals.h"
 
@@ -183,7 +191,7 @@ typedef enum {
     EV_VOICE_TURN,
     EV_CONSOLE,
     EV_LINK,
-    EV_REFLEX,
+    EV_FLOOR,
 } ev_kind_t;
 
 typedef struct {
@@ -199,6 +207,9 @@ typedef struct {
     char reply[SPEECH_TEXT_MAX];
     bool wifi;
     bool key;
+    ultrasonic_id_t sensor; /* range, range_fail: which rangefinder */
+    bool floor_front;       /* floor: floor present under each sensor */
+    bool floor_rear;
 } world_event_t;
 
 static world_event_t *s_events;
@@ -211,6 +222,8 @@ typedef struct {
     uint32_t period_ms;
     long max_requests; /* -1: firmware default */
     long max_tokens;
+    bool head;  /* servos present: the executor aims the head (ADR-036 §1) */
+    bool cliff; /* cliff reflex armed */
 } twin_config_t;
 
 static twin_config_t s_cfg = {
@@ -219,25 +232,25 @@ static twin_config_t s_cfg = {
     .period_ms = 15000,
     .max_requests = -1,
     .max_tokens = -1,
+    .head = false,
+    .cliff = false,
 };
 
 /* ---- World state, as the robot's sensors and links would report it ---- */
 
 static bool s_have_frame;
-static scene_fingerprint_t s_frame_fp;
+static scene_fingerprint_t s_frame_fp; /* .pose: the scripted frame.pose */
 static char s_frame_scene[96];
-static char s_frame_pose = 'C';
-
-static uint16_t s_range_cm;
-static bool s_range_valid;
+/** The dwell pose of the frame the planner last captured, as the letter the
+ *  request descriptor carries: the scripted frame.pose, or with `head` set the
+ *  pose sampled from the servos at the planner tick. */
+static char s_capture_pose = 'C';
 
 static bool s_wifi;
 static bool s_key;
 
-/** reactive_telemetry_t.reflex_trips: the executor is not compiled into the
- *  twin, so a `reflex` world event stands for one latch of the obstacle reflex
- *  (reactive_controller.c counts the rising edge). */
-static uint32_t s_reflex_trips;
+/* Range, range validity, robot_moving and reflex trips are not kept here: the
+ * planner reads them from reactive_controller_get_telemetry(), as on the robot. */
 
 #define MAX_BURSTS 64
 typedef struct {
@@ -326,6 +339,12 @@ static bool bool_field(const cJSON *obj, const char *name, const char *t)
     return cJSON_IsTrue(f);
 }
 
+/** An optional true/false; @p dflt when absent. */
+static bool opt_bool_field(const cJSON *obj, const char *name, bool dflt, const char *t)
+{
+    return field(obj, name, false, t) ? bool_field(obj, name, t) : dflt;
+}
+
 static void str_field(const cJSON *obj, const char *name, char *out, size_t cap, const char *t)
 {
     const cJSON *f = field(obj, name, true, t);
@@ -336,6 +355,24 @@ static void str_field(const cJSON *obj, const char *name, char *out, size_t cap,
         die(2, "'%s'.%s is longer than %zu bytes", t, name, cap - 1);
     }
     strcpy(out, f->valuestring);
+}
+
+/** The optional `sensor` of a range or range_fail event: front when absent. */
+static ultrasonic_id_t sensor_field(const cJSON *obj, const char *t)
+{
+    if (!field(obj, "sensor", false, t)) {
+        return ULTRASONIC_FRONT;
+    }
+    char name[8];
+    str_field(obj, "sensor", name, sizeof(name), t);
+    if (strcmp(name, "front") == 0) {
+        return ULTRASONIC_FRONT;
+    }
+    if (strcmp(name, "rear") == 0) {
+        return ULTRASONIC_REAR;
+    }
+    die(2, "'%s'.sensor must be front or rear (got '%s')", t, name);
+    return ULTRASONIC_FRONT; /* not reached */
 }
 
 static void add_event(const world_event_t *ev)
@@ -393,6 +430,8 @@ static void read_setup(void)
             if (s_cfg.period_ms == 0) {
                 die(2, "planner_period_ms must be > 0");
             }
+            s_cfg.head = opt_bool_field(obj, "head", false, t);
+            s_cfg.cliff = opt_bool_field(obj, "cliff", false, t);
             have_config = true;
             cJSON_Delete(obj);
             continue;
@@ -419,8 +458,19 @@ static void read_setup(void)
         } else if (strcmp(t, "range") == 0) {
             ev.kind = EV_RANGE;
             ev.cm = (int)int_field(obj, "cm", true, 0, t);
+            /* The bounds ultrasonic_core_decode() accepts (ultrasonic_core.h). */
+            if (ev.cm < (int)ULTRASONIC_MIN_RANGE_CM || ev.cm > (int)ULTRASONIC_MAX_RANGE_CM) {
+                die(2, "range.cm must be in %u..%u (got %d)", ULTRASONIC_MIN_RANGE_CM,
+                    ULTRASONIC_MAX_RANGE_CM, ev.cm);
+            }
+            ev.sensor = sensor_field(obj, t);
         } else if (strcmp(t, "range_fail") == 0) {
             ev.kind = EV_RANGE_FAIL;
+            ev.sensor = sensor_field(obj, t);
+        } else if (strcmp(t, "floor") == 0) {
+            ev.kind = EV_FLOOR;
+            ev.floor_front = bool_field(obj, "front", t);
+            ev.floor_rear = bool_field(obj, "rear", t);
         } else if (strcmp(t, "sound") == 0) {
             ev.kind = EV_SOUND;
             ev.peak_db = (int)int_field(obj, "peak_db", true, 0, t);
@@ -443,7 +493,8 @@ static void read_setup(void)
             ev.wifi = bool_field(obj, "wifi", t);
             ev.key = bool_field(obj, "key", t);
         } else if (strcmp(t, "reflex") == 0) {
-            ev.kind = EV_REFLEX;
+            die(2, "'reflex' events were removed (ADR-036): the reflex is the executor's "
+                   "reaction to a range reading, so script the obstacle with 'range'");
         } else {
             die(2, "unknown record type '%s'", t);
         }
@@ -553,18 +604,21 @@ static void apply_event(const world_event_t *ev)
             uint8_t luma[TWIN_THUMB_W * TWIN_THUMB_H];
             twin_scene_luma(ev->scene, luma);
             scene_fingerprint_from_luma(luma, TWIN_THUMB_W, TWIN_THUMB_H, &s_frame_fp);
+            /* With `head` set the pose comes from the servos at the planner
+             * tick (planner_tick() step 1b) and this one is not used. */
             s_frame_fp.pose = pose_from_letter(ev->pose);
             snprintf(s_frame_scene, sizeof(s_frame_scene), "%s", ev->scene);
-            s_frame_pose = ev->pose;
             s_have_frame = true;
             break;
         }
         case EV_RANGE:
-            s_range_cm = (uint16_t)(ev->cm > 65535 ? 65535 : ev->cm);
-            s_range_valid = true;
+            twin_exec_set_range(ev->sensor, ev->cm);
             break;
         case EV_RANGE_FAIL:
-            s_range_valid = false;
+            twin_exec_set_range(ev->sensor, TWIN_RANGE_FAILED);
+            break;
+        case EV_FLOOR:
+            twin_exec_set_floor(true, ev->floor_front, ev->floor_rear);
             break;
         case EV_SOUND:
             if (s_burst_count == MAX_BURSTS) {
@@ -587,9 +641,6 @@ static void apply_event(const world_event_t *ev)
         case EV_LINK:
             s_wifi = ev->wifi;
             s_key = ev->key;
-            break;
-        case EV_REFLEX:
-            s_reflex_trips++;
             break;
     }
 }
@@ -642,12 +693,56 @@ static void audio_frame(void)
     ambient_audio_note(&fp, t);
 }
 
+/** When the next executor tick falls due. The first is at t = 0. */
+static uint64_t s_next_exec_ms;
+
+/**
+ * One pass of reactive_task()'s loop body (reactive_controller.c:925-1104) at
+ * the current virtual time, then the `wheels` and `head` records for what it
+ * changed. xTaskDelayUntil() paces the task at REACTIVE_LOOP_PERIOD_MS on the
+ * robot; here advance_to() does.
+ *
+ * The executor's host path keeps its own clock, ticks * 33 ms
+ * (reactive_controller.c s_ticks), while goal_state, motor_controller.c and
+ * everything else read esp_timer_get_time(). The two agree only while every
+ * tick is issued exactly on its 33 ms boundary, so that is checked.
+ */
+static void executor_tick(void)
+{
+    const uint64_t expected_ms = twin_exec_ticks() * REACTIVE_LOOP_PERIOD_MS;
+    if (expected_ms != s_now_ms) {
+        die(6, "executor tick %llu issued at %llu ms, not %llu ms",
+            (unsigned long long)twin_exec_ticks(), (unsigned long long)s_now_ms,
+            (unsigned long long)expected_ms);
+    }
+
+    twin_exec_report_t r;
+    twin_exec_tick(s_voice_busy, &r);
+    if (r.wheels_changed) {
+        emit("{\"t\":\"wheels\",\"at_ms\":%llu,\"left\":{\"drive\":\"%s\",\"duty\":%u},"
+             "\"right\":{\"drive\":\"%s\",\"duty\":%u}}",
+             (unsigned long long)s_now_ms, r.left.drive, (unsigned)r.left.duty, r.right.drive,
+             (unsigned)r.right.duty);
+    }
+    if (r.head_changed) {
+        emit("{\"t\":\"head\",\"at_ms\":%llu,\"pan_deg\":%d,\"tilt_deg\":%d,\"mode\":\"%s\","
+             "\"settled\":%s}",
+             (unsigned long long)s_now_ms, r.pan_deg, r.tilt_deg, r.mode,
+             r.settled ? "true" : "false");
+    }
+}
+
 /**
  * Advance the virtual clock to @p t_ms, applying everything due on the way in
- * time order: world events, the end of a voice turn, microphone frames. At the
- * same instant world events go first, so an event at a tick's time is seen by
- * that tick. A sound is the exception in effect, not in order: it is heard
- * through frames, and the first frame that holds it ends after it starts.
+ * time order: world events, the end of a voice turn, microphone frames,
+ * executor ticks. At the same instant world events go first, so an event at a
+ * tick's time is seen by that tick, and the executor goes last, so its tick
+ * sees everything else that happened at that instant. A sound is the exception
+ * in effect, not in order: it is heard through frames, and the first frame
+ * that holds it ends after it starts.
+ *
+ * backend_plan() calls this for a reply's latency window, so executor ticks
+ * inside the window run against the previous goal, as on the robot.
  */
 static void advance_to(uint64_t t_ms)
 {
@@ -666,6 +761,10 @@ static void advance_to(uint64_t t_ms)
             next = s_next_audio_ms;
             which = 2;
         }
+        if (s_next_exec_ms <= t_ms && s_next_exec_ms < next) {
+            next = s_next_exec_ms;
+            which = 3;
+        }
         if (which < 0) {
             break;
         }
@@ -676,9 +775,12 @@ static void advance_to(uint64_t t_ms)
             apply_event(&s_events[s_event_next++]);
         } else if (which == 1) {
             voice_turn_end();
-        } else {
+        } else if (which == 2) {
             audio_frame();
             s_next_audio_ms += AUDIO_FRAME_MS;
+        } else {
+            executor_tick();
+            s_next_exec_ms += REACTIVE_LOOP_PERIOD_MS;
         }
     }
     if (t_ms > s_now_ms) {
@@ -750,7 +852,7 @@ static void build_descriptor(char *out, size_t cap, const char *gate, bool speak
     pos += (size_t)snprintf(out + pos, cap - pos, ",\"kind\":\"plan\",\"note\":");
     pos = json_escape(out, cap, pos, note_trigger_name(note_offer));
     pos += (size_t)snprintf(out + pos, cap - pos, ",\"pose\":");
-    const char pose[2] = {s_frame_pose, '\0'};
+    const char pose[2] = {s_capture_pose, '\0'};
     pos = json_escape(out, cap, pos, pose);
     pos += (size_t)snprintf(out + pos, cap - pos, ",\"scene\":");
     pos = json_escape(out, cap, pos, s_frame_scene);
@@ -900,15 +1002,18 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     plan_evidence_t ev = {0};
     ev.frame = *fp;
     ev.audio_event = ambient_audio_event(now_ms);
-    /* reactive_telemetry_t: distance and sensor_failed -> range_valid. No
-     * manual lease in phase 1, so manual_active is false. */
-    ev.distance_cm = s_range_cm;
-    ev.range_valid = s_range_valid;
-    ev.robot_moving = false;
+    /* planner_task.c:165-179, line for line. Nothing in the twin takes a
+     * manual lease, so manual_active stays false. */
+    reactive_telemetry_t tele = {0};
+    if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
+        ev.distance_cm = tele.distance_cm;
+        ev.range_valid = !tele.sensor_failed;
+        ev.robot_moving = tele.manual_active;
+    }
     goal_t current = {0};
     bool fresh = false;
-    if (goal_state_read(&current, &fresh) == ESP_OK) {
-        ev.robot_moving = fresh && current.kind != GOAL_KIND_STOP && current.kind != GOAL_KIND_NONE;
+    if (!ev.robot_moving && goal_state_read(&current, &fresh) == ESP_OK) {
+        ev.robot_moving = goal_moves_wheels(&current, fresh);
     }
     return ev;
 }
@@ -927,8 +1032,30 @@ static uint64_t planner_tick(uint64_t tick_ms)
         return tick_ms + period;
     }
 
-    /* ---- 1b. Fingerprint with the pose at capture, note it ---- */
+    /* Where the head was pointing when the frame was taken, sampled as
+     * planner_task.c:269-279 samples it right after camera_capture() returns.
+     * Without servos (`head` unset) both angles are zero and the head reads as
+     * settled. */
+    servo_position_t head_at_capture = {0};
+    bool head_settled = true;
+    if (servo_is_initialized()) {
+        (void)servo_get_position(&head_at_capture);
+        reactive_telemetry_t tele = {0};
+        head_settled = (reactive_controller_get_telemetry(&tele) == ESP_OK) && tele.head_settled;
+    }
+
+    /* ---- 1b. Fingerprint with the pose at capture, note it ----
+     * planner_task.c:298-300. With `head` set the pose is the dwell pose the
+     * servos are at, or none while the head is unsettled or between poses.
+     * Without it the frame keeps its scripted frame.pose, which is how a
+     * scenario exercises the per-pose references with no servos fitted. */
     scene_fingerprint_t fp = s_frame_fp;
+    if (s_cfg.head) {
+        fp.pose = head_settled ? (uint8_t)scene_pose_from_head(head_at_capture.pan_angle,
+                                                               head_at_capture.tilt_angle)
+                               : (uint8_t)SCENE_POSE_NONE;
+    }
+    s_capture_pose = scene_pose_letter(fp.pose);
     scene_change_note(&fp);
 
     /* ---- 1c. Decide whether this cycle is worth a request ---- */
@@ -971,8 +1098,10 @@ static uint64_t planner_tick(uint64_t tick_ms)
     }
 
     /* ---- 1d. Offer the note tool? (planner_task.c step 1d) ---- */
+    reactive_telemetry_t note_tele = {0};
+    (void)reactive_controller_get_telemetry(&note_tele);
     const planner_note_inputs_t note_in = {
-        .reflex_trips = s_reflex_trips,
+        .reflex_trips = note_tele.reflex_trips,
         .blind = !scene_change_has_measurement(),
     };
     const note_trigger_t note_offer = planner_cycle_note_offer(&s_cycle, &note_in, now_ms);
@@ -1028,9 +1157,10 @@ static uint64_t planner_tick(uint64_t tick_ms)
              jstr(note.text));
     }
     if (result == PLANNER_RESULT_WRITE_GOAL) {
-        /* No servos in phase 1: the head reads as centred (planner_task.c:181). */
-        goal.head_pan_deg = 0;
-        goal.head_tilt_deg = 0;
+        /* planner_task.c:447-448: the goal is read in the frame's coordinates,
+         * so it carries the head angles sampled at capture. */
+        goal.head_pan_deg = head_at_capture.pan_angle;
+        goal.head_tilt_deg = head_at_capture.tilt_angle;
         if (goal_state_write(&goal, 0) != ESP_OK) {
             fprintf(stderr, "robocar-twin: goal_state_write failed at %llu ms\n",
                     (unsigned long long)s_now_ms);
@@ -1093,6 +1223,14 @@ int main(void)
     }
     plan_activity_init(s_cfg.period_ms);
     note_gate_init();
+
+    /* The executor: motors and servos from init_hardware(), then
+     * reactive_controller_init() (main.c:2396), which planner_task_init()
+     * follows. Its first tick is at t = 0. */
+    const char *const exec_failed = twin_exec_init(s_cfg.seed, s_cfg.head, s_cfg.cliff);
+    if (exec_failed != NULL) {
+        die(5, "%s failed", exec_failed);
+    }
 
     int16_t room[AMBIENT_FRAME_SAMPLES];
     twin_pcm_room(s_cfg.seed, room, AMBIENT_FRAME_SAMPLES);
