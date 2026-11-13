@@ -1137,5 +1137,30 @@ class ActionPinTest(unittest.TestCase):
                 self.assertEqual(ok, pinned)
 
 
+class ActionlintGateTest(unittest.TestCase):
+    """The actionlint hook runs in CI Config Hooks on every event (#1103):
+    a local hook, so the coverage check above sees it, with shellcheck and
+    pyflakes off, which this session and a developer machine may lack. The
+    job installs the pinned release and checks its sha256 first."""
+
+    def test_hook_switches_off_the_external_linters(self):
+        (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
+        entry = hook["entry"].split()
+        self.assertEqual(entry[0], "actionlint")
+        self.assertIn("-shellcheck=", entry)
+        self.assertIn("-pyflakes=", entry)
+
+    def test_config_hooks_job_installs_a_checked_pinned_release(self):
+        steps = load("test.yml")["jobs"][CONFIG_HOOKS_JOB]["steps"]
+        runs = [str(s.get("run", "")) for s in steps]
+        (install,) = [i for i, r in enumerate(runs) if "rhysd/actionlint" in r]
+        env = steps[install].get("env", {})
+        self.assertRegex(str(env.get("ACTIONLINT_VERSION")), r"^\d+\.\d+\.\d+$")
+        self.assertRegex(str(env.get("ACTIONLINT_SHA256")), r"^[0-9a-f]{64}$")
+        self.assertIn("sha256sum -c", runs[install])
+        hooks = [i for i, r in enumerate(runs) if "pre-commit run" in r]
+        self.assertLess(install, hooks[0])
+
+
 if __name__ == "__main__":
     unittest.main()

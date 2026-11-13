@@ -199,6 +199,20 @@ repos:
         files: '^(\.github/workflows/.*\.ya?ml|\.github/project-matrix\.json|tools/test_workflows\.py)$'
         pass_filenames: false
 
+      # actionlint over every workflow (#1103): expression types, contexts,
+      # job needs, runner labels, permission scopes and the inputs a reusable
+      # workflow or a pinned action takes. Needs actionlint on PATH; CI Config
+      # Hooks installs the release test.yml pins and checks its sha256.
+      # shellcheck and pyflakes are off here because a machine without them
+      # would lint less than one with them; with no arguments it reads
+      # .github/workflows and .github/actionlint.yaml.
+      - id: actionlint
+        name: actionlint (workflow syntax, expressions and action inputs)
+        entry: actionlint -shellcheck= -pyflakes=
+        language: system
+        files: '^\.github/(workflows/.*\.ya?ml|actionlint\.ya?ml)$'
+        pass_filenames: false
+
       - id: check-typst-docs
         name: Typst docs track pin_config.h, and the drift guard sees them
         entry: python3 tools/check-typst-docs.py
