@@ -3,7 +3,15 @@
 It is not a model of the planner: it requests on a tick only when a console
 line, a sound or a new scene arrived since the previous tick, which is enough
 to exercise the harness (request servicing, latency windows, suppression,
-backoff records, timeouts and protocol errors) before the C twin exists.
+backoff records, timeouts and protocol errors) without the C twin.
+
+It is not a model of the executor either. A ``drive`` goal turns both wheels
+forward at once, any other goal coasts them, and a front ``range`` under 15 cm
+brakes a drive at the event's own time: no ramp, no read cycle, no rear sensor.
+``range_fail`` and ``floor`` are accepted and change nothing. With ``head`` in
+the config it writes one ``head`` record at 0 ms and frames carry no pose.
+That is enough for the runner to carry ``wheels`` and ``head`` records and for
+the assertions to be run against a trace the harness collected.
 
 Test-only config keys: ``fake_bad_key`` (send a wrong key), ``fake_exit``
 (exit with this status before ``done``), ``fake_hang`` (sleep forever),
@@ -64,6 +72,20 @@ def main() -> int:
     events.sort(key=lambda e: e["at_ms"])
     state = {"scene": None, "pose": "C", "woken": False}
     voice_windows: list[tuple[int, int]] = []
+    wheels = {"goal": "stop", "blocked": False, "drive": "coast"}
+
+    def set_wheels(at_ms: int) -> None:
+        """Write a `wheels` record if the goal and the obstacle changed the drive."""
+        if wheels["goal"] != "drive":
+            drive, duty = "coast", 0
+        elif wheels["blocked"]:
+            drive, duty = "brake", 0
+        else:
+            drive, duty = "forward", 2457
+        if drive != wheels["drive"]:
+            wheels["drive"] = drive
+            side = {"drive": drive, "duty": duty}
+            out({"t": "wheels", "at_ms": at_ms, "left": side, "right": side})
 
     def apply(e: dict) -> None:
         if e["t"] in ("console", "sound"):
@@ -71,7 +93,11 @@ def main() -> int:
         elif e["t"] == "frame":
             if state["scene"] is not None and e["scene"] != state["scene"]:
                 state["woken"] = True
-            state["scene"], state["pose"] = e["scene"], e["pose"]
+            # A frame has no pose when the config sets `head`.
+            state["scene"], state["pose"] = e["scene"], e.get("pose", "C")
+        elif e["t"] in ("range", "range_fail") and e.get("sensor", "front") == "front":
+            wheels["blocked"] = e["t"] == "range" and e["cm"] < 15
+            set_wheels(e["at_ms"])
         elif e["t"] == "voice_turn":
             end = e["at_ms"] + e["dur_ms"]
             voice_windows.append((e["at_ms"], end))
@@ -83,6 +109,18 @@ def main() -> int:
                     "text": e["reply"],
                 }
             )
+
+    if config.get("head"):
+        out(
+            {
+                "t": "head",
+                "at_ms": 0,
+                "pan_deg": 0,
+                "tilt_deg": 0,
+                "mode": "gaze",
+                "settled": False,
+            }
+        )
 
     backoff = 0
     next_tick = 0
@@ -153,6 +191,8 @@ def main() -> int:
                                 }
                             )
                     out({"t": "goal", "at_ms": handled, "kind": goal})
+                    wheels["goal"] = goal
+                    set_wheels(handled)
                     backoff = 0
                 else:
                     backoff = 1 if backoff == 0 else min(backoff * 2, 4)

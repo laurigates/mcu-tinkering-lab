@@ -6,6 +6,12 @@ events. A window is ``between: [start, end]`` (inclusive), or
 ``after: X, within: D`` meaning [X, X + D], or the whole run when neither is
 given. Every failure message lists the trace records it is about, with their
 index in the trace, so a reader can find them in the JSONL.
+
+``wheels`` and ``head`` records report a state when it changes, so they get two
+assertions each: ``wheels`` counts the change records in a window that match
+its filters, and ``wheels_at`` checks the state in force at one time (the last
+record at or before it). Numeric filters take ``[lo, hi]`` (inclusive) or one
+number. A new state record is one ``_StateKind`` entry in ``_STATE_KINDS``.
 """
 
 from __future__ import annotations
@@ -27,6 +33,10 @@ NOTE_TRIGGERS = ("reflex", "blind", "track_stuck", "repeats", "reflect")
 NOTE_KIND_NAMES = ("difficulty", "behaviour", "suggestion")
 FORCE_STOP_REASONS = ("camera", "dormant", "budget", "no_link", "backend_error")
 GOAL_KINDS = ("stop", "drive", "track", "rotate", "none")
+CYCLE_POSES = ("C", "L", "R", "F", "-")  # scene_pose_letter() in main/scene_change.c
+WHEEL_DRIVES = ("forward", "reverse", "coast", "brake")  # twin_exec.c decode_wheel()
+# reactive_head_mode_name() in main/reactive_controller.c
+HEAD_MODES = ("unavailable", "centre", "aim", "turn", "lease", "gaze")
 LADDER_MULTIPLIERS = (1, 2, 4, 8, 20)  # k_ladder in plan_activity.c
 
 _WINDOW = {"between", "within", "after"}
@@ -236,6 +246,161 @@ def _sequence(t: str, field: str):
 
 
 @dataclass(frozen=True)
+class _StateKind:
+    """A trace record that reports a state each time it changes.
+
+    ``exact`` maps a filter name to the field's path in the record and its
+    allowed values (``bool`` for a true/false field); ``numeric`` maps a filter
+    name to the path of a number. ``initial`` is the state before the first
+    record, for a kind whose starting state is not traced.
+    """
+
+    t: str
+    exact: dict[str, tuple[tuple[str, ...], tuple[str, ...] | type]]
+    numeric: dict[str, tuple[str, ...]]
+    initial: dict[str, Any] | None = None
+
+    @property
+    def filters(self) -> set[str]:
+        return set(self.exact) | set(self.numeric)
+
+    def path(self, name: str) -> tuple[str, ...]:
+        return self.exact[name][0] if name in self.exact else self.numeric[name]
+
+
+_STATE_KINDS: dict[str, _StateKind] = {
+    "wheels": _StateKind(
+        "wheels",
+        exact={
+            "left": (("left", "drive"), WHEEL_DRIVES),
+            "right": (("right", "drive"), WHEEL_DRIVES),
+        },
+        numeric={"left_duty": ("left", "duty"), "right_duty": ("right", "duty")},
+        # What motor_controller_init() leaves; the twin does not trace it
+        # (ADR-036 section 1 "Trace").
+        initial={
+            "left": {"drive": "coast", "duty": 0},
+            "right": {"drive": "coast", "duty": 0},
+        },
+    ),
+    # Traced from tick 0 when config.head is set, so there is no initial state.
+    "head": _StateKind(
+        "head",
+        exact={"mode": (("mode",), HEAD_MODES), "settled": (("settled",), bool)},
+        numeric={"pan": ("pan_deg",), "tilt": ("tilt_deg",)},
+    ),
+}
+
+
+def _is_number(v: object) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool)
+
+
+def _bounds(want: Any) -> tuple[float, float]:
+    """A numeric filter as (lo, hi): ``[lo, hi]`` or one number."""
+    if isinstance(want, list):
+        return want[0], want[1]
+    return want, want
+
+
+def _field_at(rec: dict[str, Any], path: tuple[str, ...]) -> Any:
+    cur: Any = rec
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+    return cur
+
+
+def _state_mismatches(
+    kind: _StateKind, rec: dict[str, Any], filters: dict[str, Any]
+) -> list[str]:
+    """One line per filter ``rec`` does not satisfy; empty when it matches."""
+    out = []
+    for name, want in filters.items():
+        got = _field_at(rec, kind.path(name))
+        if name in kind.numeric:
+            lo, hi = _bounds(want)
+            if not _is_number(got) or not lo <= got <= hi:
+                shown = f"{lo:g}" if lo == hi else f"[{lo:g}, {hi:g}]"
+                out.append(f"{name} is {got!r}, want {shown}")
+        elif got != want:
+            out.append(f"{name} is {got!r}, want {want!r}")
+    return out
+
+
+def _describe(filters: dict[str, Any]) -> str:
+    return ", ".join(f"{k}={v!r}" for k, v in filters.items())
+
+
+def _state_changes(kind: _StateKind):
+    """Count the ``kind`` records in the window that match every filter."""
+
+    def check(
+        scn: Scenario, trace: list[dict[str, Any]], args: dict[str, Any], where: str
+    ):
+        lo, hi = _window(scn, args, where)
+        filters = {k: args[k] for k in args if k in kind.filters}
+        every = [(i, r) for i, r in enumerate(trace) if r.get("t") == kind.t]
+        hits = [
+            (i, r)
+            for i, r in every
+            if isinstance(r.get("at_ms"), int)
+            and lo <= r["at_ms"] <= hi
+            and not _state_mismatches(kind, r, filters)
+        ]
+        err = _check_count(args, len(hits), 1)
+        if err is None:
+            return None
+        head = f"{kind.t}({_describe(filters)}) in [{format_ms(lo)}, {format_ms(hi)}]: {err}"
+        in_window = [(i, r) for i, r in every if lo <= r.get("at_ms", -1) <= hi]
+        if hits:
+            return head + "\n" + _cite(hits, "matching")
+        if in_window:
+            return head + "\n" + _cite(in_window, f"'{kind.t}' records in the window")
+        return head + "\n" + _cite(every, f"all '{kind.t}' records")
+
+    return check
+
+
+def _state_at(kind: _StateKind):
+    """Check the state in force at ``at``: the last ``kind`` record at or before it."""
+
+    def check(
+        scn: Scenario, trace: list[dict[str, Any]], args: dict[str, Any], where: str
+    ):
+        at = scn.resolve_time(args["at"], where=f"{where}.at")
+        filters = {k: args[k] for k in args if k in kind.filters}
+        every = [(i, r) for i, r in enumerate(trace) if r.get("t") == kind.t]
+        before = [
+            (i, r)
+            for i, r in every
+            if isinstance(r.get("at_ms"), int) and r["at_ms"] <= at
+        ]
+        head = f"{kind.t} at {format_ms(at)}"
+        if before:
+            # The twin writes these in time order; the latest wins a tie.
+            index, state = max(before, key=lambda ir: (ir[1]["at_ms"], ir[0]))
+            cited = _cite([(index, state)], "state from")
+        elif kind.initial is not None:
+            state = kind.initial
+            cited = (
+                f"  no '{kind.t}' record at or before then; the state is the one "
+                f"before the first record: {json.dumps(state)}"
+            )
+        else:
+            return f"{head}: no '{kind.t}' record at or before then\n" + _cite(
+                every, f"all '{kind.t}' records"
+            )
+        bad = _state_mismatches(kind, state, filters)
+        if not bad:
+            return None
+        return f"{head}: " + "; ".join(bad) + "\n" + cited
+
+    return check
+
+
+@dataclass(frozen=True)
 class _Spec:
     keys: set[str]
     required: set[str]
@@ -322,12 +487,29 @@ REGISTRY: dict[str, _Spec] = {
             "model_request", ("gate", "speak_allowed", "scene", "pose", "note"), 1
         ),
     ),
+    # `pose` is the dwell pose of the frame the cycle captured: C, L, R, F, or
+    # "-" for a frame taken off every pose or before the head settled.
     "cycle": _Spec(
-        _WINDOW | _COUNTS | {"cause", "requested", "gate", "spent_req", "spent_tok"},
+        _WINDOW
+        | _COUNTS
+        | {"cause", "requested", "gate", "pose", "spent_req", "spent_tok"},
         set(),
-        _counted("cycle", ("cause", "requested", "gate", "spent_req", "spent_tok"), 1),
+        _counted(
+            "cycle", ("cause", "requested", "gate", "pose", "spent_req", "spent_tok"), 1
+        ),
+        {"pose": CYCLE_POSES},
     ),
 }
+
+# Each state kind gets `<name>` (change records in a window) and `<name>_at`
+# (the state at one time). Maps the assertion name to its kind.
+_STATE_ASSERTIONS: dict[str, _StateKind] = {}
+for _name, _kind in _STATE_KINDS.items():
+    REGISTRY[_name] = _Spec(
+        _WINDOW | _COUNTS | _kind.filters, set(), _state_changes(_kind)
+    )
+    REGISTRY[f"{_name}_at"] = _Spec({"at"} | _kind.filters, {"at"}, _state_at(_kind))
+    _STATE_ASSERTIONS[_name] = _STATE_ASSERTIONS[f"{_name}_at"] = _kind
 
 
 def _split(scenario: Scenario, item: object, where: str) -> tuple[str, dict[str, Any]]:
@@ -348,6 +530,36 @@ def _split(scenario: Scenario, item: object, where: str) -> tuple[str, dict[str,
             f"{scenario.path}: {where}.{name}: expected a mapping of arguments"
         )
     return name, args
+
+
+def _validate_state_filters(
+    scenario: Scenario, kind: _StateKind, args: dict[str, Any], w: str
+) -> None:
+    for name in kind.filters & set(args):
+        v = args[name]
+        if name in kind.numeric:
+            ok = _is_number(v) or (
+                isinstance(v, list)
+                and len(v) == 2
+                and all(_is_number(x) for x in v)
+                and v[0] <= v[1]
+            )
+            if not ok:
+                raise ScenarioError(
+                    f"{scenario.path}: {w}.{name}: expected a number or [lo, hi] "
+                    f"with lo <= hi, got {v!r}"
+                )
+            continue
+        allowed = kind.exact[name][1]
+        if allowed is bool:
+            if not isinstance(v, bool):
+                raise ScenarioError(
+                    f"{scenario.path}: {w}.{name}: expected true/false, got {v!r}"
+                )
+        elif v not in allowed:
+            raise ScenarioError(
+                f"{scenario.path}: {w}.{name}: expected one of {allowed}, got {v!r}"
+            )
 
 
 def validate_expectation(scenario: Scenario, item: object, where: str) -> None:
@@ -405,6 +617,15 @@ def validate_expectation(scenario: Scenario, item: object, where: str) -> None:
         raise ScenarioError(f"{scenario.path}: {w}.exact: expected true/false")
     if "tolerance" in args:
         scenario.resolve_time(args["tolerance"], where=f"{w}.tolerance")
+    if name in _STATE_ASSERTIONS:
+        kind = _STATE_ASSERTIONS[name]
+        _validate_state_filters(scenario, kind, args, w)
+        if "at" in spec.required:
+            scenario.resolve_time(args["at"], where=f"{w}.at")
+            if not kind.filters & set(args):
+                raise ScenarioError(
+                    f"{scenario.path}: {w}: give at least one of {sorted(kind.filters)}"
+                )
     _window(scenario, args, w)
 
 

@@ -1,4 +1,5 @@
-# robocar-twin: the robocar planner loop on a virtual clock (ADR-030, PRD-017).
+# robocar-twin: the robocar planner and executor on a virtual clock (ADR-030,
+# ADR-036, PRD-017).
 #
 # Built from the firmware's own sources in ../main against the host shims in
 # ../test/include, the same way the firmware's host tests are.
@@ -17,15 +18,18 @@ endif()
 
 set(FIRMWARE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(MAIN_SRC_DIR "${FIRMWARE_DIR}/main")
-set(SHIM_DIR "${FIRMWARE_DIR}/test/include")
+set(TEST_DIR "${FIRMWARE_DIR}/test")
+set(SHIM_DIR "${TEST_DIR}/include")
 
 # Same host flags as ../test/CMakeLists.txt: goal_state.c takes its POSIX
 # branch (and goal_state_set_clock_override, which the twin points at its
-# virtual clock).
+# virtual clock), reactive_controller.c its task-less host path, and
+# cliff_sensor.c its settable sample in place of the MCP23017.
 add_compile_definitions(
     GOAL_STATE_HOST_TEST=1
     REACTIVE_CONTROLLER_HOST_TEST=1
     ULTRASONIC_HOST_TEST=1
+    CLIFF_SENSOR_HOST_TEST=1
     _POSIX_C_SOURCE=200809L
 )
 
@@ -53,6 +57,7 @@ endif()
 
 add_executable(robocar-twin
     src/twin_main.c
+    src/twin_exec.c
     src/twin_sha256.c
     src/twin_signals.c
     # The decision path, compiled unmodified from the firmware.
@@ -68,9 +73,28 @@ add_executable(robocar-twin
     "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${MAIN_SRC_DIR}/goal_state.c"
     "${MAIN_SRC_DIR}/gemini_parse.c"
+    # The executor, compiled unmodified (ADR-036 §1). main/ultrasonic.c is left
+    # out: src/twin_exec.c supplies ultrasonic.h over ultrasonic_core.c, so a
+    # reading takes the firmware's read cycle, and the PCA9685 write and STBY
+    # GPIO calls under motor_controller.c.
+    "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/motor_controller.c"
+    "${MAIN_SRC_DIR}/ultrasonic_core.c"
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
+    # The servo_controller.h subset the executor uses; servo_stub_reset() says
+    # whether the servos are present (config `head`).
+    "${TEST_DIR}/servo_controller_stub.c"
 )
 # Shims first so they shadow ESP-IDF headers, as in the firmware's host tests.
+# The two pca9685 directories are what motor_controller.c's i2c_bus.h include
+# resolves <i2cdev.h> and <pca9685.h> against (../test/CMakeLists.txt,
+# test_motor_controller).
 target_include_directories(robocar-twin PRIVATE
+    "${SHIM_DIR}/pca9685_host"
+    "${SHIM_DIR}/pca9685_decl"
     "${SHIM_DIR}"
     "${MAIN_SRC_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"

@@ -14,7 +14,9 @@ firmware docs, ADRs and issues; none has been run as a scenario. Unverified:
 how much of `planner_task.c` and `voice_turn.c` separates cleanly into
 host-compilable cores (ADR-030 §Firmware seams), and whether a scripted world
 is rich enough for the planner prompt to behave as it does on the bench.
-**Architecture**: [ADR-030](../decisions/ADR-030-robocar-behaviour-twin.md)
+**Architecture**: [ADR-030](../decisions/ADR-030-robocar-behaviour-twin.md),
+[ADR-036](../decisions/ADR-036-robocar-twin-plant-port.md) (the executor in
+the twin, and the optional physics plant)
 
 ---
 
@@ -52,10 +54,9 @@ CI or by an agent, and compared against the previous version as a scorecard.
 - **Live evaluation spends the quota the robot runs on.** The planner already
   saturates the Robotics-ER free tier (`docs/firmware/planner.md`); bench
   experiments compete with the robot itself.
-- **The existing simulation does not model this.** `packages/robotics/robocar/simulation`
-  (PRD-003) is a Pymunk physics model of the removed dual-ESP32 design, with a
-  Claude/Ollama backend and an I2C bridge. It models motion, not the planner,
-  speech gates or voice turns.
+- **The simulation does not model this.** `packages/robotics/robocar/simulation`
+  (PRD-003) is a plant: wheels, contacts, rangefinders and floor sensors
+  (ADR-036). It models motion, not the planner, speech gates or voice turns.
 
 ## Users
 
@@ -100,6 +101,7 @@ source already states, written so a scenario can test it.
 | US-C1 | As a person, when nothing directs him, he looks around rather than staring ahead | With no fresh `track` goal or lease, the head visits dwell poses; frames between poses get pose `-` | D | ADR-029 |
 | US-C2 | As a person, when I hold a ball in view, his head follows it and the wheels follow the head | `track` goals latch once per write; the executor chooses head, wheels or both | D | ADR-025 |
 | US-C3 | As an onlooker, I can tell what he is doing from his LEDs and OLED | Activity trace colours match the state timeline | D | activity-trace.md |
+| US-C4 | As a person, when I speak to him he faces me while he listens instead of looking away | While a voice turn runs the head is at centre within 20 ticks (660 ms) and holds there; the dwell starts afresh when the turn ends | D | ADR-029 §1, idle_gaze |
 
 ### D. Safety
 
@@ -107,6 +109,8 @@ source already states, written so a scenario can test it.
 |----|-------|------------|--------|--------|
 | US-D1 | As an owner, he brakes before hitting something in front of him | From a range step below `STOP_THRESHOLD_CM`, brake within `REACTIVE_REFLEX_WORST_CASE_MS` (297 ms), whatever the goal | D | test_reflex_latency |
 | US-D2 | As an owner, a stale or missing goal never leaves him driving | Goal TTL expiry holds position; camera failure forces STOP | D | ADR-016 |
+| US-D3 | As an owner, he does not back into something behind him | A rear range below `STOP_THRESHOLD_CM` brakes a reverse at the first read of a trigger that ranged it (at most 297 ms after it appears) and holds it until the rear clears; the obstacle reflex does not trip | D | #1026, reactive_controller.c |
+| US-D4 | As an owner, he stops at an edge, backs away from it and does not drive at it again | Two no-floor samples brake; after `CLIFF_BRAKE_MS` he backs off for `CLIFF_BACKOFF_MS`; motion toward a sensor with no floor is refused until three floor samples | D | cliff-sensors.md, cliff_core |
 
 ### E. Quiet and economy
 
@@ -150,10 +154,16 @@ source already states, written so a scenario can test it.
 
 ## Non-goals
 
-- Motor dynamics, PWM, I2C timing: the host unit tests cover these.
+- Motor dynamics, PWM, I2C timing: not required of the twin; the host unit
+  tests cover these. The twin's executor runs the firmware's motor driver, so
+  a trace carries the duty it wrote, and what the motors do with that duty is
+  available through the optional physics plant (ADR-036).
 - Audio quality of TTS or voice FX: the twin carries text and delivery tags, not PCM.
-- Photorealistic or physics-accurate worlds. A scripted timeline and a
-  kinematic stub are the model of the room (ADR-030 §World).
+- Photorealistic or physics-accurate worlds: not required of the twin. A
+  scripted timeline is its model of the room (ADR-030 §World), and it builds
+  and runs with nothing else. A physics world is available through the
+  optional plant, for the scenarios that name it (ADR-036 §3); camera frames
+  stay scripted either way.
 - Replacing bench testing. The twin narrows what the bench has to find.
 
 ## Success metrics
@@ -179,3 +189,15 @@ source already states, written so a scenario can test it.
    scorecard and model matrix (H-3, H-4).
 4. **Field loop**: capture-to-scenario converter (H-5), head/gaze stories with
    a kinematic stub (US-C*).
+   *Progress (2026-11-13, ADR-036 §1):* the twin now links the firmware's
+   executor and ticks it every 33 ms, so the head and reflex stories need no
+   stub. The planner reads range, `robot_moving` and reflex trips from the
+   executor's telemetry, the trace carries `wheels` and `head` records, and
+   scenarios script range readings (front and rear) and floor readings in
+   place of the removed `reflex` event. US-D1, US-D3, US-D4, and US-C1 with
+   US-C4 pass as scenarios under `just robocar-twin::test`. US-C1's scenario
+   pins where the head rests, when it first moves and the pose of a frame
+   taken before the head settled; which pose is visited when depends on the
+   seed and is not asserted. US-C2 (a `track` goal leading the head), US-C3
+   and US-D2 have no scenario yet. The kinematic stub is not built: ADR-036
+   replaces it with the optional physics plant.

@@ -212,6 +212,21 @@ def test_cycle_filters_on_spent_requests(scenario_with):
     assert not one(scn, [cyc(1000, 3), cyc(2000, 3)]).passed
 
 
+def test_cycle_filters_on_pose(scenario_with):
+    scn = scenario_with(
+        {"cycle": {"pose": "-", "between": ["0s", "0s"], "count": 1}},
+        {"cycle": {"pose": "C", "count": 1}},
+    )
+
+    def cyc(at, pose):
+        return {"t": "cycle", "at_ms": at, "requested": False, "pose": pose}
+
+    assert all(o.passed for o in evaluate(scn, [cyc(0, "-"), cyc(15000, "C")]))
+    assert not any(o.passed for o in evaluate(scn, [cyc(0, "L"), cyc(15000, "L")]))
+    with pytest.raises(ScenarioError, match="expected one of"):
+        scenario_with({"cycle": {"pose": "X"}})
+
+
 def test_speak_not_offered_is_counted(scenario_with):
     scn = scenario_with({"speak_not_offered": {"count": 0}})
     flagged = {"t": "speak_not_offered", "at_ms": 30000, "text": "hi"}
@@ -240,3 +255,210 @@ def test_note_and_note_not_offered_are_counted(scenario_with):
 def test_note_trigger_is_validated(scenario_with):
     with pytest.raises(ScenarioError, match="trigger"):
         scenario_with({"note_offered": {"trigger": "boredom"}})
+
+
+def wheels(at, left, right=None, duty=None):
+    """A `wheels` record; `left`/`right` are (drive, duty) or a drive name."""
+
+    def side(v):
+        drive, d = v if isinstance(v, tuple) else (v, duty)
+        if d is None:
+            d = 2457 if drive in ("forward", "reverse") else 0
+        return {"drive": drive, "duty": d}
+
+    return {
+        "t": "wheels",
+        "at_ms": at,
+        "left": side(left),
+        "right": side(right if right is not None else left),
+    }
+
+
+def head(at, pan, tilt=0, mode="gaze", settled=False):
+    return {
+        "t": "head",
+        "at_ms": at,
+        "pan_deg": pan,
+        "tilt_deg": tilt,
+        "mode": mode,
+        "settled": settled,
+    }
+
+
+RAMP = [
+    wheels(16005, ("forward", 546)),
+    wheels(16038, ("forward", 996)),
+    wheels(16071, ("forward", 2457)),
+    wheels(20262, "brake"),
+    wheels(21252, ("forward", 546)),
+]
+
+
+def test_wheels_counts_matching_change_records(scenario_with):
+    scn = scenario_with(
+        {"wheels": {"left": "brake", "right": "brake", "between": ["20s", "20.3s"]}},
+        {"wheels": {"left": "forward", "count": 4}},
+        {"wheels": {"left": "reverse", "count": 0}},
+    )
+    assert all(o.passed for o in evaluate(scn, RAMP))
+
+
+def test_wheels_numeric_bounds_are_inclusive(scenario_with):
+    scn = scenario_with(
+        {"wheels": {"left_duty": [546, 996], "count": 3}},
+        {"wheels": {"left_duty": [547, 995], "count": 0}},
+        {"wheels": {"right_duty": 2457, "count": 1}},
+        {"wheels": {"left": "forward", "left_duty": [1, 4095], "count": 4}},
+    )
+    assert all(o.passed for o in evaluate(scn, RAMP)), [
+        o.message for o in evaluate(scn, RAMP) if not o.passed
+    ]
+
+
+def test_wheels_failure_cites_the_records_in_the_window(scenario_with):
+    scn = scenario_with(
+        {"wheels": {"left": "brake", "after": "voice_turn[0]", "within": "297ms"}}
+    )
+    o = one(scn, RAMP)
+    assert not o.passed
+    assert "wheels(left='brake') in [16s, 16.297s]" in o.message
+    assert "expected at least 1, found 0" in o.message
+    # The three ramp records inside the window are cited, the later brake is not.
+    assert "[0]" in o.message and "[2]" in o.message and "20262" not in o.message
+    empty = one(scn, [wheels(40000, "brake")])
+    assert "all 'wheels' records" in empty.message and "40000" in empty.message
+
+
+def test_wheels_at_is_the_last_record_at_or_before(scenario_with):
+    scn = scenario_with(
+        {"wheels_at": {"at": "16.07s", "left": "forward", "left_duty": 996}},
+        {"wheels_at": {"at": "16.071s", "left_duty": 2457}},
+        {"wheels_at": {"at": "20.262s", "left": "brake", "right": "brake"}},
+        {"wheels_at": {"at": "21s", "left": "brake", "left_duty": 0}},
+        {"wheels_at": {"at": "30s", "left": "forward", "right": "forward"}},
+    )
+    assert all(o.passed for o in evaluate(scn, RAMP)), [
+        o.message for o in evaluate(scn, RAMP) if not o.passed
+    ]
+
+
+def test_wheels_at_before_any_record_is_the_boot_state(scenario_with):
+    scn = scenario_with(
+        {"wheels_at": {"at": "16s", "left": "coast", "right": "coast", "left_duty": 0}}
+    )
+    assert one(scn, RAMP).passed
+    assert one(scn, []).passed
+    moving = scenario_with({"wheels_at": {"at": "16s", "left": "forward"}})
+    o = one(moving, RAMP)
+    assert not o.passed
+    assert "left is 'coast', want 'forward'" in o.message
+    assert "before the first record" in o.message
+
+
+def test_wheels_at_failure_names_each_mismatch_and_the_record(scenario_with):
+    scn = scenario_with(
+        {"wheels_at": {"at": "20.5s", "left": "forward", "right_duty": [100, 200]}}
+    )
+    o = one(scn, RAMP)
+    assert not o.passed
+    assert "wheels at 20.5s" in o.message
+    assert "left is 'brake', want 'forward'" in o.message
+    assert "right_duty is 0, want [100, 200]" in o.message
+    assert "[3]" in o.message and "20262" in o.message
+
+
+def test_wheels_at_takes_an_event_reference(scenario_with):
+    scn = scenario_with({"wheels_at": {"at": "voice_turn[0]", "left": "coast"}})
+    assert one(scn, RAMP).passed
+
+
+def test_wheels_sides_are_filtered_separately(scenario_with):
+    scn = scenario_with(
+        {"wheels": {"left": "forward", "right": "reverse", "count": 1}},
+        {"wheels_at": {"at": "10s", "left": "forward", "right": "reverse"}},
+        {"wheels_at": {"at": "10s", "left_duty": 100, "right_duty": 200}},
+    )
+    spin = [wheels(5000, ("forward", 100), ("reverse", 200))]
+    assert all(o.passed for o in evaluate(scn, spin))
+    assert not any(o.passed for o in evaluate(scn, [wheels(5000, "forward")]))
+
+
+GAZE = [
+    head(0, 0, settled=False),
+    head(396, 0, settled=True),
+    head(5016, -2),
+    head(5643, -40),
+    head(6039, -40, settled=True),
+    head(9000, 0, tilt=-20, settled=True),
+]
+
+
+def test_head_filters_and_bounds(scenario_with):
+    scn = scenario_with(
+        {"head": {"settled": True, "pan": [-39, -1], "count": 0}},
+        {"head": {"settled": True, "pan": -40, "count": 1}},
+        {"head": {"settled": True, "tilt": [-20, -20], "count": 1}},
+        {"head": {"mode": "gaze", "min": 6}},
+        {"head": {"mode": "centre", "count": 0}},
+        {"head": {"settled": False, "between": ["5s", "6s"], "count": 2}},
+    )
+    assert all(o.passed for o in evaluate(scn, GAZE)), [
+        o.message for o in evaluate(scn, GAZE) if not o.passed
+    ]
+    off_pose = [*GAZE, head(12000, -30, settled=True)]
+    bad = [o for o in evaluate(scn, off_pose) if not o.passed]
+    assert len(bad) == 1 and "-30" in bad[0].message
+
+
+def test_head_at_looks_up_the_state(scenario_with):
+    scn = scenario_with(
+        {"head_at": {"at": "5.5s", "pan": [-39, -1], "settled": False}},
+        {"head_at": {"at": "8s", "pan": -40, "tilt": 0, "settled": True}},
+        {"head_at": {"at": "9s", "tilt": -20, "mode": "gaze"}},
+    )
+    assert all(o.passed for o in evaluate(scn, GAZE))
+    wrong = scenario_with({"head_at": {"at": "8s", "pan": [-3, 3]}})
+    o = one(wrong, GAZE)
+    assert not o.passed and "pan is -40, want [-3, 3]" in o.message
+    assert "[4]" in o.message
+
+
+def test_head_at_without_a_record_fails(scenario_with):
+    # No initial state for the head: it is traced from tick 0 or not at all.
+    scn = scenario_with({"head_at": {"at": "5s", "pan": 0}})
+    o = one(scn, [])
+    assert not o.passed and "no 'head' record at or before then" in o.message
+    late = one(scn, [head(6000, 0)])
+    assert not late.passed and "6000" in late.message
+
+
+def test_settled_filter_does_not_match_a_number(scenario_with):
+    scn = scenario_with({"head": {"settled": True, "count": 1}})
+    assert not one(scn, [{**head(1000, 0), "settled": "true"}]).passed
+
+
+@pytest.mark.parametrize(
+    ("bad", "match"),
+    [
+        ({"wheels": {"left": "backward"}}, "expected one of"),
+        ({"wheels": {"left_duty": [10]}}, "lo, hi"),
+        ({"wheels": {"left_duty": [20, 10]}}, "lo <= hi"),
+        ({"wheels": {"left_duty": "fast"}}, "number"),
+        ({"wheels": {"left_duty": True}}, "number"),
+        ({"wheels": {"duty": 5}}, "unknown argument"),
+        ({"wheels": {"left": "brake", "count": -1}}, "non-negative"),
+        ({"wheels_at": {"left": "brake"}}, "missing argument"),
+        ({"wheels_at": {"at": "5s"}}, "at least one of"),
+        ({"wheels_at": {"at": 5, "left": "brake"}}, "unit"),
+        ({"wheels_at": {"at": "5s", "left": "brake", "count": 1}}, "unknown argument"),
+        ({"wheels_at": {"at": "range[0]", "left": "brake"}}, "refers to range event 0"),
+        ({"head": {"mode": "stare"}}, "expected one of"),
+        ({"head": {"settled": 1}}, "true/false"),
+        ({"head": {"pan": [0, "x"]}}, "lo, hi"),
+        ({"head_at": {"at": "5s", "tilt": [1, 0]}}, "lo <= hi"),
+        ({"pose_at": {"at": "5s"}}, "unknown assertion"),
+    ],
+)
+def test_state_assertion_validation(scenario_with, bad, match):
+    with pytest.raises(ScenarioError, match=match):
+        scenario_with(bad)

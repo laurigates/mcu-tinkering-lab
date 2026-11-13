@@ -4,17 +4,31 @@
 # until NOTE_GATE_MIN_INTERVAL_MS (5 min, note_gate.h) has passed, however
 # often the reflex trips in between.
 #
+# A reflex is the executor's reaction to a front range reading below
+# STOP_THRESHOLD_CM (15 cm, reactive_controller.h), so the scenario scripts the
+# obstacle (ADR-036 §1): the range reads 120 cm, and four times something is
+# 8 cm ahead for 330 ms. A rangefinder is triggered every 165 ms
+# (ULTRASONIC_CONVERSION_MS 120, read on the tick at 132 ms, re-triggered on
+# the next tick; 33 ms ticks) and ranges whatever is ahead at its trigger, so
+# 330 ms spans two triggers and no dip is missed. Each dip latches the reflex
+# once (reflex_trips counts the rising edge) at the read of its first trigger:
+# the dip at 20 s is ranged at 20.130 s and read at 20.262 s.
+#
 # Timeline (15 s ticks): a console line every 5 s keeps the planner awake
 # (plan_activity_wake(), as in us-e3), so it requests on every tick from 15 s.
-# Reflex at 20 s: offered on the 30 s request, which starts the window. Reflexes
-# at 50 s and 80 s fall inside it and stay pending; the window opens at 330 s,
-# so the 330 s request offers again. The reflex at 345 s falls in the second
-# window (330..630 s), past the end of the run.
+# Dip at 20 s: offered on the 30 s request, which starts the window. Dips at
+# 50 s and 80 s fall inside it and stay pending; the window opens at 330 s, so
+# the 330 s request offers again. The dip at 345 s falls in the second window
+# (330..630 s), past the end of the run.
 #
 # Every reply carries a `note` call, as if the model ignored the tool list. Only
 # the two offered requests may yield a note; every other reply's note is
 # dropped and flagged note_not_offered (gemini_backend_plan() does the same on
 # the robot). 25 requests at 15..375 s, so 23 dropped.
+#
+# Every goal is `stop`. A stopped robot under the front reflex is braked, not
+# coasted (wheels_held_by_rangers() in reactive_controller.c), so each dip is
+# one `wheels` record to brake and one back to coast when it clears.
 id: us-n1-note-on-reflex
 stories: [US-N1]
 seed: 7
@@ -22,11 +36,16 @@ duration: 380s
 world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: hallway, pose: C}}
+  - {at: 0s, range: 120}
   - {at: 5s, every: 5s, until: 375s, console: status}
-  - {at: 20s, reflex: {}}
-  - {at: 50s, reflex: {}}
-  - {at: 80s, reflex: {}}
-  - {at: 345s, reflex: {}}
+  - {at: 20s, range: 8}
+  - {at: 20.33s, range: 120}
+  - {at: 50s, range: 8}
+  - {at: 50.33s, range: 120}
+  - {at: 80s, range: 8}
+  - {at: 80.33s, range: 120}
+  - {at: 345s, range: 8}
+  - {at: 345.33s, range: 120}
 models:
   planner: inline
 default:
@@ -43,3 +62,7 @@ expect:
   - model_request: {note: reflex, count: 2}
   - note: {trigger: reflex, kind: difficulty, count: 2}
   - note_not_offered: {count: 23}
+  # One latch per dip, within REACTIVE_REFLEX_WORST_CASE_MS (297 ms) of it.
+  - wheels: {left: brake, right: brake, count: 4}
+  - wheels: {left: brake, right: brake, after: "range[1]", within: 297ms, count: 1}
+  - wheels: {left: coast, right: coast, count: 4}

@@ -199,3 +199,56 @@ def test_cli_check_reports_scenario_errors(write_scenario, capsys):
     p = write_scenario("broken", SIMPLE.replace("seed: 1", "seed: x"))
     assert cli_main(["check", "--scenarios", str(p)]) == 2
     assert "seed" in capsys.readouterr().err
+
+
+EXECUTOR_LIKE = """\
+seed: 3
+duration: 60s
+config: {head: true, cliff: true}
+world:
+  - {at: 0s, frame: {scene: hall}}
+  - {at: 0s, range: 120}
+  - {at: 0s, floor: {front: true, rear: true}}
+  - {at: 5s, console: status}
+  - {at: 20s, range: 8}
+  - {at: 21s, range: {cm: 9, sensor: rear}}
+  - {at: 22s, range_fail: {sensor: rear}}
+  - {at: 25s, range: 120}
+models: {planner: inline}
+default: {status: 200, latency: 1s, call: drive,
+          args: {heading_deg: 0, distance_cm: 50, speed_pct: 60}}
+expect:
+  - wheels_at: {at: 15s, left: coast, right: coast}
+  - wheels: {left: forward, right: forward, between: [16s, 16s], count: 1}
+  - wheels: {left: brake, after: "range[1]", within: 297ms, count: 1}
+  - wheels_at: {at: 24.999s, left: brake, left_duty: 0}
+  - wheels_at: {at: "range[3]", left: forward, left_duty: [2000, 4095]}
+  - head_at: {at: 30s, pan: 0, tilt: [-1, 1], mode: gaze, settled: false}
+  - head: {count: 1}
+"""
+
+
+def test_executor_records_pass_through_the_runner(write_scenario, fake_twin_cmd):
+    scn = load_scenario(write_scenario("executor-like", EXECUTOR_LIKE))
+    lines = scn.protocol_lines()
+    assert lines[0]["head"] is True and lines[0]["cliff"] is True
+    assert lines[1] == {"t": "frame", "at_ms": 0, "scene": "hall"}
+    result = run_scenario(scn, fake_twin_cmd, timeout_s=20)
+    kinds = [r["t"] for r in result.trace]
+    assert kinds.count("wheels") == 3 and kinds.count("head") == 1
+    outcomes = evaluate(scn, result.trace)
+    assert all(o.passed for o in outcomes), [
+        o.message for o in outcomes if not o.passed
+    ]
+
+
+def test_state_assertion_fails_against_a_real_run(write_scenario, fake_twin_cmd):
+    body = EXECUTOR_LIKE.replace(
+        "wheels_at: {at: 24.999s, left: brake, left_duty: 0}",
+        "wheels_at: {at: 24.999s, left: forward, left_duty: 0}",
+    )
+    scn = load_scenario(write_scenario("executor-fail", body))
+    outcomes = evaluate(scn, run_scenario(scn, fake_twin_cmd, timeout_s=20).trace)
+    bad = [o for o in outcomes if not o.passed]
+    assert len(bad) == 1
+    assert "left is 'brake', want 'forward'" in bad[0].message

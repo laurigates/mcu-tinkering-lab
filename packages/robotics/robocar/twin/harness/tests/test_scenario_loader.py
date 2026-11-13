@@ -45,12 +45,15 @@ def test_every_kind_and_repeat(write_scenario):
     body = """\
 seed: 1
 duration: 30s
-config: {planner_period_ms: 5000, plan_budget_max_requests: 3}
+config: {planner_period_ms: 5000, plan_budget_max_requests: 3, cliff: true}
 world:
   - {at: 0s, link: {wifi: true, key: false}}
   - {at: 1s, range: 80}
   - {at: 1500ms, range: {cm: 40}}
+  - {at: 1600ms, range: {cm: 9, sensor: rear}}
   - {at: 2s, range_fail: {}}
+  - {at: 2100ms, range_fail: {sensor: rear}}
+  - {at: 2200ms, floor: {front: false, rear: true}}
   - {at: 3s, sound: {peak_db: 20, dur: 300ms}}
   - {at: 4s, voice_turn: {dur: 2s, reply: hi}}
   - {at: 5s, every: 10s, until: 25s, console: status}
@@ -64,6 +67,21 @@ expect: [{requests: {max: 9}}]
     lines = s.protocol_lines()
     assert lines[0]["planner_period_ms"] == 5000
     assert lines[0]["plan_budget_max_requests"] == 3
+    assert lines[0]["cliff"] is True and "head" not in lines[0]
+    assert [e.to_protocol() for e in s.world if e.kind in ("range", "range_fail")] == [
+        {"t": "range", "at_ms": 1000, "cm": 80, "sensor": "front"},
+        {"t": "range", "at_ms": 1500, "cm": 40, "sensor": "front"},
+        {"t": "range", "at_ms": 1600, "cm": 9, "sensor": "rear"},
+        {"t": "range_fail", "at_ms": 2000, "sensor": "front"},
+        {"t": "range_fail", "at_ms": 2100, "sensor": "rear"},
+    ]
+    floor = next(e for e in s.world if e.kind == "floor")
+    assert floor.to_protocol() == {
+        "t": "floor",
+        "at_ms": 2200,
+        "front": False,
+        "rear": True,
+    }
     kinds = [(e.kind, e.at_ms) for e in s.world]
     assert ("console", 5000) in kinds and ("console", 15000) in kinds
     assert ("console", 25000) in kinds
@@ -133,9 +151,36 @@ expect: [{requests: {max: 9}}]
             "text",
         ),
         (
-            ("{at: 0s, frame", "{at: 0s, reflex: {cm: 3}, frame"),
+            ("{at: 0s, frame", "{at: 0s, range: 80, frame"),
             "exactly one event kind",
         ),
+        # ADR-036: a reflex is scripted as the obstacle that causes it.
+        (("{at: 0s, frame: {scene: room}}", "{at: 0s, reflex: {}}"), "were removed"),
+        # The bounds ultrasonic_core_decode() accepts.
+        (("{at: 0s, frame: {scene: room}}", "{at: 0s, range: 1}"), r"2\.\.400"),
+        (("{at: 0s, frame: {scene: room}}", "{at: 0s, range: {cm: 401}}"), r"2\.\.400"),
+        (("{at: 0s, frame: {scene: room}}", "{at: 0s, range: {cm: 2.5}}"), "integer"),
+        (
+            (
+                "{at: 0s, frame: {scene: room}}",
+                "{at: 0s, range: {cm: 80, sensor: side}}",
+            ),
+            "sensor",
+        ),
+        (
+            ("{at: 0s, frame: {scene: room}}", "{at: 0s, range_fail: {sensor: top}}"),
+            "sensor",
+        ),
+        (("{at: 0s, frame: {scene: room}}", "{at: 0s, range_fail: 3}"), "mapping"),
+        (
+            (
+                "{at: 0s, frame: {scene: room}}",
+                "{at: 0s, floor: {front: true, rear: true}}",
+            ),
+            "config.cliff",
+        ),
+        (("seed: 1", "seed: 1\nconfig: {head: 1}"), "true/false"),
+        (("seed: 1", "seed: 1\nconfig: {plant: external}"), "unknown key"),
     ],
 )
 def test_validation_errors(write_scenario, patch, match):
@@ -210,15 +255,45 @@ def test_build_body_carries_a_note_call():
     }
 
 
-def test_reflex_event_takes_no_fields(write_scenario):
-    path = write_scenario(
-        "reflex",
-        MINIMAL.replace(
-            "{at: 0s, frame: {scene: room}}",
-            "{at: 0s, frame: {scene: room}}\n  - {at: 1s, reflex: {}}",
-        ),
+def test_range_bounds_are_inclusive(write_scenario):
+    body = MINIMAL.replace(
+        "{at: 0s, frame: {scene: room}}",
+        "{at: 0s, frame: {scene: room}}\n  - {at: 1s, range: 2}\n  - {at: 2s, range: 400}",
     )
-    events = load_scenario(path).world
-    assert [(e.kind, e.fields) for e in events if e.kind == "reflex"] == [
-        ("reflex", {})
-    ]
+    events = load_scenario(write_scenario("bounds", body)).world
+    assert [e.fields["cm"] for e in events if e.kind == "range"] == [2, 400]
+
+
+def test_head_config_sends_frames_without_a_pose(write_scenario):
+    body = MINIMAL.replace("seed: 1", "seed: 1\nconfig: {head: true}")
+    s = load_scenario(write_scenario("head", body))
+    assert s.protocol_lines()[0]["head"] is True
+    assert s.world[0].to_protocol() == {"t": "frame", "at_ms": 0, "scene": "room"}
+
+
+def test_head_config_refuses_a_scripted_pose(write_scenario):
+    body = MINIMAL.replace("seed: 1", "seed: 1\nconfig: {head: true}").replace(
+        "{scene: room}", "{scene: room, pose: C}"
+    )
+    with pytest.raises(ScenarioError, match=r"not allowed with config\.head"):
+        load_scenario(write_scenario("head-pose", body))
+    # head: false is the default written out: the pose works as before.
+    off = body.replace("head: true", "head: false")
+    s = load_scenario(write_scenario("head-off", off))
+    assert s.world[0].fields == {"scene": "room", "pose": "C"}
+    assert s.protocol_lines()[0]["head"] is False
+
+
+def test_floor_events_need_boolean_fields(write_scenario):
+    body = MINIMAL.replace("seed: 1", "seed: 1\nconfig: {cliff: true}").replace(
+        "{at: 0s, frame: {scene: room}}",
+        "{at: 0s, frame: {scene: room}}\n  - {at: 1s, floor: {front: 1, rear: true}}",
+    )
+    with pytest.raises(ScenarioError, match=r"floor\.front"):
+        load_scenario(write_scenario("floor-bad", body))
+    with pytest.raises(ScenarioError, match="missing key"):
+        load_scenario(
+            write_scenario(
+                "floor-half", body.replace("front: 1, rear: true", "rear: true")
+            )
+        )

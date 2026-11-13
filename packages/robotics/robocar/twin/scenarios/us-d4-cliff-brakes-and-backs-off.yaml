@@ -1,0 +1,69 @@
+# US-D4: at an edge he brakes, backs away from it, and will not drive toward it
+# again until there is floor (docs/firmware/cliff-sensors.md, cliff_core.c).
+#
+# `cliff: true` arms the cliff reflex. It starts as "no floor" under both
+# sensors and fails closed; the floor reading scripted at 0 clears both after
+# CLIFF_CLEAR_SAMPLES (3) ticks, at 66 ms. The executor samples the floor
+# sensors on every 33 ms tick.
+#
+# Waking and the drive are as in us-d1-front-reflex-brakes: the 15 s planner
+# tick requests on the range change (400 cm boot value to 120 cm), the reply is
+# a forward drive at 60 % written at 16 s, duty 2457 from 16.170 s.
+#
+# Edge: the front sensor loses the floor at 20 s. The ticks at 20.031 s
+# (607 x 33) and 20.064 s are the CLIFF_TRIP_SAMPLES (2) samples, so the
+# reflex starts on the second: brake at 20.064 s. It brakes for CLIFF_BRAKE_MS
+# (150): the first tick at or past 20.214 s is 20.229 s, where the back-off
+# starts because the rear sensor has floor. The back-off is
+# motor_move_backward(CLIFF_BACKOFF_SPEED): 140/255 = duty 2248, ramped 546,
+# 996, 1446, 1896, 2248 (20.361 s). It runs for CLIFF_BACKOFF_MS (400): the
+# first tick at or past 20.629 s is 20.658 s, where the reflex ends.
+#
+# The scripted front sensor still reads no floor (the world here does not move
+# with the robot), and the goal is still a forward drive, so from 20.658 s
+# apply_wheels() refuses it and brakes (cliff_permits()).
+#
+# Floor again from 22 s: the ticks at 22.011 s (667 x 33), 22.044 s and
+# 22.077 s are the three clear samples, so the drive resumes at 22.077 s,
+# ramping to 2457 by 22.242 s.
+id: us-d4-cliff-brakes-and-backs-off
+stories: [US-D4]
+seed: 7
+duration: 40s
+config: {cliff: true}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: table-top}}
+  - {at: 0s, range: 120}
+  - {at: 0s, floor: {front: true, rear: true}}
+  - {at: 20s, floor: {front: false, rear: true}}
+  - {at: 22s, floor: {front: true, rear: true}}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
+expect:
+  - requests: {count: 2}
+  # Driving at 60 % when the floor ends.
+  - wheels_at: {at: "floor[1]", left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # Brake on the second no-floor sample.
+  - wheels: {left: brake, right: brake, after: "floor[1]", within: 66ms, count: 1}
+  - wheels_at: {at: 20.064s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 20.228s, left: brake, right: brake}
+  # Back-off: reverse from 20.229 s, at the back-off duty once ramped.
+  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [20.229s, 20.229s], count: 1}
+  - wheels_at: {at: 20.361s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
+  - wheels_at: {at: 20.657s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
+  - wheels: {left: reverse, between: [0s, 20.228s], count: 0}
+  - wheels: {left: reverse, between: [20.658s, 40s], count: 0}
+  # The reflex ends; the forward goal is refused while the front has no floor.
+  - wheels: {left: brake, right: brake, between: [20.658s, 20.658s], count: 1}
+  - wheels: {left: forward, between: [20.064s, 22.076s], count: 0}
+  - wheels_at: {at: 22.076s, left: brake, right: brake}
+  # Floor confirmed on the third sample: the drive resumes.
+  - wheels: {left: forward, right: forward, left_duty: 546, between: [22.077s, 22.077s], count: 1}
+  - wheels_at: {at: 22.242s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: brake, count: 2}
