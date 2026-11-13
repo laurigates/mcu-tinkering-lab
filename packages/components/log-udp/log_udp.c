@@ -3,7 +3,7 @@
  * @brief WiFi AP + UDP broadcast log sink.
  *
  * Starts a SoftAP so any device can connect directly and receive logs.
- * No external router or credentials needed. The SSID and password come from
+ * No external router needed. The SSID and password come from
  * Kconfig (CONFIG_LOG_UDP_AP_SSID, CONFIG_LOG_UDP_AP_PASSWORD); each consumer
  * sets its own in sdkconfig.defaults.
  *
