@@ -118,13 +118,7 @@ NOT_IN_MATRIX: dict[str, str] = {
 # Projects nested in a matrix entry's directory that are deliberately not in
 # its `exclude_paths`, keyed by path relative to packages/. Each needs a
 # reason; a change under one rebuilds the entry around it.
-NESTED_NOT_EXCLUDED: dict[str, str] = {
-    "audio/melody-detector/training": (
-        "predates exclude_paths: a change under training/ has always rebuilt "
-        "the melody-detector firmware, which does not read it; left as it was "
-        "when this check was added"
-    ),
-}
+NESTED_NOT_EXCLUDED: dict[str, str] = {}
 
 _MOD_LINE = re.compile(
     r"""^\s*mod\??\s+([\w-]+)(?:\s+(?:'([^']*)'|"([^"]*)"))?""", re.MULTILINE
