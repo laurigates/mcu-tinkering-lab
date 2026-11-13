@@ -31,14 +31,22 @@ table on p. 3 gives VM a 4.5 V minimum, with 1.0 A per channel at VM ≥ 5 V and
 0.4 A at 5 V > VM ≥ 4.5 V. The 2026-05-13 revision drops the range from the pin
 table (p. 2 says only "Motor supply") and puts the minimum at 2.5 V in the
 Operating Range table, with the 1.0 A row starting at 4.5 V and the 0.4 A row
-limited to operation without PWM. Which revision first made the change was not
-checked.
+limited to operation without PWM. That revision still contradicts itself: its
+p. 7 Typical Application Diagram labels the VM supply "+4.5 V to 13.5 V", so
+the 2.5 V minimum comes only from the p. 3 Operating Range table, where VM
+below 4.5 V is limited to 0.4 A without PWM. In the 2007-06-30 copy, p. 7
+("+4.5V ~13.5V") agrees with its p. 3. Which revision first made the change
+was not checked.
 
 **In this repo.** Both robocar carriers run VM from the 5 V rail
 (`packages/robotics/robocar/hardware.toml`, the LM2596 module set to 5.0 V;
 `packages/robotics/robocar/integrated/hardware.toml`, the TPS563208 at 5.07 V
-typical, 4.94–5.19 V), inside the operating range and in its 1.0 A row, while
-the motors' stall current is an unmeasured assumption of about 1.7 A each
+typical, 4.94–5.19 V), inside the operating range and, under the 2026-05-13
+revision's 4.5 V breakpoint, in its 1.0 A row. Under the 2007-06-30 revision's
+5 V breakpoint the integrated carrier's 4.94 V low end falls in the 0.4 A row,
+which is what `.claude/rules/power-stage-checklist.md` (row 9), the integrated
+carrier's README and its `hardware.toml` reason from. The motors' stall
+current is an unmeasured assumption of about 1.7 A each
 ([WIRING.md](../../../packages/robotics/robocar/WIRING.md), "The 5 V current
 budget"), above both the 1.0 A operating maximum and the 1.2 A absolute
 maximum average.
