@@ -26,5 +26,9 @@ else()
     set(PROJECT_VER "0.1.0")
 endif()
 
+# The RC522 driver is the shared component; only that one directory, not all of
+# packages/components/.
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components/thinkpack-rc522")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(nfc-scavenger-hunt)
