@@ -60,13 +60,15 @@ repos:
   # `uv run` resolves ty from the project's pinned dev extra (pyproject.toml)
   # and lockfile, not `uvx`'s unpinned "latest" — a pre-1.0 `uvx ty` release
   # changed its diagnostic set and reddened every PR with no commit in this
-  # repo to explain it (issue #515). This also gives ty the real trimesh/etc.
-  # type info from the synced venv instead of treating them as unresolved.
+  # repo to explain it (issue #515). `--extra dev` is named because the twin's
+  # plant recipe syncs this environment with no extras, which leaves no ty in
+  # it. The `viz` packages (trimesh, matplotlib, ...) are not installed here,
+  # so calls into them are not type-checked (ADR-036).
   - repo: local
     hooks:
       - id: ty
         name: ty type check (robocar-simulation)
-        entry: bash -c 'cd packages/robotics/robocar/simulation && uv run ty check src/'
+        entry: bash -c 'cd packages/robotics/robocar/simulation && uv run --extra dev ty check src/'
         language: system
         files: '^packages/robotics/robocar/simulation/src/.*\.py$'
         pass_filenames: false

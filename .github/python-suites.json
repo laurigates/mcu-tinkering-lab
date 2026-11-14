@@ -66,7 +66,8 @@
       "packages/robotics/robocar/test/servo_controller_stub.c",
       "packages/robotics/robocar/simulation/src/**",
       "packages/robotics/robocar/simulation/pyproject.toml",
-      "packages/robotics/robocar/simulation/uv.lock"
+      "packages/robotics/robocar/simulation/uv.lock",
+      "packages/robotics/robocar/simulation/.python-version"
     ]
   },
   {
