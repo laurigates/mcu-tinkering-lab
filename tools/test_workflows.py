@@ -41,6 +41,11 @@ What the tests hold:
   firmware change, alone or in the same pull request as a nested-project
   change, and keeps ``extra_paths`` and ``exclude_paths`` out of the job
   matrix.
+- build-firmware.yml's own Bluepad32 fetch step clones the tag
+  ``tools/fetch-bluepad32.sh --version`` prints, from the same repository,
+  and copies the same btstack directories and files as the script.
+  ``_ci-build-esp32.yml`` and the xbox-switch-bridge justfile run the script
+  and name neither the tag nor the repository themselves (issue #1082).
 - auto-fix.yml passes the release-please App to the reusable auto-fix, so the
   fix commits it pushes start CI (issue #866).
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
@@ -965,7 +970,7 @@ class BluepadTagTest(unittest.TestCase):
     """tools/fetch-bluepad32.sh holds the Bluepad32 tag for the CI build and
     the xbox-switch-bridge justfile. build-firmware.yml keeps its own copy of
     the fetch step, so the release path does not depend on the script (#1082);
-    its tag must stay the script's."""
+    its tag, and what it clones and copies, must stay the script's."""
 
     SCRIPT = ROOT / "tools" / "fetch-bluepad32.sh"
 
@@ -991,6 +996,43 @@ class BluepadTagTest(unittest.TestCase):
         self.assertTrue(branches, "no --branch in build-firmware.yml's fetch step")
         named = set(re.findall(r"\brelease_v\d+(?:\.\d+)*", script))
         self.assertEqual(branches | named, {self.script_tag()})
+
+    @staticmethod
+    def fetch_facts(text: str) -> dict[str, object]:
+        """What a fetch script clones and copies, in a form that compares two
+        scripts written differently: the repository, the submodule it
+        initialises, the btstack paths, and the words of each `for` list."""
+        code = "\n".join(
+            line for line in text.splitlines() if not line.lstrip().startswith("#")
+        )
+        return {
+            "repo": sorted(set(re.findall(r"https://\S+?\.git\b", code))),
+            "submodule": sorted(
+                set(re.findall(r"submodule update\s+(.*?)\s*(?:&&|$)", code, re.M))
+            ),
+            "paths": dict(re.findall(r'^\s*(BTSTACK_\w+)="([^"]*)"', code, re.M)),
+            "loops": {
+                var: sorted(words.replace("\\\n", " ").split())
+                for var, words in re.findall(
+                    r"\bfor\s+(\w+)\s+in\s+(.*?);\s*do\b", code, re.S
+                )
+            },
+        }
+
+    def test_the_release_build_prepares_btstack_as_the_script_does(self):
+        (step,) = [
+            s
+            for _, _, s in steps_of(load("build-firmware.yml"))
+            if "bluepad32.git" in str(s.get("run", ""))
+        ]
+        ours = self.fetch_facts(self.SCRIPT.read_text())
+        # Control: a pattern that stopped matching would compare empty to empty.
+        self.assertEqual(len(ours["repo"]), 1, ours)
+        self.assertTrue(ours["submodule"], ours)
+        self.assertEqual(set(ours["paths"]), {"BTSTACK_ROOT", "BTSTACK_COMP"})
+        self.assertEqual(set(ours["loops"]), {"dir", "f"})
+        self.assertTrue(all(ours["loops"].values()), ours)
+        self.assertEqual(self.fetch_facts(step["run"]), ours)
 
     def test_the_ci_build_and_the_justfile_call_the_script(self):
         callers = (

@@ -9,7 +9,8 @@
 # step of .github/workflows/_ci-build-esp32.yml. build-firmware.yml keeps its
 # own copy of the step, so a release build does not depend on this file at the
 # tag; tools/test_workflows.py (BluepadTagTest) fails when its tag differs from
-# BP32_TAG below (#1082).
+# BP32_TAG below, or when it clones or copies something else than this script
+# does (#1082).
 #
 # Safe to re-run: the clone is skipped when <dest>/src exists, and the btstack
 # copy when the component's src/ exists.
