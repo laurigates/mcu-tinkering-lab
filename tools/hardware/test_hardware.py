@@ -35,6 +35,7 @@ ROBOCAR = REPO_ROOT / "packages/robotics/robocar"
 XIAO_S3 = REPO_ROOT / "docs/reference/boards/xiao-esp32s3.md"
 BALANCEBOT = REPO_ROOT / "packages/robotics/balancebot"
 XIAO_RP2350 = REPO_ROOT / "docs/reference/boards/xiao-rp2350.md"
+WAVESHARE_S3_ZERO = REPO_ROOT / "docs/reference/boards/waveshare-esp32-s3-zero.md"
 GENERATOR = REPO_ROOT / "tools/typst/generate-pin-defs.py"
 
 
@@ -322,6 +323,35 @@ class XiaoRp2350ReferenceTest(unittest.TestCase):
             [p.name for p in layout.side("R")],
             ["5V", "GND", "3V3", "D10", "D9", "D8", "D7"],
         )
+
+
+class WaveshareEsp32S3ZeroReferenceTest(unittest.TestCase):
+    """The S3-Zero page (#1083): no hardware.toml reads it yet, so pin it here."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.board = parse_board_table(WAVESHARE_S3_ZERO)
+
+    def test_pad_order_and_gpio_follow_the_schematics_p15(self):
+        # Waveshare's ESP32-S3-Zero-Sch.pdf, connector P15: pin 1 IO43 (TX),
+        # 2 IO44 (RX), 3 to 15 IO13 down to IO1, 16 3V3, 17 GND, 18 VBUS.
+        # Matched to the wiki's top view (ESP32-S3-Zero_02.jpg), pins 1-9 run
+        # down the right edge and 10-18 back up the left.
+        p15 = [43, 44, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, None, None, None]
+        by_pos = sorted(self.board.pins, key=lambda p: p.pos)
+        right = [p.gpio for p in by_pos if p.side == "R"]
+        left = [p.gpio for p in by_pos if p.side == "L"]
+        self.assertEqual(right + left[::-1], p15)
+
+    def test_silkscreen_names_the_gpio(self):
+        for pin in self.board.pins:
+            if pin.name.isdigit():
+                self.assertEqual(pin.gpio, int(pin.name), pin.name)
+
+    def test_gpio3_is_the_only_strapping_edge_pad(self):
+        # ESP32-S3 datasheet v2.2 Table 3-1: GPIO0, 3, 45 and 46; only GPIO3
+        # reaches an edge pad on this board.
+        self.assertEqual([p.gpio for p in self.board.pins if p.strapping], [3])
 
 
 SIDECAR = """\
