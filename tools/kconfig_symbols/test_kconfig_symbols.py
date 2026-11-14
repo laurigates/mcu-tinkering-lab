@@ -13,10 +13,12 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from kconfig_symbols import check, extract
 from kconfig_symbols.symbols import (
     assignments,
+    fenced_assignments,
     format_list,
     kconfig_symbols,
     lock_versions,
@@ -124,6 +126,35 @@ class ParserTests(unittest.TestCase):
             "CONFIG_D_NOT_AN_ASSIGNMENT\n"
         )
         self.assertEqual(assignments(text), [(2, "A"), (4, "B"), (5, "C")])
+
+    def test_fenced_assignments_read_code_blocks_only(self):
+        # Board pages tag their snippets `ini` or leave them untagged (#1092),
+        # so the fence's info string does not matter.
+        text = (
+            "Prose naming CONFIG_OUTSIDE=y is not a snippet.\n"
+            "```ini\n"
+            "# CONFIG_UNSET is not set\n"
+            "CONFIG_A=y\n"
+            "```\n"
+            "CONFIG_BETWEEN=y\n"
+            "  ~~~\n"
+            '  CONFIG_B="x"\n'
+            "  ```\n"
+            "  CONFIG_INSIDE_TILDES=1\n"
+            "  ~~~\n"
+            "`CONFIG_INLINE=y`\n"
+        )
+        self.assertEqual(
+            fenced_assignments(text),
+            [(3, "UNSET"), (4, "A"), (8, "B"), (10, "INSIDE_TILDES")],
+        )
+
+    def test_an_unclosed_fence_runs_to_the_end(self):
+        self.assertEqual(fenced_assignments("```\nCONFIG_A=y\n"), [(2, "A")])
+
+    def test_a_shorter_fence_inside_a_longer_one_does_not_close_it(self):
+        text = "````\n```\nCONFIG_A=y\n```\n````\nCONFIG_B=y\n"
+        self.assertEqual(fenced_assignments(text), [(3, "A")])
 
     def test_manifest_dependencies(self):
         text = """
@@ -525,6 +556,101 @@ class RepoTests(unittest.TestCase):
         count, findings = check.check_repo()
         self.assertGreater(count, 10)
         self.assertEqual(findings, [], "\n" + "\n".join(findings))
+
+    def test_every_fenced_sdkconfig_snippet_in_markdown_is_defined(self):
+        # #1092: board pages prescribed CONFIG_TINYUSB and others nothing defines.
+        count, findings = check.check_markdown()
+        # Control: the board pages, rules and skills hold snippets, so a broken
+        # fence parser or an empty file list cannot pass by finding none.
+        self.assertGreater(count, 5)
+        self.assertEqual(findings, [], "\n" + "\n".join(findings))
+
+
+class CheckMarkdownTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.idf = _list("idf", "v9.9", {"IDF_ONLY"})
+        self.components = {
+            "espressif/x": {"1.0": _list("espressif/x", "1.0", {"X_SYM"})}
+        }
+        kconfig = _write(
+            self.root / "packages/p/components/c/Kconfig", "config LOCAL_SYM\n"
+        )
+        self.kconfigs = [kconfig]
+
+    def run_check(self, text: str) -> list[str]:
+        doc = _write(self.root / "docs/reference/boards/b.md", text)
+        return check.check_markdown_file(
+            doc,
+            check.markdown_known(self.idf, self.components, self.kconfigs),
+            self.root,
+        )
+
+    def test_symbols_from_idf_any_component_and_any_kconfig_pass(self):
+        text = "```ini\nCONFIG_IDF_ONLY=y\nCONFIG_X_SYM=y\nCONFIG_LOCAL_SYM=y\n```\n"
+        self.assertEqual(self.run_check(text), [])
+
+    def test_unknown_symbol_in_a_fence_is_reported_with_its_line(self):
+        findings = self.run_check(
+            "text\n```\nCONFIG_IDF_ONLY=y\nCONFIG_TINYUSB=y\n```\n"
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertTrue(
+            findings[0].startswith("docs/reference/boards/b.md:4: CONFIG_TINYUSB "),
+            findings[0],
+        )
+
+    def test_unknown_symbol_outside_a_fence_is_not_checked(self):
+        self.assertEqual(
+            self.run_check("Set CONFIG_TINYUSB=y? No.\n`CONFIG_ZB_ENABLED=y`\n"), []
+        )
+
+
+def _files_on_disk(root: Path, pattern: str) -> list[Path]:
+    """Stands in for check._git_ls over a throwaway tree: the files under
+    `root` that match the glob. The tree is not a repository, so the suite
+    spawns no git that a hook's GIT_DIR could point at the real one."""
+    return sorted(p for p in root.glob(pattern) if p.is_file())
+
+
+class MainTests(unittest.TestCase):
+    """main() over a throwaway tree: the tests above call check_markdown
+    directly, so they cannot see main() dropping its findings."""
+
+    # A name no Kconfig will define, so the test depends only on the code.
+    DEAD = "KCONFIG_SYMBOLS_TEST_DEAD"
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        _write(self.root / "packages/p/sdkconfig.defaults", "CONFIG_FREERTOS_HZ=1000\n")
+
+    def run_main(self, doc: str) -> tuple[int, str]:
+        _write(self.root / "docs/b.md", doc)
+        repo, markdown = check.check_repo, check.check_markdown
+        err = io.StringIO()
+        with (
+            mock.patch.object(check, "_git_ls", _files_on_disk),
+            mock.patch.object(check, "check_repo", lambda: repo(self.root)),
+            mock.patch.object(check, "check_markdown", lambda: markdown(self.root)),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(err),
+        ):
+            return check.main(), err.getvalue()
+
+    def test_a_dead_symbol_in_a_snippet_fails_the_run_and_is_named(self):
+        status, err = self.run_main(
+            f"```ini\nCONFIG_FREERTOS_HZ=1000\nCONFIG_{self.DEAD}=y\n```\n"
+        )
+        self.assertEqual(status, 1, err)
+        self.assertIn(f"docs/b.md:3: CONFIG_{self.DEAD} ", err)
+
+    def test_control_the_same_tree_without_it_passes(self):
+        status, err = self.run_main("```ini\nCONFIG_FREERTOS_HZ=1000\n```\n")
+        self.assertEqual(status, 0, err)
 
 
 if __name__ == "__main__":

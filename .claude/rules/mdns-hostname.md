@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-03
+reviewed: 2026-11-13
 paths:
   - 'packages/**/*wifi*'
   - 'packages/**/main/main.{c,cpp}'
@@ -36,7 +36,12 @@ All ESP32 projects that connect to WiFi in STA mode MUST configure mDNS so the d
 
 ## Hostname Convention
 
-Use the project directory name as the hostname (e.g., `esp32-cam-webserver`, `robocar`, `it-troubleshooter`). This keeps hostnames predictable and consistent.
+Use the project directory name as the hostname (e.g., `robocar`, `it-troubleshooter`, `brainbox`). This keeps hostnames predictable and consistent.
+
+cam-webserver (`esp32-cam`), llm-telegram (`esp32cam-llm-telegram`) and
+gemini-vision (`xiao-vision`) carry hostnames that predate this convention.
+They are listed below as they are; a flashed device keeps its address until
+its firmware changes the call.
 
 ## Placement
 
@@ -44,10 +49,15 @@ Initialize mDNS **after** WiFi has connected (after `IP_EVENT_STA_GOT_IP` or equ
 
 ## Current Project Hostnames
 
+Every `mdns_hostname_set()` call under `packages/`
+(`git grep -n 'mdns_hostname_set(' -- packages ':!**/managed_components/**'`):
+
 | Project | Hostname | URL |
 |---------|----------|-----|
-| esp32-cam-webserver | `esp32-cam` | `http://esp32-cam.local` |
-| esp32cam-llm-telegram | `esp32cam-llm-telegram` | `esp32cam-llm-telegram.local` |
-| robocar | `robocar` | `robocar.local` |
-| nfc-scavenger-hunt | `nfc-scavenger-hunt` | `nfc-scavenger-hunt.local` |
-| it-troubleshooter | `it-troubleshooter` | `it-troubleshooter.local` |
+| `camera-vision/cam-webserver` | `esp32-cam` | `http://esp32-cam.local` |
+| `camera-vision/gemini-vision` | `xiao-vision` | `http://xiao-vision.local/` |
+| `camera-vision/llm-telegram` | `esp32cam-llm-telegram` | `esp32cam-llm-telegram.local` |
+| `games/nfc-scavenger-hunt` | `nfc-scavenger-hunt` | `nfc-scavenger-hunt.local` |
+| `networking/it-troubleshooter` | `it-troubleshooter` | `it-troubleshooter.local` |
+| `robotics/robocar` | `robocar` | `robocar.local` |
+| `thinkpack/brainbox` | `brainbox` | `brainbox.local` |

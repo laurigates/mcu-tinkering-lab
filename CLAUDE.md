@@ -59,8 +59,10 @@ mcu-tinkering-lab/
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # Reusable ESP-IDF components
+│       ├── host-test/              # Shared headers for the component host suites
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
 │       ├── ota-github/             # GitHub Releases OTA updater
+│       ├── log-udp/                # SoftAP + UDP broadcast log sink (SSID and password via Kconfig)
 │       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
 ├── .github/workflows/              # CI/CD pipelines
 ├── tools/scaffold/                 # Project scaffolding scripts
@@ -83,7 +85,7 @@ mcu-tinkering-lab/
 | Python type checker | ty (astral) |
 | Secret scanning | gitleaks |
 | Pre-commit | pre-commit (8 hooks) |
-| CI/CD | GitHub Actions (11+ workflows) |
+| CI/CD | GitHub Actions (see CI/CD Workflows below) |
 | Containers | Docker + docker-compose |
 | Carrier PCBs | KiCad 10.0.6 (local; CI is KiCad-free) |
 
@@ -215,6 +217,14 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `carrier-check.yml` | Push/PR (path-filtered) | KiCad-free carrier check: `tools/kicad` tests, vendored-library hashes, schematic regenerates byte-identical, board pads match the join, the check stamp matches the committed files, every BOM part has an `lcsc` or `buy` source (`kicad.sourcing`) ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)) | No (local) |
 | `refresh-idf-locks.yml` | Monthly / manual | Regenerate every git-tracked ESP-IDF `dependencies.lock` and open one PR with the diff — see [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md) | No (local) |
 | `issue-labels.yml` | Issue and PR events / push of the taxonomy / weekly / manual | Type and routing labels (`build:`, `area:`, `core:`) from titles, quoted paths and changed files; clears `blocked` when every linked blocker closes; weekly label audit. No model. Writes for every event but `pull_request`, with `pr-labels: false` (a manual run defaults to `dry-run: true`); a second call on `pull_request` is always `dry-run: true` and only previews a PR's labels in its job summary (#1066) | `reusable-issue-labels.yml` |
+| `build-guide-check.yml` | Push/PR (path-filtered) / manual | Runs `tools/check-typst-docs.py`, then regenerates each `docs/auto/pin_defs.typ` and pinout SVG and recompiles every committed Typst document with the pinned CLI; fails on any drift — see [`.claude/rules/build-guide-drift-guard.md`](.claude/rules/build-guide-drift-guard.md) | No (local) |
+| `hardware-check.yml` | Push/PR (path-filtered) / manual | `just hardware::check` spelled out: the `tools/hardware` unit tests, then `hardware.docs --check` on every generated Markdown block | No (local) |
+| `schematics-check.yml` | Push/PR (path-filtered) / manual | The `docs/schematics` test suites, then re-renders every circuit and fails when an SVG differs from the committed one; PNG drift is only a notice | No (local) |
+| `test-melody-train.yml` | Push/PR to main/develop (path-filtered) / manual | melody-detector training package: ruff, ty, pytest, and the quantize-extra test, with `UV_LOCKED=1` | No (local) |
+| `merge-method.yml` | PR opened/edited/sync/labeled | Advisory `merge-method` check and `merge:rebase` / `merge:squash` label; never required, and a human-applied `merge:*` label overrides | `reusable-merge-method.yml` |
+| `pr-base-coverage-notice.yml` | PR opened/reopened/base edited | Comments on a PR whose base is not main/develop, since some workflows do not run for it (#487); builds and tests nothing | No (local) |
+| `notebook-doc-reminder.yml` | PR (path-filtered) | Comments with the NotebookLM notebooks a PR's changed files map to — see `docs/reference/notebook-mapping.md` | No (local) |
+| `notebook-refresh-reminder.yml` | Monthly / manual | Opens the month's NotebookLM refresh checklist issue (label `notebooks`) unless one is open | No (local) |
 
 ## Important Paths
 
@@ -229,7 +239,8 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `docs/reference/parts/` — the parts registry: one TOML per physical part a carrier mounts (KiCad symbol, footprint, LCSC number, pin map and where the pin order came from), named from `hardware.toml` by `part = "<slug>"`
 - `docs/reference/blocks/` — circuit blocks: a stage (buck, pack-input protection) designed once from registry parts, used from `hardware.toml` by `[blocks.<id>]` and expanded when the file is read (`tools/hardware/blocks.py`, [ADR-031](docs/decisions/ADR-031-circuit-blocks.md))
 - `docker-compose.yml` — ESP-IDF container service definition, built from the `Dockerfile` (`espressif/idf:v5.5.6`). The ESP-IDF version is set in the `Dockerfile`, the compose image tag and `esp-idf-tools` volume name, and `IDF_VERSION` in `_ci-build-esp32.yml`, `build-firmware.yml` and `refresh-idf-locks.yml`; `tools/kconfig_symbols/test_kconfig_symbols.py` fails when they disagree
-- `tools/kconfig_symbols/` — checks every tracked `sdkconfig.defaults` without a build: each symbol must be defined by ESP-IDF (`idf-v<version>.txt`, extracted from the `espressif/idf` image by `just kconfig-symbols::idf`), the project's own Kconfig files, or its managed components (`components/<ns>__<name>@<version>.txt`, recorded from a build's `managed_components/` by `just kconfig-symbols::component`). ESP-IDF ignores an unknown symbol with only a build-log warning (#707). Runs as the `kconfig-symbols` pre-commit hook; a test fails when the ESP-IDF list and the Dockerfile's IDF version disagree
+- `tools/kconfig_symbols/` — checks every tracked `sdkconfig.defaults` without a build: each symbol must be defined by ESP-IDF (`idf-v<version>.txt`, extracted from the `espressif/idf` image by `just kconfig-symbols::idf`), the project's own Kconfig files, or its managed components (`components/<ns>__<name>@<version>.txt`, recorded from a build's `managed_components/` by `just kconfig-symbols::component`). ESP-IDF ignores an unknown symbol with only a build-log warning (#707). It also checks the assignments in fenced code blocks of tracked Markdown, against ESP-IDF, every recorded component and every tracked Kconfig file together (#1092). Runs as the `kconfig-symbols` pre-commit hook; a test fails when the ESP-IDF list disagrees with any of the ESP-IDF pins the `docker-compose.yml` entry above lists
+- `tools/check-md-links.py` — fails on a relative Markdown link whose target git does not track (#1147). Runs as the `check-md-links` pre-commit hook on every commit, since moving a target breaks a link without touching a `.md`, and in `test.yml`'s CI Config Hooks job, so a docs-only PR is checked. Each exclude in its `EXCLUDES` carries its reason
 - `tools/refresh-idf-locks.py` — the one update path for git-tracked `dependencies.lock` files (`just refresh-idf-locks`, and the monthly `refresh-idf-locks.yml`). Nothing else re-resolves a tracked lock while its `idf_component.yml` is unchanged; editing the manifest re-resolves on the next build. Procedure: [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md)
 - `packages/components/host-test/` — `unity_compat.h`, `esp_log.h` and `esp_err.h`, shared by every component host suite (`packages/<...>/components/<name>/test/Makefile`); `just components::test` builds and runs all of them (#1077)
 - `.clang-format` — C/C++ formatting rules

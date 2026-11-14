@@ -59,10 +59,12 @@ link is back.
   Compatibility* turned on.
 - The build has no BLE. Internal RAM was once driven to 259 bytes, before
   mbedTLS moved to PSRAM.
-- The shared `improv-wifi` component treats Improv Serial command 0x02 as
-  *Identify* rather than *Request current state*. It sends 0xFE instead of 0x03
-  for "unable to connect", and it has no scan RPC (`improv_wifi.c:32-34`,
-  `improv_wifi.h:46`; improv-wifi.com/serial).
+- Until #1075 the shared `improv-wifi` component treated Improv Serial command
+  0x02 as *Identify* rather than *Request current state*, and sent 0xFE
+  instead of 0x03 for "unable to connect". #1075 fixed both in code
+  (`CMD_REQUEST_STATE`, `IMPROV_ERROR_UNABLE_CONNECT`); the bench run against
+  ESP Web Tools is still pending. It still has no scan RPC
+  (improv-wifi.com/serial).
 - Nothing decodes a QR code or reads text on the device.
 - The 960 KB `spiffs` partition is allocated but unused (`partitions.csv:18`).
   The app image is 1.34 MB of a 3.5 MB OTA slot (v0.2.13).

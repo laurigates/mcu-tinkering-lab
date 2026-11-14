@@ -23,6 +23,12 @@ when one of these defines it:
 A component with no recorded list is named in the finding, so a symbol it
 would define reads as "record the component", never as passing.
 
+The same check reads every assignment inside a fenced code block of a
+git-tracked Markdown file (issue #1092). A doc belongs to no one project, so
+its snippets are checked against ESP-IDF, every recorded component list and
+every tracked Kconfig file together: a symbol only another project's
+components define still passes.
+
 Run: PYTHONPATH=tools python3 -m kconfig_symbols.check   (just kconfig-symbols::check)
 Exit: 0 when every symbol is known; 1 otherwise.
 """
@@ -40,6 +46,7 @@ from .symbols import (
     SymbolList,
     assignments,
     component_file_name,
+    fenced_assignments,
     kconfig_symbols,
     lock_versions,
     manifest_dependencies,
@@ -242,6 +249,46 @@ def tracked_locks(root: Path = REPO_ROOT) -> dict[Path, dict[str, str]]:
     }
 
 
+def markdown_known(
+    idf: SymbolList, components: Components, kconfigs: list[Path]
+) -> frozenset[str]:
+    """Every symbol a snippet in a doc may name: a board page belongs to no one
+    project, so it is checked against ESP-IDF, every recorded component and
+    every tracked Kconfig file together."""
+    symbols = set(idf.symbols)
+    for versions in components.values():
+        for parsed in versions.values():
+            symbols |= parsed.symbols
+    for path in kconfigs:
+        symbols |= kconfig_symbols(path.read_text(encoding="utf-8", errors="replace"))
+    return frozenset(symbols)
+
+
+def check_markdown_file(
+    doc: Path, known: frozenset[str], root: Path = REPO_ROOT
+) -> list[str]:
+    rel = doc.relative_to(root).as_posix()
+    return [
+        f"{rel}:{line}: CONFIG_{symbol} in a fenced snippet is not a Kconfig symbol"
+        " in ESP-IDF, any recorded component or any Kconfig file in the repo"
+        for line, symbol in fenced_assignments(
+            doc.read_text(encoding="utf-8", errors="replace")
+        )
+        if symbol not in known
+    ]
+
+
+def check_markdown(root: Path = REPO_ROOT) -> tuple[int, list[str]]:
+    """(Markdown files holding a fenced sdkconfig assignment, findings)."""
+    known = markdown_known(idf_list(), component_lists(), _git_ls(root, "**/Kconfig*"))
+    docs = [
+        p
+        for p in _git_ls(root, "**/*.md")
+        if fenced_assignments(p.read_text(encoding="utf-8", errors="replace"))
+    ]
+    return len(docs), [f for doc in docs for f in check_markdown_file(doc, known, root)]
+
+
 def check_repo(root: Path = REPO_ROOT) -> tuple[int, list[str]]:
     idf, components, locks = idf_list(), component_lists(), tracked_locks(root)
     files = tracked_defaults(root)
@@ -258,6 +305,8 @@ def main() -> int:
     if not count:
         print("no tracked sdkconfig.defaults found under packages/", file=sys.stderr)
         return 1
+    docs, doc_findings = check_markdown()
+    findings += doc_findings
     if findings:
         print("\n".join(findings), file=sys.stderr)
         print(
@@ -266,7 +315,10 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"{count} sdkconfig.defaults files: every symbol is defined")
+    print(
+        f"{count} sdkconfig.defaults files and the snippets in {docs} Markdown"
+        " files: every symbol is defined"
+    )
     return 0
 
 

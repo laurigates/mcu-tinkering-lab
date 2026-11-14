@@ -28,8 +28,11 @@ It differs from the other doc skills by audience and format:
      channel assignments. Pin numbers come from here, not the README.
    - `WIRING.md` — existing wiring tables, I²C topology, power diagram.
    - `README.md`, `CLAUDE.md` — purpose, architecture, provisioning, OTA notes.
-   - `sdkconfig.defaults` — target chip, PSRAM/flash size, brown-out, mDNS,
+   - `sdkconfig.defaults` — target chip, PSRAM/flash size, brown-out,
      stack sizes, console. Surface any load-bearing settings in troubleshooting.
+   - `main/idf_component.yml` — managed components, which have no enable
+     switch in `sdkconfig.defaults`: mDNS is `espressif/mdns` here, not a
+     `sdkconfig.defaults` line.
    - `justfile` — real build / flash / monitor recipe names and flash offsets.
    - `partitions.csv` — flash layout / OTA partitions and offsets.
    - `main/CMakeLists.txt` — `REQUIRES` reveals components (camera, mdns, ota…).
