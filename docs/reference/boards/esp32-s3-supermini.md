@@ -5,7 +5,8 @@ USB, sold under the name "ESP32-S3 SuperMini" by several makers. It is the
 board of the ThinkPack chatterbox and finderbox (their `flasher.json` `board`
 field), and boombox, glowbug and the `thinkpack-rc522` component name it too.
 The nfc-scavenger-hunt game has a pin block for it.
-The silicon is described in [`mcu--esp32-s3.md`](../datasheets/mcu--esp32-s3.md);
+The silicon is described in [`mcu--esp32-s3.md`](../datasheets/mcu--esp32-s3.md),
+and [`esp32-s3.md`](esp32-s3.md) compares the chip family and its boards;
 this page holds only what is particular to the board.
 
 ## The fitted board
@@ -16,7 +17,10 @@ number of sites without a listed manufacturer"
 ([circuitpython.org](https://circuitpython.org/board/generic_esp32s3_supermini/)).
 **Which variant Lauri owns is not known.** No listing link or photo of the
 fitted boards is in the repository, and no project records a chip marking or an
-`esptool.py chip_id` read.
+`esptool.py chip_id` read. The one record of the purchase is the parts-drawer
+label in `tools/labels/data/drawers-2026-10.toml` (value "S3 SuperMini", stock
+slug `esp32-s3-supermini`, "AliExpress 03/2026"); the listing behind that entry
+is the way to the photos.
 
 The variants a primary source describes:
 
@@ -26,8 +30,10 @@ The variants a primary source describes:
 | Generic ESP32-S3 SuperMini | 15 GPIO on the castellated edges and 20 on underside pads; no charger mentioned. A unit marked `HW747 V0.0.2` drives its RGB LED in RGB rather than GRB order | ESP32-S3FH4R2 | CircuitPython's board page and board definition (`adafruit/circuitpython` at `519f3530`, `ports/espressif/boards/generic_esp32s3_supermini/`) |
 | "A random ESP32-S3 Super Mini product" | A plain LED and an addressable RGB LED, both on GPIO48 | ESP32-S3FH4R2 | [UnsignedArduino/ESP32-S3-Super-Mini-Test](https://github.com/UnsignedArduino/ESP32-S3-Super-Mini-Test) `README.md` lines 3 and 11 (at `b9ba4904`) |
 
-Every source found names the ESP32-S3FH4R2, but espboards.dev hedges: "Most
-S3 SuperMinis are built on the ESP32-S3FH4R2" and "These boards come from many
+The three variants above name the ESP32-S3FH4R2. They are not the only ones:
+CircuitPython's board page adds "There is even an early variant with 8M Flash
+and no PSRAM", without naming its chip, and espboards.dev hedges: "Most S3
+SuperMinis are built on the ESP32-S3FH4R2" and "These boards come from many
 factories, so verify what you actually got". No source was found for a
 SuperMini with octal PSRAM (an R8 or R16V part).
 
@@ -136,7 +142,9 @@ From datasheet §3 and Table 3-1 (p. 32).
 |---|---|---|
 | GPIO19, GPIO20 | USB D− and D+ to the USB-C connector; not broken out | Datasheet Table 2-8 (p. 24), §2.3.4 (p. 25) |
 | GPIO26–GPIO32 | SPI0/1 to the in-package flash and PSRAM; not broken out | Datasheet §2.3.5 (p. 26), Table 2-14 (p. 31) |
-| GPIO33–GPIO37 | Free on the FH4R2: they carry octal SPI only on parts with 8-line flash or PSRAM | Datasheet §2.3.5 (p. 26), Table 2-14 (p. 31) |
+
+GPIO33–GPIO37 are free on the FH4R2. They carry octal SPI only on parts with
+8-line flash or PSRAM (datasheet §2.3.5, p. 26, and Table 2-14, p. 31).
 
 ## Power
 
@@ -153,7 +161,7 @@ is involved. To force download mode, hold BOOT and press RESET (CircuitPython
 board page), or hold BOOT while plugging in (espboards.dev). UnsignedArduino
 `README.md` line 7 reports that some boards need this for every upload.
 
-ESP-IDF settings for the ESP32-S3FH4R2 every source names (symbols checked
+ESP-IDF settings for the ESP32-S3FH4R2 the three variants name (symbols checked
 against `tools/kconfig_symbols/idf-v5.5.6.txt`):
 
 ```ini
@@ -167,7 +175,8 @@ CONFIG_SPIRAM_MODE_QUAD=y
 ## Known issues and quirks
 
 - **Weak Wi-Fi.** CircuitPython sets its default transmit power to 15 to
-  "reduce wifi.radio.tx_power due to the antenna design of this board" (`mpconfigboard.h` lines 19–20).
+  "reduce wifi.radio.tx_power due to the antenna design of this board"
+  (`mpconfigboard.h` lines 19–20).
   espboards.dev reports units with the antenna soldered backwards.
 - **The Tenstar drawing's prose is copied from the ESP32-C3 board.** Its
   description and parameter list say "32-bit RISC-V single-core processor,
@@ -253,8 +262,7 @@ also sets `CONFIG_SPIRAM_MODE_OCT=y` (line 12) and
   ROBOT pinout drawing, the maker's own document, watermarked, as committed to
   `esphome/esphome-devices` at `ff000958`
   (`src/docs/devices/TENSTAR-ROBOT-ESP32-S3-SuperMini/Pinouts.webp`). The
-  copy espboards.dev links on alicdn is the same image: a pixel comparison of
-  the two decoded images gave a mean absolute difference of 0.49 of 255.
+  copy espboards.dev links on alicdn is the same drawing.
 - **GPIO-to-name map, the BOOT button, the RGB LED and memory modes:**
   CircuitPython's board definition, `adafruit/circuitpython` at
   `519f353038965db798d8476b80a193ad4877c965`,
@@ -275,8 +283,12 @@ other people's boards and documents.**
 ## Check on the physical board
 
 - [ ] Read the chip marking, or run `esptool.py chip_id` and `flash_id`, and
-      record which ESP32-S3 variant it is (every source says ESP32-S3FH4R2,
-      which has 2 MB quad PSRAM, not octal).
+      record which ESP32-S3 variant it is (the three variants above name the
+      ESP32-S3FH4R2, which has 4 MB flash and 2 MB quad PSRAM, not octal). An
+      8 MB flash size with no PSRAM is the early variant CircuitPython names.
+- [ ] Find the listing behind the drawer label's stock entry
+      (`esp32-s3-supermini`, AliExpress 03/2026) and read its photos, as the
+      board-reference skill's step 2 describes.
 - [ ] Record which variant it is: battery pads and `BOOST` jumper on the
       underside (Tenstar) or not, and any marking such as `HW747 V0.0.2`.
 - [ ] Confirm the edge order: left `TX`, `RX`, `1`–`7` and right `5V`, `GND`,
