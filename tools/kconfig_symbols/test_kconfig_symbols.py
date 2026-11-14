@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import io
-import os
 import re
-import subprocess
 import sys
 import tempfile
 import textwrap
@@ -610,28 +608,32 @@ class CheckMarkdownTests(unittest.TestCase):
         )
 
 
+def _files_on_disk(root: Path, pattern: str) -> list[Path]:
+    """Stands in for check._git_ls over a throwaway tree: the files under
+    `root` that match the glob. The tree is not a repository, so the suite
+    spawns no git that a hook's GIT_DIR could point at the real one."""
+    return sorted(p for p in root.glob(pattern) if p.is_file())
+
+
 class MainTests(unittest.TestCase):
-    """main() over a throwaway git tree: the tests above call check_markdown
+    """main() over a throwaway tree: the tests above call check_markdown
     directly, so they cannot see main() dropping its findings."""
+
+    # A name no Kconfig will define, so the test depends only on the code.
+    DEAD = "KCONFIG_SYMBOLS_TEST_DEAD"
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        # GIT_DIR or GIT_INDEX_FILE from a hook would point git at the real repo.
-        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        patcher = mock.patch.dict(os.environ, env, clear=True)
-        patcher.start()
-        self.addCleanup(patcher.stop)
         _write(self.root / "packages/p/sdkconfig.defaults", "CONFIG_FREERTOS_HZ=1000\n")
-        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
 
     def run_main(self, doc: str) -> tuple[int, str]:
         _write(self.root / "docs/b.md", doc)
-        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
         repo, markdown = check.check_repo, check.check_markdown
         err = io.StringIO()
         with (
+            mock.patch.object(check, "_git_ls", _files_on_disk),
             mock.patch.object(check, "check_repo", lambda: repo(self.root)),
             mock.patch.object(check, "check_markdown", lambda: markdown(self.root)),
             contextlib.redirect_stdout(io.StringIO()),
@@ -641,10 +643,10 @@ class MainTests(unittest.TestCase):
 
     def test_a_dead_symbol_in_a_snippet_fails_the_run_and_is_named(self):
         status, err = self.run_main(
-            "```ini\nCONFIG_FREERTOS_HZ=1000\nCONFIG_TINYUSB=y\n```\n"
+            f"```ini\nCONFIG_FREERTOS_HZ=1000\nCONFIG_{self.DEAD}=y\n```\n"
         )
         self.assertEqual(status, 1, err)
-        self.assertIn("docs/b.md:3: CONFIG_TINYUSB ", err)
+        self.assertIn(f"docs/b.md:3: CONFIG_{self.DEAD} ", err)
 
     def test_control_the_same_tree_without_it_passes(self):
         status, err = self.run_main("```ini\nCONFIG_FREERTOS_HZ=1000\n```\n")
