@@ -287,7 +287,7 @@ repos:
         entry: python3 -m unittest tools/test_post_edit_lint_hook.py
         language: system
         pass_filenames: false
-        files: '^(\.claude/hooks/post-edit-lint\.sh|tools/test_post_edit_lint_hook\.py|ruff\.toml)$'
+        files: '^(\.claude/hooks/post-edit-lint\.sh|tools/test_post_edit_lint_hook\.py|ruff\.toml|\.pre-commit-config\.yaml)$'
 
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
