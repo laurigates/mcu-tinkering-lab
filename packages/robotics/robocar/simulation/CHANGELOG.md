@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.13...robocar-simulation-v0.2.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **robocar-simulation:** modules are imported as `robocar_sim.<name>`, not as top-level names from src/. The WebSocket and serial bridge, the AI command processor and the WiFi and OTA models are gone, and main.py no longer takes --serial, --no-bridge or --demo-only. The legacy demo and visualiser need `uv sync --extra viz`.
+
+### Features
+
+* **robocar-simulation:** cut the simulation to the robocar_sim plant library ([f84c09c](https://github.com/laurigates/mcu-tinkering-lab/commit/f84c09cc9d0768d669a47e3c31685464af4aa5fd))
+
 ## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.12...robocar-simulation-v0.1.13) (2026-11-14)
 
 
