@@ -61,7 +61,7 @@ The ESP32-S3 fills a gap that other ESP32 variants leave open:
 
 | Board | Flash/PSRAM | Form Factor | USB | Price |
 |-------|-------------|-------------|-----|-------|
-| Waveshare ESP32-S3-Zero | 4 MB / 2 MB | Stamp (tiny) | USB-C | ~$8 |
+| [Waveshare ESP32-S3-Zero](waveshare-esp32-s3-zero.md) | 4 MB / 2 MB | Stamp (tiny) | USB-C | ~$8 |
 | ESP32-S3-DevKitC-1 | 8–16 MB / 8–16 MB | Full-size | USB-C (dual) | ~$10 |
 | Seeed XIAO ESP32S3 | 8 MB / 8 MB | Thumb-sized | USB-C | ~$8 |
 | Seeed XIAO ESP32S3 Sense | 8 MB / 8 MB | Thumb-sized | USB-C | ~$14 (with camera + mic) |
