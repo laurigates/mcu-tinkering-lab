@@ -131,7 +131,12 @@ static void send_rpc_result(uint8_t command, const char *const *strings, size_t 
         }
         const size_t room = sizeof(data) - idx - 1;  // one byte for the length
         const size_t full = strlen(strings[i]);
+        // The check above leaves idx <= 253, so room is 1..252. cppcheck takes the
+        // branch that breaks and computes room as negative (it is a size_t).
+        // cppcheck-suppress knownConditionTrueFalse
         const size_t len = full < room ? full : room;
+        // A string of room bytes or more is truncated, and this logs it.
+        // cppcheck-suppress knownConditionTrueFalse
         if (len < full) {
             ESP_LOGW(TAG, "RPC 0x%02x string %u truncated from %u to %u bytes", command,
                      (unsigned)i, (unsigned)full, (unsigned)len);
@@ -158,7 +163,7 @@ static void handle_send_wifi_creds(const uint8_t *payload, uint8_t length)
     // Payload layout: [ssid_len, ssid..., pass_len, pass...]
     unsigned int idx = 0;  // unsigned int, so idx + len cannot wrap a uint8_t
 
-    if (idx >= (unsigned int)length) {
+    if (length == 0) {
         improv_wifi_send_error(IMPROV_ERROR_INVALID_RPC);
         return;
     }

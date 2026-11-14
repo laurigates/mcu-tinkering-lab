@@ -46,6 +46,8 @@ CPPCHECK_FLAGS=(
     --suppress=unusedStructMember
     --inline-suppr
     --template=gcc
+    # ESP-IDF macros (MACSTR, IPSTR, ...) that cppcheck otherwise stops at.
+    "--library=$(dirname "${BASH_SOURCE[0]}")/cppcheck-esp-idf.cfg"
 )
 
 # Print NUL-delimited list of in-scope C/C++ files under packages/.

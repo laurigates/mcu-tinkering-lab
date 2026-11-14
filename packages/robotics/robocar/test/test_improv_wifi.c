@@ -214,6 +214,7 @@ static int rpc_strings(const packet_t *p, uint8_t expect_command, char out[][96]
         TEST_ASSERT(idx + 1 + slen <= p->len);
         TEST_ASSERT(slen < 96);
         memcpy(out[count], p->data + idx + 1, slen);
+        // cppcheck-suppress arrayIndexOutOfBoundsCond ; TEST_ASSERT aborts at 96
         out[count][slen] = '\0';
         count++;
         idx += (size_t)1 + slen;
@@ -515,6 +516,7 @@ static void test_rpc_with_a_wrong_data_length_is_invalid(void)
     packet_t pkts[4];
     const int n = parse_packets(&s_custom, pkts, 4);
     TEST_ASSERT(n >= 1);
+    // cppcheck-suppress negativeIndex ; TEST_ASSERT above aborts when n < 1
     TEST_ASSERT(pkts[n - 1].type == TYPE_ERROR_STATE);
     TEST_ASSERT(pkts[n - 1].data[0] == IMPROV_ERROR_INVALID_RPC);
 }

@@ -99,7 +99,6 @@ static uint8_t heat_intensity(int dbm)
 void hot_cold_get_color(const hot_cold_state_t *state, uint8_t *r, uint8_t *g, uint8_t *b)
 {
     uint8_t red = 0;
-    uint8_t green = 0;
     uint8_t blue = 255;
 
     if (state != NULL && state->primed) {
@@ -113,7 +112,7 @@ void hot_cold_get_color(const hot_cold_state_t *state, uint8_t *r, uint8_t *g, u
         *r = red;
     }
     if (g != NULL) {
-        *g = green;
+        *g = 0; /* the gradient runs blue to red; green stays off */
     }
     if (b != NULL) {
         *b = blue;

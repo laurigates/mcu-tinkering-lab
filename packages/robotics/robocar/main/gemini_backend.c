@@ -345,6 +345,7 @@ static cJSON *build_tools(bool allow_speak, bool allow_note)
      * make a noise this cycle govern it — an instruction to honk "sparingly"
      * is one the stateless model cannot check (stateless-model-gating.md).
      * The parser turns the call into a `[name]` tag at the front of the line. */
+    // cppcheck-suppress duplicateCondition ; a separate tool, gated like speak on purpose
     if (allow_speak) {
         cJSON *fn = cJSON_CreateObject();
         cJSON_AddStringToObject(fn, "name", "sound");

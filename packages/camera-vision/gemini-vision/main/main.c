@@ -278,6 +278,8 @@ extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 static esp_err_t root_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
+    // Both symbols are the linker's start and end of the one embedded index.html.
+    // cppcheck-suppress comparePointers
     return httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start);
 }
 

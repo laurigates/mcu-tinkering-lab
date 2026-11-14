@@ -117,6 +117,8 @@ static const param_entry_t param_table[PARAM_COUNT] = {
 
 static float *field_of(balance_params_t *p, const param_entry_t *e)
 {
+    // e->offset is offsetof() a float field of balance_params_t (PENTRY above).
+    // cppcheck-suppress invalidPointerCast
     return (float *)((unsigned char *)p + e->offset);
 }
 

@@ -106,7 +106,7 @@ static void test_out_of_order_complete(void)
     reassembly_slot_t *completed = NULL;
     reassemble_result_t r;
 
-    uint8_t order[] = {2, 0, 1};
+    const uint8_t order[] = {2, 0, 1};
     for (int step = 0; step < 3; step++) {
         thinkpack_fragment_data_t f;
         make_fragment(&f, 20, order[step], total, MSG_LLM_REQUEST, (uint8_t)(0x20 + order[step]));
