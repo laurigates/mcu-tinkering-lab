@@ -183,8 +183,10 @@ The script asks for a name and domain folder, then copies
 `packages/camera-vision/cam-webserver` (or a project you name), including its
 dotfiles: `CMakeLists.txt`, `main/`, `sdkconfig.defaults`, `.gitignore` and a
 justfile using the shared containerized recipes. It leaves out the template's
-`flasher.json`, `CHANGELOG.md`, `CLAUDE.md` and `dependencies.lock`, resets
-`version.txt` to 0.1.0 and sets the mDNS hostname to the project name. Then:
+`flasher.json`, `CHANGELOG.md`, `CLAUDE.md`, `.claude/` and
+`dependencies.lock`, resets `version.txt` to 0.1.0 where the source has one
+and, where `main/` calls `mdns_hostname_set()`, sets the mDNS hostname to the
+project name. Then:
 
 1. Register the module in the root `justfile`:
    `mod <name> 'packages/<domain>/<name>'`.

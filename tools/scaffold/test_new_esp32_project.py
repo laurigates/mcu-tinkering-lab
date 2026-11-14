@@ -195,8 +195,8 @@ class CopyFromExisting(unittest.TestCase):
 
 class CopyFromBareSource(unittest.TestCase):
     """Project type 4 from a source with no mDNS call, no version.txt and only
-    one of the release files, as packages/audio/kids-audio-toy lacks the first
-    two. The closing summary states only what the script did."""
+    one of the release files (packages/audio/kids-audio-toy lacks the mDNS
+    call). The closing summary states only what the script did."""
 
     @classmethod
     def setUpClass(cls):
