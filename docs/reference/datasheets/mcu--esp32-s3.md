@@ -1,6 +1,7 @@
 # ESP32-S3 (Xtensa LX7)
 
-**Used in:** Waveshare ESP32-S3-Zero
+**Used in:** Waveshare ESP32-S3-Zero ([board page](../boards/waveshare-esp32-s3-zero.md)),
+ESP32-S3 SuperMini ([board page](../boards/esp32-s3-supermini.md))
 
 ## Key Specs
 
@@ -13,8 +14,8 @@
 | WiFi | 802.11 b/g/n |
 | Bluetooth | BLE 5.0 |
 | USB | USB OTG 1.1 |
-| Flash | External, up to 16 MB (Octal SPI) |
-| PSRAM | External, up to 16 MB (Octal SPI) |
+| Flash | In the package or external, depending on the part. The ESP32-S3FH4R2 on the two boards above has 4 MB quad SPI in the package (datasheet Table 1-1) |
+| PSRAM | In the package or external, depending on the part. The ESP32-S3FH4R2 has 2 MB quad SPI in the package; a part with 8-line (octal) flash or PSRAM also takes GPIO33–GPIO37 (datasheet Table 2-14) |
 | AI acceleration | Vector instructions for neural networks |
 
 ## Datasheets & References
