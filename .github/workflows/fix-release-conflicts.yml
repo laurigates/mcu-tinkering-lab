@@ -7,8 +7,19 @@ on:
     - cron: '30 6 * * 1-5'  # Weekdays at 06:30 UTC
   workflow_dispatch:
 
+# Read-only by default; the caller job asks for what the reusable uses.
+permissions:
+  contents: read
+
 jobs:
   fix-conflicts:
+    # The scopes reusable-fix-release-conflicts.yml declares at its workflow
+    # level. A called workflow gets no more than its caller job grants, so a
+    # narrower block here fails the run at startup.
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     uses: laurigates/.github/.github/workflows/reusable-fix-release-conflicts.yml@main
     # App token, the same credentials sync-ai-rules.yml uses. The previous
     # secrets.MY_RELEASE_PLEASE_TOKEN was never created, so this ran on

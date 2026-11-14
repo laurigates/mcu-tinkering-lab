@@ -10,8 +10,21 @@ on:
   pull_request_review:
     types: [submitted]
 
+# Read-only by default; the caller job asks for what the reusable uses.
+permissions:
+  contents: read
+
 jobs:
   claude:
+    # The scopes reusable-claude.yml declares at its workflow level. A called
+    # workflow gets no more than its caller job grants, so a narrower block
+    # here fails the run at startup.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
     if: |
       github.event.sender.type != 'Bot' &&
       (

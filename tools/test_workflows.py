@@ -51,9 +51,11 @@ What the tests hold:
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
   calls the reusable Claude scan (issue #860).
 - Every workflow declares workflow-level ``permissions:``, except the
-  reusable callers listed in ``INHERITS_REPO_DEFAULT``. auto-fix.yml's caller
-  job grants the reusable's scopes itself, since the workflow level is
-  read-only.
+  reusable callers listed in ``INHERITS_REPO_DEFAULT`` (none now). The five
+  laurigates/.github reusable callers in PermissionsTest's table (auto-fix
+  and the four that inherited the repo default until issue #1103) are
+  read-only at workflow level, and each caller job grants exactly the scopes
+  its reusable declares.
 - A pre-commit hook that watches CI configuration (``.github/``,
   ``.claude/hooks/``, any root file but Markdown) runs on a PR
   that changes only that file: test.yml's ``any-code`` filter covers the file,
@@ -116,12 +118,7 @@ DRIFT_STEP_SUFFIX = "check for drift"
 # block here would cap the scopes that reusable declares (a startup_failure
 # if it is narrower). Give the caller job the reusable's scopes, as
 # auto-fix.yml does, then drop the file from this list.
-INHERITS_REPO_DEFAULT = {
-    "auto-resolve-conflicts.yml",
-    "claude.yml",
-    "fix-release-conflicts.yml",
-    "sync-ai-rules.yml",
-}
+INHERITS_REPO_DEFAULT: set[str] = set()
 
 # CI configuration: files whose hooks must run on a PR that changes nothing
 # else (issue #1089): .github/, the Claude Code hooks, and every root file but
@@ -802,26 +799,59 @@ class PermissionsTest(unittest.TestCase):
                 jobs = workflow["jobs"].values()
                 self.assertTrue(all("uses" in job for job in jobs))
 
-    def test_auto_fix_caller_grants_the_reusables_scopes(self):
-        # reusable-auto-fix.yml declares these at its workflow level; a called
-        # workflow gets no more than its caller job grants.
-        workflow = load("auto-fix.yml")
-        self.assertEqual(workflow["permissions"], {"contents": "read"})
-        (caller,) = [
-            job
-            for job in workflow["jobs"].values()
-            if "reusable-auto-fix.yml" in str(job.get("uses", ""))
-        ]
-        self.assertEqual(
-            caller.get("permissions"),
-            {
-                "contents": "write",
-                "pull-requests": "write",
-                "issues": "write",
-                "actions": "read",
-                "id-token": "write",
-            },
-        )
+    def test_reusable_callers_grant_the_reusables_scopes(self):
+        # Each caller, the laurigates/.github reusable it runs, and the scopes
+        # that reusable declares at its workflow level (read at @main on
+        # 2026-11-13). A called workflow gets no more than its caller job
+        # grants, so with a read-only workflow level the caller job grants
+        # exactly these. When a reusable adds a scope, its caller fails at
+        # startup until the scope is added here and in the caller.
+        callers = {
+            "auto-fix.yml": (
+                "reusable-auto-fix.yml",
+                {
+                    "contents": "write",
+                    "pull-requests": "write",
+                    "issues": "write",
+                    "actions": "read",
+                    "id-token": "write",
+                },
+            ),
+            "auto-resolve-conflicts.yml": (
+                "reusable-auto-resolve-conflicts.yml",
+                {"contents": "write", "pull-requests": "write", "issues": "write"},
+            ),
+            "claude.yml": (
+                "reusable-claude.yml",
+                {
+                    "contents": "write",
+                    "pull-requests": "write",
+                    "issues": "write",
+                    "id-token": "write",
+                    "actions": "read",
+                },
+            ),
+            "fix-release-conflicts.yml": (
+                "reusable-fix-release-conflicts.yml",
+                {"contents": "write", "pull-requests": "write", "actions": "write"},
+            ),
+            "sync-ai-rules.yml": (
+                "reusable-sync-ai-rules.yml",
+                {"contents": "write", "pull-requests": "write"},
+            ),
+        }
+        for name, (reusable, scopes) in sorted(callers.items()):
+            with self.subTest(workflow=name):
+                workflow = load(name)
+                self.assertEqual(workflow.get("permissions"), {"contents": "read"})
+                (caller,) = [
+                    job
+                    for job in workflow["jobs"].values()
+                    if str(job.get("uses", "")).startswith(
+                        f"laurigates/.github/.github/workflows/{reusable}@"
+                    )
+                ]
+                self.assertEqual(caller.get("permissions"), scopes)
 
 
 def glob_regex(glob: str) -> re.Pattern:
@@ -1218,6 +1248,234 @@ class BuildGuideDriftStepTest(unittest.TestCase):
     def test_a_failing_document_discovery_fails_the_step(self):
         result = self.run_step(STUB_GIT_FAIL="ls-files")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+# A `uses:` line and its ref. Third-party actions are pinned to a full commit
+# SHA with the tag in a trailing comment, which Renovate's github-actions
+# manager keeps in step (issue #1103). GitHub's own actions/*, the
+# laurigates/.github reusables (@main by design) and local ./ refs are exempt.
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)(.*)$")
+PINNED_SUFFIX = re.compile(r"@[0-9a-f]{40}\Z")
+VERSION_COMMENT = re.compile(r"\s+#\s+v\d+\.\d+\.\d+\Z")
+UNPINNED_BY_DESIGN = ("./", "actions/", "laurigates/.github/")
+
+
+def is_pinned(ref: str, rest: str) -> bool:
+    """A full 40-hex commit SHA, then a ``# vX.Y.Z`` comment and nothing else."""
+    return bool(PINNED_SUFFIX.search(ref) and VERSION_COMMENT.fullmatch(rest))
+
+
+def third_party_refs() -> list[tuple[str, int, str, str]]:
+    """(file, line, ref, rest of line) for each third-party ``uses:``."""
+    files = workflow_files() + sorted(
+        (ROOT / ".github" / "actions").glob("*/action.yml")
+    )
+    refs = []
+    for path in files:
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            m = USES_LINE.match(line)
+            if m and not m.group(1).startswith(UNPINNED_BY_DESIGN):
+                refs.append((str(path.relative_to(ROOT)), n, m.group(1), m.group(2)))
+    return refs
+
+
+class ActionPinTest(unittest.TestCase):
+    def test_third_party_actions_are_pinned_to_a_commit(self):
+        refs = third_party_refs()
+        self.assertTrue(refs)
+        unpinned = [
+            f"{f}:{n}: {ref}{rest}"
+            for f, n, ref, rest in refs
+            if not is_pinned(ref, rest)
+        ]
+        self.assertEqual(unpinned, [], "pin to the tag's commit SHA with # vX.Y.Z")
+
+    def test_pin_check_refuses_a_tag_and_a_bare_sha(self):
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        for ref, rest, pinned in (
+            (f"dorny/paths-filter@{sha}", " # v4.0.3", True),
+            ("dorny/paths-filter@v4.0.3", "", False),
+            (f"dorny/paths-filter@{sha}", "", False),
+            (f"dorny/paths-filter@{sha[:12]}", " # v4.0.3", False),
+        ):
+            with self.subTest(ref=ref, rest=rest):
+                self.assertEqual(is_pinned(ref, rest), pinned)
+
+
+class ActionlintGateTest(unittest.TestCase):
+    """The actionlint hook runs in CI Config Hooks on every event (#1103):
+    a local hook, so the coverage check above sees it, with shellcheck and
+    pyflakes off, which this session and a developer machine may lack. The
+    job installs the pinned release and checks its sha256 first; every other
+    job that runs all hooks skips it, and cloud sessions install the same
+    release."""
+
+    INSTALL_PKGS = ROOT / "scripts" / "install_pkgs.sh"
+    # The arguments of one `pre-commit run`, up to the end of the line or a
+    # shell operator, once backslash continuations are joined.
+    PRE_COMMIT_RUN = re.compile(r"\bpre-commit run\b([^\n|;&]*)")
+    # Flags of `pre-commit run` that take a value (`pre-commit run --help`,
+    # pre-commit 4.7.0): the word after one is not a hook id.
+    VALUE_FLAGS = frozenset(
+        [
+            "-c",
+            "--config",
+            "--color",
+            "--hook-stage",
+            "--remote-branch",
+            "--local-branch",
+            "--from-ref",
+            "--source",
+            "-s",
+            "--to-ref",
+            "--origin",
+            "-o",
+            "--pre-rebase-upstream",
+            "--pre-rebase-branch",
+            "--commit-msg-filename",
+            "--prepare-commit-message-source",
+            "--commit-object-name",
+            "--remote-name",
+            "--remote-url",
+            "--checkout-type",
+            "--is-squash-merge",
+            "--rewrite-command",
+        ]
+    )
+
+    @classmethod
+    def runs_every_hook(cls, run: str) -> bool:
+        """The script has a `pre-commit run` that names no hook id, so it runs
+        every hook. `pre-commit run "$hook"` and `pre-commit run ruff` name one."""
+        script = re.sub(r"\\\n\s*", " ", run)
+        for found in cls.PRE_COMMIT_RUN.finditer(script):
+            words = iter(found.group(1).split())
+            hook = None
+            for word in words:
+                if word == "--files":
+                    break  # the rest are file names
+                if word in cls.VALUE_FLAGS:
+                    next(words, None)
+                elif not word.startswith("-"):
+                    hook = word
+                    break
+            if hook is None:
+                return True
+        return False
+
+    def test_hook_switches_off_the_external_linters(self):
+        (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
+        entry = hook["entry"].split()
+        self.assertEqual(entry[0], "actionlint")
+        self.assertIn("-shellcheck=", entry)
+        self.assertIn("-pyflakes=", entry)
+
+    def test_config_hooks_job_installs_a_checked_pinned_release(self):
+        steps = load("test.yml")["jobs"][CONFIG_HOOKS_JOB]["steps"]
+        runs = [str(s.get("run", "")) for s in steps]
+        (install,) = [i for i, r in enumerate(runs) if "rhysd/actionlint" in r]
+        env = steps[install].get("env", {})
+        self.assertRegex(str(env.get("ACTIONLINT_VERSION")), r"^\d+\.\d+\.\d+$")
+        self.assertRegex(str(env.get("ACTIONLINT_SHA256")), r"^[0-9a-f]{64}$")
+        self.assertIn("sha256sum -c", runs[install])
+        hooks = [i for i, r in enumerate(runs) if "pre-commit run" in r]
+        self.assertLess(install, hooks[0])
+
+    def test_hook_runs_on_a_local_action_change(self):
+        # actionlint checks the inputs a workflow passes to a local action, so
+        # removing one from action.yml breaks the workflow that passes it.
+        (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
+        files = re.compile(hook["files"])
+        actions = [
+            p
+            for p in tracked_files()
+            if re.fullmatch(r"\.github/actions/.+/action\.ya?ml", p)
+        ]
+        self.assertIn(".github/actions/setup-tools/action.yml", actions)
+        for path in [".github/workflows/test.yml", ".github/actionlint.yaml", *actions]:
+            self.assertRegex(path, files)
+        for path in [".github/project-matrix.json", "tools/test_workflows.py"]:
+            self.assertNotRegex(path, files)
+
+    def test_this_suite_reruns_when_a_file_it_reads_changes(self):
+        # The tests of this class read the hook config, the local actions and
+        # install_pkgs.sh. The hook that runs this suite has to match them, or
+        # a local commit that changes only one of them skips the suite.
+        (hook,) = [h for h in local_hooks() if h["id"] == "workflow-structure"]
+        files = re.compile(hook["files"])
+        for path in (
+            ".pre-commit-config.yaml",
+            "scripts/install_pkgs.sh",
+            ".github/actions/setup-tools/action.yml",
+            ".github/workflows/test.yml",
+            "tools/test_workflows.py",
+        ):
+            self.assertRegex(path, files)
+
+    def test_every_full_pre_commit_run_installs_or_skips_actionlint(self):
+        # A job that runs every hook without installing actionlint fails on
+        # "Executable `actionlint` not found" unless SKIP names it.
+        workflow = load("test.yml")
+        full_runs = 0
+        for job_id, job in workflow["jobs"].items():
+            steps = job.get("steps") or []
+            installed = False
+            for step in steps:
+                run = str(step.get("run", ""))
+                if "rhysd/actionlint" in run and "sha256sum -c" in run:
+                    installed = True
+                if not self.runs_every_hook(run):
+                    continue
+                full_runs += 1
+                skip = {
+                    **(workflow.get("env") or {}),
+                    **(job.get("env") or {}),
+                    **(step.get("env") or {}),
+                }.get("SKIP", "")
+                skipped = {s.strip() for s in str(skip).split(",")}
+                with self.subTest(job=job_id, step=step.get("name")):
+                    self.assertTrue(
+                        installed or "actionlint" in skipped,
+                        "install actionlint before this step or add it to SKIP",
+                    )
+        self.assertGreater(full_runs, 0, "found no `pre-commit run` over all hooks")
+
+    def test_which_pre_commit_runs_count_as_running_every_hook(self):
+        # The forms the check above has to recognise, and the ones it must not.
+        every_hook = (
+            "pre-commit run --all-files --show-diff-on-failure",
+            "pre-commit run --all-files \\\n  --show-diff-on-failure",
+            "pre-commit run --from-ref origin/main --to-ref HEAD",
+            "pre-commit run --hook-stage manual --all-files",
+            "pre-commit run --files a.py b.py",
+            "pre-commit run -a || failed=1",
+        )
+        one_hook = (
+            'pre-commit run "$hook" --all-files --show-diff-on-failure',
+            "pre-commit run ruff --all-files",
+            "pre-commit run --all-files ruff",
+            "pre-commit run --hook-stage manual actionlint",
+            "pre-commit install",
+        )
+        for run in every_hook:
+            with self.subTest(run=run):
+                self.assertTrue(self.runs_every_hook(run))
+        for run in one_hook:
+            with self.subTest(run=run):
+                self.assertFalse(self.runs_every_hook(run))
+
+    def test_cloud_sessions_install_the_actionlint_ci_pins(self):
+        # scripts/install_pkgs.sh installs the release CI Config Hooks runs,
+        # checked against the same sha256, so `pre-commit run --all-files`
+        # passes in a cloud session.
+        steps = load("test.yml")["jobs"][CONFIG_HOOKS_JOB]["steps"]
+        (ci,) = [s for s in steps if "rhysd/actionlint" in str(s.get("run", ""))]
+        script = self.INSTALL_PKGS.read_text()
+        for name in ("ACTIONLINT_VERSION", "ACTIONLINT_SHA256"):
+            session = re.search(rf'^{name}="([^"]+)"', script, re.MULTILINE)
+            self.assertIsNotNone(session, f"{name} missing from install_pkgs.sh")
+            self.assertEqual(session.group(1), str(ci["env"][name]), name)
+        self.assertIn("sha256sum -c", script)
 
 
 if __name__ == "__main__":

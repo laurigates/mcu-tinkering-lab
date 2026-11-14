@@ -228,11 +228,31 @@ repos:
       # No run: script expands inputs.* or github.event.* through ${{ }}
       # (issue #855), plus the workflow wiring the file's docstring lists.
       # project-matrix.json: the suite runs build.yml's discovery step on it.
+      # It also reads the local actions' pins, this file's hooks and the
+      # actionlint pin in scripts/install_pkgs.sh, so it runs on those too.
       - id: workflow-structure
         name: Workflows pass untrusted text through env, and keep their release and Claude wiring
         entry: uv run --no-project --with pyyaml==6.0.3 python -m unittest tools/test_workflows.py
         language: system
-        files: '^(\.github/workflows/.*\.ya?ml|\.github/project-matrix\.json|tools/test_workflows\.py)$'
+        files: '^(\.github/workflows/.*\.ya?ml|\.github/actions/.+/action\.ya?ml|\.github/project-matrix\.json|tools/test_workflows\.py|\.pre-commit-config\.yaml|scripts/install_pkgs\.sh)$'
+        pass_filenames: false
+
+      # actionlint over every workflow (#1103): expression types, contexts,
+      # job needs, runner labels, permission scopes and the inputs of local
+      # reusable workflows and actions. A remote action's inputs are checked
+      # only for a major-tag ref in actionlint's bundled data
+      # (actions/checkout@v4), so the SHA-pinned and full-version refs here
+      # get no input check. Needs actionlint on PATH; CI Config Hooks
+      # installs the release test.yml pins and checks its sha256.
+      # shellcheck and pyflakes are off here because a machine without them
+      # would lint less than one with them; with no arguments it reads
+      # .github/workflows and .github/actionlint.yaml. It also runs on a
+      # local action's action.yml, whose inputs the workflows pass.
+      - id: actionlint
+        name: actionlint (workflow syntax, expressions and action inputs)
+        entry: actionlint -shellcheck= -pyflakes=
+        language: system
+        files: '^\.github/(workflows/.*\.ya?ml|actions/.+/action\.ya?ml|actionlint\.ya?ml)$'
         pass_filenames: false
 
       - id: check-typst-docs

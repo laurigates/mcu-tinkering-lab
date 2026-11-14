@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: dorny/paths-filter@v4.0.3
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
@@ -129,6 +129,7 @@ jobs:
     env:
       HOOKS: >-
         workflow-structure
+        actionlint
         kconfig-symbols
         check-md-links
         check-flash-recipes
@@ -161,6 +162,23 @@ jobs:
 
       - name: Install pre-commit
         run: pip install pre-commit
+
+      # For the actionlint hook, which runs the actionlint on PATH. The
+      # release tarball is checked against the sha256 pinned here, taken from
+      # that release's checksums file; bump both together.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$tarball"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/actionlint" actionlint
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
 
       # Its own key: code-quality saves installed hook environments under
       # pre-commit-<hash>, and this job, which installs none, must not save
@@ -233,10 +251,11 @@ jobs:
       # only staged files, and a CI checkout stages nothing, so here they would
       # scan nothing and still print Passed. They stay on as local commit
       # hooks; in CI the gitleaks job in security-secrets.yml scans each PR's
-      # commits.
+      # commits. actionlint runs in config-hooks, which installs it, on every
+      # event.
       - name: Run pre-commit hooks
         env:
-          SKIP: gitleaks,check-credentials
+          SKIP: gitleaks,check-credentials,actionlint
         run: pre-commit run --all-files --show-diff-on-failure
 
   test-python-simulation:
@@ -285,7 +304,7 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7.1.1
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         if: always()
         with:
           files: packages/robotics/robocar/simulation/coverage.xml

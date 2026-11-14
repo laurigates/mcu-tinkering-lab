@@ -424,9 +424,12 @@ class SetupAction(unittest.TestCase):
         self.assertNotIn("extractions/setup-just", code)
         self.assertRegex(
             text,
-            r"uses: astral-sh/setup-uv@v\d+\.\d+\.\d+\n\s+with:\n\s+version: '\d+\.\d+\.\d+'",
+            r"uses: astral-sh/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+\n"
+            r"\s+with:\n\s+version: '\d+\.\d+\.\d+'",
         )
-        self.assertRegex(text, r"uses: taiki-e/install-action@v\d+\.\d+\.\d+")
+        self.assertRegex(
+            text, r"uses: taiki-e/install-action@[0-9a-f]{40} # v\d+\.\d+\.\d+"
+        )
         self.assertRegex(text, r"tool: just@\d+\.\d+\.\d+\n")
 
     def test_renovate_regex_matches_the_just_pin(self):
