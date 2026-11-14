@@ -1147,8 +1147,11 @@ class ActionlintGateTest(unittest.TestCase):
     """The actionlint hook runs in CI Config Hooks on every event (#1103):
     a local hook, so the coverage check above sees it, with shellcheck and
     pyflakes off, which this session and a developer machine may lack. The
-    job installs the pinned release and checks its sha256 first."""
+    job installs the pinned release and checks its sha256 first; every other
+    job that runs all hooks skips it, and cloud sessions install the same
+    release."""
 
+    INSTALL_PKGS = ROOT / "scripts" / "install_pkgs.sh"
     # `pre-commit run` with only flags after it, to the end of the line or a
     # shell operator: a run over every hook. `pre-commit run "$hook"` names one.
     FULL_PRE_COMMIT_RUN = re.compile(
@@ -1216,6 +1219,19 @@ class ActionlintGateTest(unittest.TestCase):
                         "install actionlint before this step or add it to SKIP",
                     )
         self.assertGreater(full_runs, 0, "found no `pre-commit run` over all hooks")
+
+    def test_cloud_sessions_install_the_actionlint_ci_pins(self):
+        # scripts/install_pkgs.sh installs the release CI Config Hooks runs,
+        # checked against the same sha256, so `pre-commit run --all-files`
+        # passes in a cloud session.
+        steps = load("test.yml")["jobs"][CONFIG_HOOKS_JOB]["steps"]
+        (ci,) = [s for s in steps if "rhysd/actionlint" in str(s.get("run", ""))]
+        script = self.INSTALL_PKGS.read_text()
+        for name in ("ACTIONLINT_VERSION", "ACTIONLINT_SHA256"):
+            session = re.search(rf'^{name}="([^"]+)"', script, re.MULTILINE)
+            self.assertIsNotNone(session, f"{name} missing from install_pkgs.sh")
+            self.assertEqual(session.group(1), str(ci["env"][name]), name)
+        self.assertIn("sha256sum -c", script)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,24 @@ else
   echo "[install_pkgs] just already installed, skipping."
 fi
 
+# --- actionlint (the release and sha256 test.yml's CI Config Hooks pins; tools/test_workflows.py holds them equal) ---
+# No renovate comment: a version bump needs the new sha256 too, by hand in both files.
+ACTIONLINT_VERSION="1.7.12"
+ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+if ! has actionlint; then
+  echo "[install_pkgs] Installing actionlint ${ACTIONLINT_VERSION}..."
+  tmpdir=$(mktemp -d)
+  tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+  curl -fsSL -o "${tmpdir}/${tarball}" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+  echo "${ACTIONLINT_SHA256}  ${tmpdir}/${tarball}" | sha256sum -c -
+  tar xzf "${tmpdir}/${tarball}" -C "${tmpdir}" actionlint
+  mv "${tmpdir}/actionlint" "${INSTALL_DIR}/actionlint"
+  chmod +x "${INSTALL_DIR}/actionlint"
+  rm -rf "${tmpdir}"
+else
+  echo "[install_pkgs] actionlint already installed, skipping."
+fi
+
 # --- cppcheck (apt; required by `just lint-c` / `just lint` for C/C++ analysis) ---
 # Distro package, not a pinned binary release — no version pin to annotate.
 if ! has cppcheck; then
@@ -63,7 +81,7 @@ fi
 
 # --- Summary ---
 echo "[install_pkgs] Done. Available tools:"
-for cmd in pre-commit gitleaks just cppcheck ; do
+for cmd in pre-commit gitleaks just actionlint cppcheck ; do
   if has "$cmd"; then
     echo "  $cmd: $(command -v "$cmd")"
   else

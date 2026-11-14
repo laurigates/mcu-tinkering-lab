@@ -105,6 +105,7 @@ install-dev-tools:
     pre-commit install
     command -v clang-format >/dev/null 2>&1 || echo "clang-format not found — install with: brew install clang-format"
     command -v cppcheck >/dev/null 2>&1 || echo "cppcheck not found — install with: brew install cppcheck"
+    command -v actionlint >/dev/null 2>&1 || echo "actionlint not found — install with: brew install actionlint"
     echo "Development tools installed"
 
 ##########
