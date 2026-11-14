@@ -169,6 +169,42 @@
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
+    },
+    "packages/usb-tools/facedancer-espdancer-fw": {
+      "release-type": "simple",
+      "component": "facedancer-espdancer-fw",
+      "package-name": "facedancer-espdancer-fw",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/boombox": {
+      "release-type": "simple",
+      "component": "thinkpack-boombox",
+      "package-name": "thinkpack-boombox",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/glowbug": {
+      "release-type": "simple",
+      "component": "thinkpack-glowbug",
+      "package-name": "thinkpack-glowbug",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/mesh-demo": {
+      "release-type": "simple",
+      "component": "thinkpack-mesh-demo",
+      "package-name": "thinkpack-mesh-demo",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   },
   "release-type": "simple",

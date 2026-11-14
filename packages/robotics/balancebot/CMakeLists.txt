@@ -7,7 +7,12 @@ set(PICO_BOARD seeed_xiao_rp2350 CACHE STRING "Board type")
 # $PICO_SDK_PATH/external/pico_sdk_import.cmake (SDK 2.2.0).
 include(pico_sdk_import.cmake)
 
-project(balancebot VERSION 0.1.0 LANGUAGES C CXX ASM)
+# Read the version from release-please managed version.txt. project() takes
+# a plain x.y.z, so the trailing newline is stripped.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" BALANCEBOT_VERSION_TXT)
+string(STRIP "${BALANCEBOT_VERSION_TXT}" BALANCEBOT_VERSION_TXT)
+
+project(balancebot VERSION ${BALANCEBOT_VERSION_TXT} LANGUAGES C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 

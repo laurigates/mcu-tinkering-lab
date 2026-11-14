@@ -15,5 +15,9 @@
   "packages/audio/gamepad-synth": "0.1.13",
   "packages/thinkpack/chatterbox": "1.1.5",
   "packages/thinkpack/finderbox": "1.1.6",
-  "packages/robotics/balancebot": "0.1.14"
+  "packages/robotics/balancebot": "0.1.14",
+  "packages/usb-tools/facedancer-espdancer-fw": "0.1.0",
+  "packages/thinkpack/boombox": "0.1.0",
+  "packages/thinkpack/glowbug": "0.1.0",
+  "packages/thinkpack/mesh-demo": "0.1.0"
 }

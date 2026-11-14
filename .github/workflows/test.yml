@@ -127,6 +127,7 @@ jobs:
         check-md-links
         check-flash-recipes
         check-flash-recipes-tests
+        release-please-versions
         check-component-extra-paths
         check-component-extra-paths-tests
     steps:
