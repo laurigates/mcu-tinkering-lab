@@ -1,0 +1,43 @@
+# US-D4: armed and with no floor reading, he does not move. The cliff state
+# starts as "no floor" under both sensors and a sensor that has not been read
+# counts as no floor (cliff_core.c, docs/firmware/cliff-sensors.md), so every
+# goal that moves the wheels is refused until floor samples arrive (ADR-036
+# section 1, `cliff`).
+#
+# `cliff: true` arms the reflex and the script supplies no `floor` event, so
+# the floor sample stays invalid for the whole run. The console line at 5 s
+# wakes the planner for the 15 s tick, and the reply (1 s) is a forward drive
+# at 60 %, written at 16 s. apply_wheels() refuses it (cliff_permits()) and
+# brakes, from the first tick after the goal, 16.005 s: the wheels are never
+# driven forward or backward, and their duty stays 0.
+#
+# us-d4-cliff-brakes-and-backs-off scripts a floor reading at 0 s, so it does
+# not show what happens before the first one.
+id: us-d4-cliff-fails-closed
+stories: [US-D4]
+seed: 7
+duration: 30s
+config: {cliff: true}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: table-top}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
+expect:
+  # The planner did ask for a drive.
+  - goals: {sequence: [drive]}
+  # Neither wheel is ever driven.
+  - wheels: {left: forward, count: 0}
+  - wheels: {right: forward, count: 0}
+  - wheels: {left: reverse, count: 0}
+  - wheels: {right: reverse, count: 0}
+  # The refused goal is held braked, to the end of the run.
+  - wheels: {left: brake, right: brake, between: [16.005s, 16.005s], count: 1}
+  - wheels_at: {at: 20s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 30s, left: brake, right: brake, left_duty: 0, right_duty: 0}

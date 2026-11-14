@@ -35,10 +35,13 @@
 # Why 40 %: the speed sets the margin, and the margin is the plant's. At 40 %
 # the travel in the worst-case 297 ms (6.5 cm) and the brake distance fit
 # inside the 15 cm with about 6 cm to spare. At 60 % the same run stops 6 cm
-# from the wall, and at 80 % it reaches the wall: the brake comes too late,
-# and under 2 cm the rangefinder reads nothing, which the reflex takes for a
-# clear path. At 40 % the scenario fails on a lost reflex and not on a small
-# change in an estimate.
+# from the wall, and at 80 % it reaches the wall: the brake comes too late to
+# stop him short, and he first touches the wall while still braked. The plant
+# then reports no reading under 2 cm, which is an assumption about the sensor
+# (plant.yaml `min_cm`, ADR-036 open question 1) and which the reflex takes
+# for a clear path, so the reflex lets go with him against the wall. At 40 %
+# the scenario fails on a lost reflex and not on a small change in an
+# estimate.
 id: us-d5-stops-short-of-wall
 stories: [US-D5]
 seed: 7

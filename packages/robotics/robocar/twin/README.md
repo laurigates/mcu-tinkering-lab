@@ -55,8 +55,9 @@ CI runs both in the Python Suites job of
 [`.github/workflows/test.yml`](../../../../.github/workflows/test.yml):
 `just robocar-twin::test` on any change here, under `../main/` or to the
 `../test/` files the twin compiles, and `just robocar-twin::test-physics` on
-those and on the plant's sources and lock (`../simulation/src/`,
-`pyproject.toml`, `uv.lock`). The entries and trigger paths are `robocar-twin`
+those and on the plant's sources, lock and interpreter pin
+(`../simulation/src/`, `pyproject.toml`, `uv.lock`, `.python-version`). The
+entries and trigger paths are `robocar-twin`
 and `robocar-twin-physics` in
 [`.github/python-suites.json`](../../../../.github/python-suites.json).
 
@@ -78,7 +79,7 @@ only the scripted files to do without it.
 | `src/twin_signals.c` | deterministic synthetic camera luma (from the scene name) and microphone PCM (from the seed) |
 | `src/twin_sha256.c` | SHA-256 for the request key |
 | `tests/smoke.sh` | ctest smoke test: no link, no request, a `no_link` stop |
-| `tests/plant.sh` | ctest for the plant exchange: one request per tick, and the error exits (wrong id, wrong record, closed stdin, a scripted reading with an external plant) |
+| `tests/plant.sh` | ctest for the plant exchange: one request per tick, after that tick's `wheels` record; which range values are readings and which are failed reads, to the wheels and to the planner; and the error exits (wrong id, wrong record, closed stdin, a range that is not a number, a scripted reading with an external plant) |
 | `harness/` | uv project: scenario loader, model ports, plant ports, runner, assertions, scorecard ([harness README](harness/README.md)) |
 | `scenarios/*.yaml` | one file per user story |
 | `arenas/*.yaml` | the arenas the physics scenarios name; the schema is the plant's ([simulation README](../simulation/README.md)) |
@@ -268,6 +269,13 @@ builder still lives in `gemini_backend.c`, and its extraction to
   microphone), the start cue, manual leases, and the microphone's quarantine
   after a head movement (`ambient_head_quiet()`): with `head` set the twin
   hears sounds the robot's listener would drop while the head moves.
+- **No reflex horn.** On the robot a reflex that stops a drive requests the
+  horn clip (`sound_clips_request()` in `reactive_task()`), and its playback
+  quarantines the microphone for the clip and
+  `AMBIENT_PLAYBACK_HANGOVER_MS`. The executor's host tick has no such step
+  and the twin's microphone never sees playback, so a `sound` scripted just
+  after a reflex or cliff trip is heard here where the robot's listener is
+  muted. No scenario does that today.
 - **The head is modelled only with `head` set.** Without it the servos read as
   absent, the head as unavailable, and a frame's pose is the scripted one.
 - **A scripted world does not move with the robot.** In a scenario without
@@ -277,6 +285,19 @@ builder still lives in `gemini_backend.c`, and its extraction to
   they follow the pose, and are as good as the plant's estimates: nothing in
   `plant.yaml` is measured (ADR-036, open question 1). Camera frames, sounds
   and voice turns are scripted either way.
+- **Under 2 cm the plant reports no reading**, and the reflex takes a failed
+  read for a clear path, so a robot that reaches a wall loses its reflex
+  there. The datasheet page gives a 2 cm blind zone and not what the sensor
+  returns inside it, so this is an assumption (`plant.yaml` `min_cm`), and
+  the outcome of any scenario in which he touches a wall depends on it.
+- **Two start-up rules have no test**, because nothing the trace records
+  depends on them. A rangefinder trigger latched before the first `range`
+  event or plant response is a failed read and not a 400 cm reading: either
+  way the path counts as clear, and the planner's first tick has already read
+  the boot value. With an external plant the floor sample is invalid until
+  the first response, 33 ms in, and no goal exists that early. The scripted
+  case, armed with no `floor` event at all, is
+  `scenarios/us-d4-cliff-fails-closed.yaml`.
 - **The boot range value reaches the planner.** Its first tick reads 400 cm
   before any rangefinder read has completed. Whether the robot's first cycle
   does the same depends on how long its first camera capture takes, which is

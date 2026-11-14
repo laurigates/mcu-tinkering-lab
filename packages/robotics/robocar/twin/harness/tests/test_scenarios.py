@@ -61,6 +61,15 @@ def test_scenario_validates(path):
     load_scenario(path)
 
 
+def test_validation_covers_every_scenario_and_carries_no_marker():
+    """The light suite deselects ``physics``, so a marker on a validation case
+    would leave that scenario file unvalidated there."""
+    marks = test_scenario_validates.pytestmark
+    assert [m.name for m in marks] == ["parametrize"]
+    # Plain paths, not pytest.param(..., marks=...) as RUNS holds.
+    assert list(marks[0].args[1]) == SCENARIOS
+
+
 @pytest.mark.parametrize("path", RUNS)
 def test_scenario_passes(path):
     scenario = load_scenario(path)
