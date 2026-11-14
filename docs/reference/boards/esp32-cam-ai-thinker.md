@@ -18,9 +18,11 @@ This page documents Ai-Thinker's own design, from two vendor documents:
 - the *ESP32_CAM* schematic, revision 1.6, dated 2018/1/30 (Altium output,
   1 page), as mirrored in Seeed's `SeeedDocument/forum_doc` repository.
 
-Ai-Thinker's documentation site no longer carries an ESP32-CAM page: on
-2026-11-14 `docs.ai-thinker.com/en/esp32-cam` returned the site's landing
-page, and the site's route table lists no ESP32-CAM entry. Both documents
+Ai-Thinker's documentation site did not serve an ESP32-CAM page when this
+page was written: on 2026-11-14 `docs.ai-thinker.com/en/esp32-cam` returned
+the site's landing page, and the site's route table listed no ESP32-CAM
+entry. A second fetch the same day got HTTP 403 for the whole site, so that
+observation was not repeated. Both documents
 above are copies held by third parties; their titles, revision and date
 fields name Ai-Thinker.
 
@@ -177,8 +179,9 @@ The board has no USB. Programming goes through UART0 on the header: a 3.3 V
 USB-serial adapter's TX to `U0R` (pin 14, GPIO3), RX to `U0T` (pin 15, GPIO1),
 GND to GND, and 5 V into the `5V` pin. The ESP32 operates from 2.3 V to
 3.6 V (ESP32 datasheet §2.5, notes on power supply) and the board runs it from
-the 3V3 rail, so the adapter's logic level must be 3.3 V. An ESP32-CAM-MB base does the same through its own USB-serial chip;
-no vendor document for it was found.
+the 3V3 rail, so the adapter's logic level must be 3.3 V. An ESP32-CAM-MB base
+does the same through its own USB-serial chip; no vendor document for it was
+found.
 
 To enter the download boot mode, hold GPIO0 (pin 11) at GND while the chip
 comes out of reset (ESP32 datasheet Table 3-3), using the reset button K1 on
