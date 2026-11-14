@@ -1,7 +1,7 @@
 # ESP-IDF Robot Simulation Requirements
 # Core simulation framework
 # roboticstoolbox-python>=1.1.0  # Replaced with Genesis
-spatialmath-python==1.1.18
+spatialmath-python==1.1.19
 
 # Scientific computing
 numpy==2.5.4
@@ -32,7 +32,7 @@ pymunk==7.3.1
 # Configuration and utilities
 pyyaml==6.0.3
 toml==0.10.2
-click==8.5.0
+click==8.5.1
 
 # Testing framework
 pytest==9.2.0

@@ -42,7 +42,7 @@ runs:
     # which does call the API.
     - name: Install just
       if: inputs.just == 'true'
-      uses: taiki-e/install-action@v2.87.31
+      uses: taiki-e/install-action@v2.90.3
       with:
-        tool: just@1.58.0
+        tool: just@1.59.0
         fallback: none
