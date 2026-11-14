@@ -208,12 +208,13 @@ repos:
       # installs the release test.yml pins and checks its sha256.
       # shellcheck and pyflakes are off here because a machine without them
       # would lint less than one with them; with no arguments it reads
-      # .github/workflows and .github/actionlint.yaml.
+      # .github/workflows and .github/actionlint.yaml. It also runs on a
+      # local action's action.yml, whose inputs the workflows pass.
       - id: actionlint
         name: actionlint (workflow syntax, expressions and action inputs)
         entry: actionlint -shellcheck= -pyflakes=
         language: system
-        files: '^\.github/(workflows/.*\.ya?ml|actionlint\.ya?ml)$'
+        files: '^\.github/(workflows/.*\.ya?ml|actions/.+/action\.ya?ml|actionlint\.ya?ml)$'
         pass_filenames: false
 
       - id: check-typst-docs

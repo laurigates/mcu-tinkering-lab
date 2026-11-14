@@ -1167,6 +1167,22 @@ class ActionlintGateTest(unittest.TestCase):
         hooks = [i for i, r in enumerate(runs) if "pre-commit run" in r]
         self.assertLess(install, hooks[0])
 
+    def test_hook_runs_on_a_local_action_change(self):
+        # actionlint checks the inputs a workflow passes to a local action, so
+        # removing one from action.yml breaks the workflow that passes it.
+        (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
+        files = re.compile(hook["files"])
+        actions = [
+            p
+            for p in tracked_files()
+            if re.fullmatch(r"\.github/actions/.+/action\.ya?ml", p)
+        ]
+        self.assertIn(".github/actions/setup-tools/action.yml", actions)
+        for path in [".github/workflows/test.yml", ".github/actionlint.yaml", *actions]:
+            self.assertRegex(path, files)
+        for path in [".github/project-matrix.json", "tools/test_workflows.py"]:
+            self.assertNotRegex(path, files)
+
 
 if __name__ == "__main__":
     unittest.main()
