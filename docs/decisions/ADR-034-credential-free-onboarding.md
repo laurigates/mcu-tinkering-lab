@@ -62,8 +62,10 @@ Facts the design rests on, read 2026-11-09:
   devices to share data or control"
   ([improv-wifi.com/serial](https://www.improv-wifi.com/serial/)). After
   provisioning the device may return a redirect URL. The shared
-  `improv-wifi` component implements 0x01–0x03 only, and treats 0x02 as
-  *Identify* (ADR-028 Context).
+  `improv-wifi` component implements 0x01–0x03 only. Until #1075 it treated
+  0x02 as *Identify* (ADR-028 Context); since #1075 it answers 0x02 as
+  *Request current state*, fixed in code with the bench run against ESP Web
+  Tools still pending.
 - **The build has no BLE**, and internal RAM was once driven to 259 bytes
   before mbedTLS moved to PSRAM (ADR-028 Context).
 - **The OLED's network row** reads `IP <address>` or `WIFI DOWN`
@@ -121,7 +123,8 @@ auth` stays the route, as PRD-015 route B describes.
 - Provisioned networks land in ADR-028's network list with source `improv`
   and without the `home` flag.
 - Fix the component's RPC 0x02 (current state) and error code 0x03 first
-  (ADR-028 §2); BLE clients rely on the state machine the spec defines.
+  (ADR-028 §2); BLE clients rely on the state machine the spec defines. Done
+  in code by #1075; the bench run against ESP Web Tools is still pending.
 - **Gate:** measure NimBLE's internal-RAM cost with camera, TLS, audio and the
   planner running before committing. ADR-028 §8 deferred BLE for exactly this.
   If it does not fit while running, BLE runs only while provisioning is armed

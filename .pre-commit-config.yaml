@@ -189,11 +189,12 @@ repos:
       # tools/kconfig_symbols, and fails when the ESP-IDF version pins (the
       # Dockerfile, docker-compose.yml's image tag, any workflow) disagree
       # with each other or with the ESP-IDF list. No build or container needed.
+      # Fenced sdkconfig snippets in tracked Markdown are checked too (#1092).
       - id: kconfig-symbols
-        name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
+        name: sdkconfig.defaults and doc snippet symbols exist in ESP-IDF, the project or its components
         entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
         language: system
-        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|\.md|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
         pass_filenames: false
 
       # No run: script expands inputs.* or github.event.* through ${{ }}
@@ -290,6 +291,23 @@ repos:
         entry: python3 tools/check-doc-facts.py
         language: system
         files: '(pin_config\.h|WIRING\.md|README\.md|build-guide\.typ|tools/check-doc-facts\.py)$'
+        pass_filenames: false
+
+      # Every relative Markdown link names a tracked file (#1147). Moving or
+      # deleting the target breaks a link without touching any .md, so it runs
+      # on every commit; the scan takes well under a second.
+      - id: check-md-links
+        name: Relative Markdown links resolve to tracked files
+        entry: python3 tools/check-md-links.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-md-links-tests
+        name: check-md-links unit tests
+        entry: python3 -m unittest tools/test_check_md_links.py
+        language: system
+        files: '^tools/(check-md-links|test_check_md_links)\.py$'
         pass_filenames: false
 
       - id: check-ota-consumer-agreement

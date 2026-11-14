@@ -523,10 +523,10 @@ The current implementation provides extension points for:
 
 ## Related Documentation
 
-- [Robot Model Documentation](ROBOT_MODEL.md)
-- [Error Handling Framework](ERROR_HANDLING.md)
-- [Camera Simulation](CAMERA_SIMULATION.md)
-- [Motor Control System](MOTOR_CONTROL.md)
+- [Robot model](../src/robot_model.py)
+- [Error handling framework](../src/error_handling.py)
+- [Camera simulation](../src/camera_simulation.py)
+- [Motor control](../src/motor_controller.py)
 
 ## Support
 
