@@ -315,6 +315,17 @@ def test_wheels_numeric_bounds_are_inclusive(scenario_with):
     ]
 
 
+def test_a_record_without_the_number_does_not_satisfy_a_bound(scenario_with):
+    scn = scenario_with({"wheels": {"left_duty": [0, 4095], "count": 0}})
+    rec = {
+        "t": "wheels",
+        "at_ms": 100,
+        "left": {"drive": "forward"},
+        "right": {"drive": "forward", "duty": 5},
+    }
+    assert one(scn, [rec]).passed
+
+
 def test_wheels_failure_cites_the_records_in_the_window(scenario_with):
     scn = scenario_with(
         {"wheels": {"left": "brake", "after": "voice_turn[0]", "within": "297ms"}}

@@ -1,0 +1,63 @@
+# US-D3: backed toward a wall, he brakes before he reaches it and stays braked.
+#
+# us-d5-stops-short-of-wall turned around, against the physics plant (ADR-036
+# section 3): the wall is 1 m behind him in arenas/wall-behind-1m.yaml and
+# nothing is ahead, so only the plant's rear range reading can stop him. The
+# front rangefinder reads nothing for the whole run. `just
+# robocar-twin::test-physics` runs it.
+#
+# From the firmware:
+#   - The console line at 5 s wakes the planner for the 15 s tick. The reply
+#     (1 s) is a drive at heading 180 and 40 %, which the executor runs in
+#     reverse (drive_reverses()), duty 1638 from 16.104 s.
+#   - A rear reading below STOP_THRESHOLD_CM (15) brakes a reverse and holds
+#     it (rangers_rear_blocked()). It is not the obstacle reflex, so the
+#     planner is offered no note. The 30 s tick requests again (the goal still
+#     moves the wheels) and its reverse is held the same way.
+#
+# From the plant's estimates (simulation/src/robocar_sim/plant.yaml; none is
+# measured), so asserted as ordering and wide bounds only: the rear rangefinder
+# and the chassis rear edge are 13 cm behind the axle, so the first rear range
+# is 87 cm, the wall is inside 15 cm from x = -72 and the chassis touches it
+# at x = -87.
+id: us-d3-stops-short-reversing
+stories: [US-D3]
+seed: 7
+duration: 40s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+plant:
+  physics:
+    arena: arenas/wall-behind-1m.yaml
+    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 180, distance_cm: 100, speed_pct: 40}
+expect:
+  - requests: {count: 2}
+  - goals: {sequence: [drive, drive]}
+  # Parked until the goal, then backing up at 40 %.
+  - pose_at: {at: 16s, x_cm: 0, y_cm: 0, heading_deg: 0, collided: false}
+  - wheels_at: {at: 16.104s, left: reverse, right: reverse, left_duty: 1638, right_duty: 1638}
+  - wheels: {left: forward, count: 0}
+  # He covers ground toward the wall before anything brakes him.
+  - wheels: {left: brake, between: [0s, 17s], count: 0}
+  - pose: {x_cm: [-87, -20], between: [16s, 40s], min: 1}
+  # One brake, on both wheels, and no reverse after it.
+  - wheels: {left: brake, right: brake, count: 1}
+  - wheels_at: {at: 30s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 40s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  # He never touches the wall.
+  - pose: {collided: true, count: 0}
+  # Stopped inside the hold distance and short of the wall, and still there at
+  # the end.
+  - pose_at: {at: 40s, x_cm: [-86, -65], y_cm: [-2, 2], heading_deg: [-5, 5], collided: false}
+  - pose: {between: [30s, 40s], count: 0}
+  # The rear hold is not the obstacle reflex: nothing for the planner to note.
+  - note_offered: {count: 0}

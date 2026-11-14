@@ -52,7 +52,7 @@ plant:
 ```
 
 The loader checks that the arena file exists and holds a mapping, and that
-`start` has exactly those three numbers. The arena is forwarded as it is: the
+`start` has exactly those three numbers, each finite. The arena is forwarded as it is: the
 schema and its validation are the plant's
 ([simulation README](../../simulation/README.md)), and an arena it refuses
 fails the run with the plant's message. With `physics` the loader refuses
@@ -97,6 +97,9 @@ expect:
   - suppressed: {reason: person_spoke, between: [15s, 20s], count: 1}
   - utterance: {source: voice_turn, within: 4s, after: "voice_turn[0]"}
 ```
+
+`seed` is a whole number in 0..4294967295: the twin reads it into 32 bits and
+the plant refuses a negative one.
 
 `config` keys: `planner_period_ms`, `plan_budget_max_requests` and
 `plan_budget_max_tokens` (integers), and two executor inputs that are off

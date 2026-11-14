@@ -224,6 +224,7 @@ def test_a_malformed_reading_is_refused(patch):
         {"dt_ms": 33.0},
         {"left": {"drive": "ahead", "duty": 0}},
         {"right": {"drive": "coast", "duty": 0.5}},
+        {"right": {"drive": "coast", "duty": True}},
         {"right": {"drive": "coast"}},
     ],
 )
@@ -233,13 +234,14 @@ def test_a_malformed_plant_request_is_refused(patch):
         "id": 7,
         "at_ms": 231,
         "dt_ms": 33,
-        "left": COAST,
+        "left": FORWARD,
         "right": COAST,
     }
+    # The wheels differ, so one sent as the other does not compare equal.
     assert PlantRequest.from_record(good).to_step() == {
         "t": "step",
         "dt_ms": 33,
-        "left": COAST,
+        "left": FORWARD,
         "right": COAST,
     }
     with pytest.raises((KeyError, TypeError, ValueError)):

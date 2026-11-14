@@ -1,0 +1,45 @@
+# US-C5: a drive goal to the right of the body takes him to the right.
+#
+# Against the physics plant (ADR-036 section 3), in arenas/wall-1m.yaml. This
+# is the scenario in which the two wheels get different commands, so it is the
+# one that fails when left and right are exchanged anywhere between the
+# executor and the plant: in the twin's plant_request, in the harness's step,
+# or in the plant's wheels. `just robocar-twin::test-physics` runs it.
+#
+# From the firmware: the console line at 5 s wakes the planner for the 15 s
+# tick. The reply (1 s) is a drive at heading +30 and 40 %, written at 16 s. A
+# positive heading is to the right, and execute_drive() slows the right wheel
+# by |heading| / 180 of the base speed: 40 % is 102/255, so the left wheel
+# runs at 102 (duty 1638) and the right at 85 (duty 1365), both forward. There
+# is no head here (`head` is unset), so the heading is the goal's own.
+#
+# From the plant: angles grow counter-clockwise and y is to the left
+# (robocar_sim.arena), so a turn to the right takes the heading and y below
+# zero. How far depends on the plant's estimates (plant.yaml, none measured),
+# so only the signs are asserted, two seconds into the drive, with the robot
+# still far from the wall.
+id: us-c5-heading-turns-the-plant
+stories: [US-C5]
+seed: 7
+duration: 18s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+plant:
+  physics:
+    arena: arenas/wall-1m.yaml
+    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 30, distance_cm: 100, speed_pct: 40}
+expect:
+  - goals: {sequence: [drive]}
+  # The right wheel is the slower one.
+  - wheels_at: {at: 16.2s, left: forward, right: forward, left_duty: 1638, right_duty: 1365}
+  # So he has gone forward and to the right, and faces right of where he started.
+  - pose_at: {at: 18s, x_cm: [5, 60], y_cm: [-60, -1], heading_deg: [-179, -2], collided: false}

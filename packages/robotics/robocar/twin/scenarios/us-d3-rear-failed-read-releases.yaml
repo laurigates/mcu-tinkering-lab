@@ -1,0 +1,51 @@
+# US-D3: a rear rangefinder whose reads fail does not hold a reverse. Only a
+# rear reading below STOP_THRESHOLD_CM (15 cm) does (rangers_rear_blocked() in
+# reactive_controller.c compares a reading and skips ULTRASONIC_DIST_ERROR), so
+# when the reads start failing the hold ends, on the tick of the first failed
+# read.
+#
+# This pins what the firmware does today. Issue #1185 asks for a failed read
+# not to release the hold; the expectations after 36 s change with that fix.
+#
+# The timeline is us-d3-rear-holds-reverse's up to the release: woken by the
+# front range at 15 s, a reverse at 60 % from 16 s, 8 cm behind from 20 s,
+# braked at 20.262 s.
+#
+# Release: `range_fail` on the rear sensor at 36 s. The front sensor is not
+# named and keeps reading 120 cm. A failed read is paced like a read (the bus
+# takes the trigger and fails the read, ADR-036 section 1 "Rangefinders"): the
+# rear trigger at 36.135 s (219 x 165) is the first after the event and its
+# read at 36.267 s fails, so the reverse written at 31 s ramps up again from
+# that tick: 546 at 36.267 s.
+#
+# This is the only scenario with a `range_fail`, and it names the rear sensor:
+# a twin that failed the front sensor instead would leave the rear at 8 cm and
+# the reverse held to the end.
+id: us-d3-rear-failed-read-releases
+stories: [US-D3]
+seed: 7
+duration: 44s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 0s, range: 120}
+  - {at: 0s, range: {cm: 120, sensor: rear}}
+  - {at: 20s, range: {cm: 8, sensor: rear}}
+  - {at: 36s, range_fail: {sensor: rear}}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 180, distance_cm: 50, speed_pct: 60}
+expect:
+  - requests: {count: 2}
+  # Braked by the rear reading, and held while it reads 8 cm.
+  - wheels: {left: brake, right: brake, after: "range[2]", within: 297ms, count: 1}
+  - wheels: {left: reverse, between: [20.262s, 36.266s], count: 0}
+  - wheels_at: {at: 36.266s, left: brake, right: brake}
+  # Released at the first failed read, one read cycle after the event at most.
+  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [36.267s, 36.267s], count: 1}
+  - wheels_at: {at: 36.432s, left: reverse, right: reverse, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: brake, count: 1}

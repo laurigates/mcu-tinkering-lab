@@ -20,7 +20,8 @@
 # (MOTOR_RAMP_FULL_SCALE_MS): 546 on the first write, then 450 per 33 ms tick,
 # so the duty reaches 2457 on the sixth tick, 16.170 s.
 #
-# Obstacle: 8 cm ahead (below STOP_THRESHOLD_CM, 15) from 19.966 s, 1 ms after
+# Obstacle: 14 cm ahead, the last whole centimetre below STOP_THRESHOLD_CM
+# (15, reactive_controller.h), from 19.966 s, 1 ms after
 # the trigger at 19.965 s (121 x 165), which ranged the clear path. That is the
 # worst case: the read at 20.097 s is still 120 cm, the next trigger at
 # 20.130 s ranges the obstacle and its read at 20.262 s trips the reflex on
@@ -31,9 +32,14 @@
 # (128 x 165, tick 640). A world event is applied before an executor tick at
 # the same instant (ADR-036 section 1, "Tick"), so that trigger ranges 120 cm
 # and is read at 21.252 s. The latest reading and the
-# mean of the last three (8, 8, 120 = 45 cm) are then both at or above 15 cm,
+# mean of the last three (14, 14, 120 = 49 cm) are then both at or above 15 cm,
 # so the reflex releases on that tick and the drive goal, still fresh (TTL
 # 22.5 s from 16 s), ramps up again: 546 at 21.252 s, 2457 at 21.417 s.
+#
+# At the threshold: 15 cm ahead from 25.080 s (152 x 165, a trigger instant)
+# to 25.410 s, so the triggers at 25.080 s and 25.245 s range it. A reading
+# at the threshold is not below it, so the wheels do not change and the brake
+# above stays the only one of the run.
 #
 # Planner: the 30 s tick requests because the robot is moving
 # (goal_moves_wheels()), and that request is offered the `note` tool: the
@@ -46,8 +52,10 @@ world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: hallway}}
   - {at: 0s, range: 120}
-  - {at: 19.966s, range: 8}
+  - {at: 19.966s, range: 14}
   - {at: 21.12s, range: 120}
+  - {at: 25.08s, range: 15}
+  - {at: 25.41s, range: 120}
 models:
   planner: inline
 default:
@@ -75,6 +83,9 @@ expect:
   - wheels: {left: forward, right: forward, after: "range[2]", within: 297ms, min: 1}
   - wheels: {left: forward, right: forward, left_duty: 546, between: [21.252s, 21.252s], count: 1}
   - wheels_at: {at: 21.417s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # The 15 cm readings change nothing: still at 60 % after them, and the brake
+  # at 20.262 s is the only one of the run.
+  - wheels_at: {at: 25.6s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   - wheels: {left: brake, count: 1}
   # The planner hears of the trip from the executor's telemetry.
   - note_offered: {trigger: reflex, between: [30s, 30s], count: 1}
