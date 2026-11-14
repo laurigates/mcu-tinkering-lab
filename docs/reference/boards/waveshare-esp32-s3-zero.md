@@ -20,13 +20,16 @@ is attached in this repository's sessions, and no project records a listing or
 item number.
 
 - **Name and variants:** Waveshare sells the ESP32-S3-Zero without pin headers
-  and the ESP32-S3-Zero-M with them soldered; the wiki gives both the same chip
-  and pinout (wiki § Introduction).
-- **Silkscreen** (top face, 2D drawing `ESP32-S3-Zero-2D-size.jpg`): `5V`,
-  `GND`, `3V3`, `1` to `6` down the left edge, `TX`, `RX`, `13` to `7` down the
-  right edge, `16`, `15`, `14` on three inner pads, and `BOOT` and `RESET`
-  beside the two buttons. The bottom face carries `ESP32-S3-Zero` and eight
-  more numbered pads (pinout drawing, bottom view).
+  and the ESP32-S3-Zero-M with them soldered: the same chip, with or without
+  pin headers (wiki § Introduction).
+- **Silkscreen** (top face, the wiki's top-view photo `ESP32-S3-Zero_02.jpg`,
+  § Dimensions): `5V`, `GND`, `3V3`, `1` to `6` down the left edge, `TX`, `RX`,
+  `13` to `7` down the right edge, `16`, `15`, `14` on three inner pads, and
+  `BOOT` and `RESET` printed below the two buttons. The wiki's pinout drawing
+  shows another artwork, with `B` and `R` above the buttons and a different
+  component placement. The bottom face carries `ESP32-S3-Zero` and eight more
+  numbered pads (pinout drawing, bottom view; 2D drawing
+  `ESP32-S3-Zero-2D-size.jpg`, which is a bottom view).
 - **Not to be confused with:** other small ESP32-S3 boards with castellated
   edges and one USB-C port, among them the ESP32-S3 SuperMini that ThinkPack's
   chatterbox and finderbox use. This page covers only the Waveshare board;
@@ -50,7 +53,7 @@ item number.
 | Buttons | BOOT (K2) on GPIO0, RESET (K1) on CHIP_PU, each with a 10 kΩ pull-up to 3V3 | Schematic |
 | GPIOs on pads | 26: 15 on the castellated edges, 11 on inner and bottom pads | Schematic P15 and test-point pads; pinout drawing |
 | Header row spacing | 15.24 mm | Wiki FAQ |
-| Size | 23.50 x 18.00 mm, 2.54 mm pad pitch | 2D drawing |
+| Size | 23.50 x 18.00 mm, 2.54 mm pad pitch | 2D drawing (bottom view) |
 | Ambient temperature | −40 to 85 °C | Datasheet Table 1-1 (ESP32-S3FH4R2 row); wiki FAQ |
 
 The wiki's Features list says "24 × GPIO pins". The schematic brings 26 GPIOs to
@@ -69,10 +72,14 @@ from two vendor documents that agree pad for pad:
   `5V`, `GND`, `3V3(OUT)`, `GP1` to `GP6` on the left; `TX`, `RX`, `GP13` to
   `GP7` on the right), and
 - the schematic's 18-pin connector P15, numbered 1 at `TX` and running
-  counter-clockwise to 18 at `VBUS`: pin 1 IO43 (through R6), 2 IO44, 3 to 15
-  IO13 down to IO1, 16 3V3, 17 GND, 18 VBUS.
+  clockwise in the top view to 18 at `VBUS`: pin 1 IO43 (through R6), 2 IO44,
+  3 to 15 IO13 down to IO1, 16 3V3, 17 GND, 18 VBUS. That is the reverse of
+  the repo's `board-dip-ccw` numbering
+  ([parts README](../parts/README.md)), which counts counter-clockwise from
+  `L 1`: P15 pin *k* is `board-dip-ccw` pin 19−*k*.
 
-The 2D drawing's silkscreen shows the same order. GPIO functions are from the
+The top-view photo on the wiki (`ESP32-S3-Zero_02.jpg`, § Dimensions) shows
+the same silkscreen order. GPIO functions are from the
 ESP32-S3 datasheet v2.2: ADC and touch channels from Table 2-8, UART0 from
 Table 2-4, strapping from Table 3-1. `tools/hardware/` reads this table
 (ADR-021); keep it the only table in this file whose first column names a pin
@@ -184,8 +191,8 @@ reached through the USB-C port's USB-Serial-JTAG controller, which appears as
 ## ESP-IDF configuration
 
 The memory settings follow the chip, not Waveshare's "Octal PSRAM" wording.
-These lines are from xbox-switch-bridge's `sdkconfig.defaults` (lines 35 and
-40–42); it-troubleshooter and facedancer-espdancer-fw set the same:
+These lines are from xbox-switch-bridge's `sdkconfig.defaults` (lines 4, 35
+and 40–42); it-troubleshooter and facedancer-espdancer-fw set the same:
 
 ```ini
 CONFIG_IDF_TARGET="esp32s3"
@@ -234,7 +241,10 @@ mode" where Waveshare and the datasheet say download mode.
 - **Pin order, pad functions and on-board wiring:** Waveshare's schematic
   `ESP32-S3-Zero-Sch.pdf` (one page, read 2026-11-14) and the wiki's pinout
   drawing `ESP32-S3-Zero-details-inter.jpg`, which agree pad for pad.
-- **Dimensions and silkscreen:** the wiki's `ESP32-S3-Zero-2D-size.jpg`.
+- **Top-face silkscreen:** the wiki's top-view photo `ESP32-S3-Zero_02.jpg`
+  (§ Dimensions).
+- **Dimensions, pad pitch and bottom-face pads:** the wiki's
+  `ESP32-S3-Zero-2D-size.jpg` (§ Board Design Files), a bottom view.
 - **Power, flashing and variants:** the Waveshare wiki page, revision
   `oldid=111000`.
 - **Chip facts:** Espressif ESP32-S3 Series Datasheet v2.2: Tables 1-1, 2-4,
@@ -250,6 +260,9 @@ are all read from Waveshare's documents.
 
 - [ ] The edge silkscreen reads `5V`, `GND`, `3V3`, `1`–`6` down the left and
   `TX`, `RX`, `13`–`7` down the right, USB-C at the top, component side up.
+- [ ] Which button artwork the fitted board carries: `BOOT` and `RESET` below
+  the buttons (wiki photo `ESP32-S3-Zero_02.jpg`) or `B` and `R` above them
+  (wiki pinout drawing).
 - [ ] Continuity: each edge pad reaches the GPIO the table gives (a pad-by-pad
   check with a short test image toggling each GPIO also settles it).
 - [ ] The top-face pads `16`, `15`, `14` and the bottom-face pads `45`, `42`,
@@ -269,7 +282,8 @@ are all read from Waveshare's documents.
 - [Waveshare wiki: ESP32-S3-Zero](https://www.waveshare.com/wiki/ESP32-S3-Zero)
 - [Schematic PDF](https://files.waveshare.com/wiki/ESP32-S3-Zero/ESP32-S3-Zero-Sch.pdf)
 - [Pinout drawing](https://www.waveshare.com/w/upload/8/87/ESP32-S3-Zero-details-inter.jpg)
-- [2D dimension drawing](https://files.waveshare.com/wiki/ESP32-S3-Zero/ESP32-S3-Zero-2D-size.jpg)
+- [Top-view photo with dimensions](https://www.waveshare.com/w/upload/e/e0/ESP32-S3-Zero_02.jpg)
+- [2D dimension drawing, bottom view](https://files.waveshare.com/wiki/ESP32-S3-Zero/ESP32-S3-Zero-2D-size.jpg)
 - [3D model (STEP)](https://files.waveshare.com/wiki/ESP32-S3-Zero/ESP32-S3-Zero_v2-138eb3753cf14afa3252058c380ca416.stp)
 - [ESP32-S3 Series Datasheet (Espressif)](https://documentation.espressif.com/esp32-s3_datasheet_en.pdf)
 - [XL-0807RGBC-WS2812B LED datasheet (Waveshare copy)](https://files.waveshare.com/wiki/common/XL-0807RGBC-WS2812B.pdf)
