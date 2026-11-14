@@ -192,11 +192,13 @@ repos:
       # No run: script expands inputs.* or github.event.* through ${{ }}
       # (issue #855), plus the workflow wiring the file's docstring lists.
       # project-matrix.json: the suite runs build.yml's discovery step on it.
+      # It also reads the local actions' pins, this file's hooks and the
+      # actionlint pin in scripts/install_pkgs.sh, so it runs on those too.
       - id: workflow-structure
         name: Workflows pass untrusted text through env, and keep their release and Claude wiring
         entry: uv run --no-project --with pyyaml==6.0.3 python -m unittest tools/test_workflows.py
         language: system
-        files: '^(\.github/workflows/.*\.ya?ml|\.github/project-matrix\.json|tools/test_workflows\.py)$'
+        files: '^(\.github/workflows/.*\.ya?ml|\.github/actions/.+/action\.ya?ml|\.github/project-matrix\.json|tools/test_workflows\.py|\.pre-commit-config\.yaml|scripts/install_pkgs\.sh)$'
         pass_filenames: false
 
       # actionlint over every workflow (#1103): expression types, contexts,

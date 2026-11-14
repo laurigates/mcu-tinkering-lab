@@ -1152,11 +1152,57 @@ class ActionlintGateTest(unittest.TestCase):
     release."""
 
     INSTALL_PKGS = ROOT / "scripts" / "install_pkgs.sh"
-    # `pre-commit run` with only flags after it, to the end of the line or a
-    # shell operator: a run over every hook. `pre-commit run "$hook"` names one.
-    FULL_PRE_COMMIT_RUN = re.compile(
-        r"\bpre-commit run((\s+-\S+)*)\s*($|[|;&])", re.MULTILINE
+    # The arguments of one `pre-commit run`, up to the end of the line or a
+    # shell operator, once backslash continuations are joined.
+    PRE_COMMIT_RUN = re.compile(r"\bpre-commit run\b([^\n|;&]*)")
+    # Flags of `pre-commit run` that take a value (`pre-commit run --help`,
+    # pre-commit 4.7.0): the word after one is not a hook id.
+    VALUE_FLAGS = frozenset(
+        [
+            "-c",
+            "--config",
+            "--color",
+            "--hook-stage",
+            "--remote-branch",
+            "--local-branch",
+            "--from-ref",
+            "--source",
+            "-s",
+            "--to-ref",
+            "--origin",
+            "-o",
+            "--pre-rebase-upstream",
+            "--pre-rebase-branch",
+            "--commit-msg-filename",
+            "--prepare-commit-message-source",
+            "--commit-object-name",
+            "--remote-name",
+            "--remote-url",
+            "--checkout-type",
+            "--is-squash-merge",
+            "--rewrite-command",
+        ]
     )
+
+    @classmethod
+    def runs_every_hook(cls, run: str) -> bool:
+        """The script has a `pre-commit run` that names no hook id, so it runs
+        every hook. `pre-commit run "$hook"` and `pre-commit run ruff` name one."""
+        script = re.sub(r"\\\n\s*", " ", run)
+        for found in cls.PRE_COMMIT_RUN.finditer(script):
+            words = iter(found.group(1).split())
+            hook = None
+            for word in words:
+                if word == "--files":
+                    break  # the rest are file names
+                if word in cls.VALUE_FLAGS:
+                    next(words, None)
+                elif not word.startswith("-"):
+                    hook = word
+                    break
+            if hook is None:
+                return True
+        return False
 
     def test_hook_switches_off_the_external_linters(self):
         (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
@@ -1192,6 +1238,21 @@ class ActionlintGateTest(unittest.TestCase):
         for path in [".github/project-matrix.json", "tools/test_workflows.py"]:
             self.assertNotRegex(path, files)
 
+    def test_this_suite_reruns_when_a_file_it_reads_changes(self):
+        # The tests of this class read the hook config, the local actions and
+        # install_pkgs.sh. The hook that runs this suite has to match them, or
+        # a local commit that changes only one of them skips the suite.
+        (hook,) = [h for h in local_hooks() if h["id"] == "workflow-structure"]
+        files = re.compile(hook["files"])
+        for path in (
+            ".pre-commit-config.yaml",
+            "scripts/install_pkgs.sh",
+            ".github/actions/setup-tools/action.yml",
+            ".github/workflows/test.yml",
+            "tools/test_workflows.py",
+        ):
+            self.assertRegex(path, files)
+
     def test_every_full_pre_commit_run_installs_or_skips_actionlint(self):
         # A job that runs every hook without installing actionlint fails on
         # "Executable `actionlint` not found" unless SKIP names it.
@@ -1204,7 +1265,7 @@ class ActionlintGateTest(unittest.TestCase):
                 run = str(step.get("run", ""))
                 if "rhysd/actionlint" in run and "sha256sum -c" in run:
                     installed = True
-                if not self.FULL_PRE_COMMIT_RUN.search(run):
+                if not self.runs_every_hook(run):
                     continue
                 full_runs += 1
                 skip = {
@@ -1219,6 +1280,30 @@ class ActionlintGateTest(unittest.TestCase):
                         "install actionlint before this step or add it to SKIP",
                     )
         self.assertGreater(full_runs, 0, "found no `pre-commit run` over all hooks")
+
+    def test_which_pre_commit_runs_count_as_running_every_hook(self):
+        # The forms the check above has to recognise, and the ones it must not.
+        every_hook = (
+            "pre-commit run --all-files --show-diff-on-failure",
+            "pre-commit run --all-files \\\n  --show-diff-on-failure",
+            "pre-commit run --from-ref origin/main --to-ref HEAD",
+            "pre-commit run --hook-stage manual --all-files",
+            "pre-commit run --files a.py b.py",
+            "pre-commit run -a || failed=1",
+        )
+        one_hook = (
+            'pre-commit run "$hook" --all-files --show-diff-on-failure',
+            "pre-commit run ruff --all-files",
+            "pre-commit run --all-files ruff",
+            "pre-commit run --hook-stage manual actionlint",
+            "pre-commit install",
+        )
+        for run in every_hook:
+            with self.subTest(run=run):
+                self.assertTrue(self.runs_every_hook(run))
+        for run in one_hook:
+            with self.subTest(run=run):
+                self.assertFalse(self.runs_every_hook(run))
 
     def test_cloud_sessions_install_the_actionlint_ci_pins(self):
         # scripts/install_pkgs.sh installs the release CI Config Hooks runs,
