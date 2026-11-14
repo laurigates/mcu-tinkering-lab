@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.7...nfc-scavenger-hunt-v0.1.8) (2026-11-14)
+
+
+### Documentation
+
+* add READMEs for four web-flasher projects and nfc-scavenger-hunt wiring ([#1172](https://github.com/laurigates/mcu-tinkering-lab/issues/1172)) ([0aae24f](https://github.com/laurigates/mcu-tinkering-lab/commit/0aae24f3651cd47592ef00d48fcf64ec1d9933ad)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.6...nfc-scavenger-hunt-v0.1.7) (2026-11-10)
 
 

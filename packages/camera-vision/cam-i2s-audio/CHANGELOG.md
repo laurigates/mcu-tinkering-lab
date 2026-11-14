@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-cam-i2s-audio-v0.1.6...esp32-cam-i2s-audio-v0.1.7) (2026-11-14)
+
+
+### Documentation
+
+* add READMEs for four web-flasher projects and nfc-scavenger-hunt wiring ([#1172](https://github.com/laurigates/mcu-tinkering-lab/issues/1172)) ([0aae24f](https://github.com/laurigates/mcu-tinkering-lab/commit/0aae24f3651cd47592ef00d48fcf64ec1d9933ad)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+* **tools:** state esp32.just's importers as a fact, not a ban ([4797d8c](https://github.com/laurigates/mcu-tinkering-lab/commit/4797d8c041688e8d7e1a9332f2d3adbfe71d96d5)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-cam-i2s-audio-v0.1.5...esp32-cam-i2s-audio-v0.1.6) (2026-11-10)
 
 

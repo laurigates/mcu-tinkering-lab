@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.24](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.23...robocar-v0.2.24) (2026-11-14)
+
+
+### Bug Fixes
+
+* **robocar:** treat a cut Improv packet as dead after 5 s of silence ([#1161](https://github.com/laurigates/mcu-tinkering-lab/issues/1161)) ([09c13a8](https://github.com/laurigates/mcu-tinkering-lab/commit/09c13a83b235232684862df718dfc36f1fdc418d)), closes [#1103](https://github.com/laurigates/mcu-tinkering-lab/issues/1103)
+
 ## [0.2.23](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.22...robocar-unified-v0.2.23) (2026-11-12)
 
 

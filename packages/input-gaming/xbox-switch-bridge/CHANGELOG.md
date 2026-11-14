@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/xbox-switch-bridge-v0.1.5...xbox-switch-bridge-v0.1.6) (2026-11-14)
+
+
+### Documentation
+
+* **claude:** list packages/components/log-udp in the repository tree ([cce9e4c](https://github.com/laurigates/mcu-tinkering-lab/commit/cce9e4c6566f84c9d035aed160bae78720edd3c8)), closes [#1081](https://github.com/laurigates/mcu-tinkering-lab/issues/1081)
+* point the two log_udp consumers' docs at the shared component ([c5a0a2c](https://github.com/laurigates/mcu-tinkering-lab/commit/c5a0a2c5112ad6c51c6b56ea2506ccc96394fd79)), closes [#1081](https://github.com/laurigates/mcu-tinkering-lab/issues/1081)
+* **tools:** state esp32.just's importers as a fact, not a ban ([4797d8c](https://github.com/laurigates/mcu-tinkering-lab/commit/4797d8c041688e8d7e1a9332f2d3adbfe71d96d5)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/xbox-switch-bridge-v0.1.4...xbox-switch-bridge-v0.1.5) (2026-10-12)
 
 

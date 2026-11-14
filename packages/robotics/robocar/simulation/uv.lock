@@ -773,7 +773,7 @@ wheels = [
 
 [[package]]
 name = "esp32-robot-simulation"
-version = "0.1.12"
+version = "0.1.13"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio-mqtt" },

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.6...thinkpack-finderbox-v1.1.7) (2026-11-14)
+
+
+### Documentation
+
+* **thinkpack-rc522:** stop citing the driver copy nfc-scavenger-hunt no longer has ([32a1e1a](https://github.com/laurigates/mcu-tinkering-lab/commit/32a1e1afbab544f9394c2ec4f2da09c37466572e)), closes [#1081](https://github.com/laurigates/mcu-tinkering-lab/issues/1081)
+* **thinkpack:** say what is known about the AMPDU-off settings ([bab94e3](https://github.com/laurigates/mcu-tinkering-lab/commit/bab94e30e846391913bce9ad031fdb7b4d76c961)), closes [#1081](https://github.com/laurigates/mcu-tinkering-lab/issues/1081)
+
 ## [1.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.5...thinkpack-finderbox-v1.1.6) (2026-11-11)
 
 

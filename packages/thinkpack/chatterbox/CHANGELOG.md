@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.5...thinkpack-chatterbox-v1.1.6) (2026-11-14)
+
+
+### Documentation
+
+* **thinkpack:** say what is known about the AMPDU-off settings ([bab94e3](https://github.com/laurigates/mcu-tinkering-lab/commit/bab94e30e846391913bce9ad031fdb7b4d76c961)), closes [#1081](https://github.com/laurigates/mcu-tinkering-lab/issues/1081)
+
 ## [1.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.4...thinkpack-chatterbox-v1.1.5) (2026-11-11)
 
 
