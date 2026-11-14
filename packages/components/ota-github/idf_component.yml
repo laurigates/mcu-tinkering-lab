@@ -1,16 +1,9 @@
 ## IDF Component Manager manifest for the ota_github shared component.
 ##
-## Declares the external GitHub-OTA dependency (esp_ghota) so that any
-## ESP-IDF project that adds ota_github to EXTRA_COMPONENT_DIRS picks it up
-## transitively — consumers no longer need to list esp_ghota in their own
-## idf_component.yml.
+## The component has no managed dependencies: TRIGGERED mode and MQTT
+## push-notify use only ESP-IDF's own esp_https_ota and mqtt. The esp_ghota
+## dependency left with PULL mode (#1081); pull OTA lives in
+## packages/robotics/robocar/main/ota_manager.c.
 dependencies:
   idf:
     version: '>=5.1'
-  # GitHub release polling + semver comparison. Only required by the
-  # PULL-mode source (src/ota_github_pull.c). If you only use TRIGGERED
-  # mode you can still build, but the symbol references are resolved at
-  # link time so this dependency is always pulled.
-  fishwaldo/esp_ghota:
-    git: https://github.com/FishWaldo/esp_ghota.git
-    version: 'v1.0.0'

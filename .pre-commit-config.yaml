@@ -84,7 +84,7 @@ repos:
       - id: check-credentials
         name: Check for credential files
         entry: >-
-          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
+          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h$|wifi_config\.h$|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
@@ -119,6 +119,13 @@ repos:
         files: '^tools/labels/'
         pass_filenames: false
 
+      - id: scaffold-tests
+        name: tools/scaffold unit tests (new project drops the template's release identity)
+        entry: python3 -m unittest discover -s tools/scaffold
+        language: system
+        files: '^(tools/scaffold/|packages/camera-vision/cam-webserver/)'
+        pass_filenames: false
+
       - id: refresh-idf-locks-tests
         name: refresh-idf-locks unit tests
         entry: python3 -m unittest tools/test_refresh_idf_locks.py
@@ -133,11 +140,39 @@ repos:
         files: '^tools/(changelog-notes\.py|test_changelog_notes\.py|generate-flasher-manifests\.sh)$'
         pass_filenames: false
 
+      # release-please's simple strategy bumps version.txt but never creates
+      # it, so a package without one ships every release as its CMake
+      # fallback (issue #1078). A config-only PR runs no Code Quality Checks,
+      # so test.yml's CI Config Hooks job runs this hook too.
+      - id: release-please-versions
+        name: every release-please package has a version.txt at its manifest version
+        entry: python3 -m unittest tools/test_release_please_versions.py
+        language: system
+        files: '(^release-please-config\.json|^\.release-please-manifest\.json|(^|/)version\.txt|CMakeLists\.txt|^tools/test_release_please_versions\.py)$'
+        pass_filenames: false
+
       - id: flash-source-tests
         name: flash-source unit tests (which firmware a flash writes)
         entry: python3 -m unittest tools/test_flash_source.py
         language: system
         files: '^tools/(flash-source\.py|test_flash_source\.py)$'
+        pass_filenames: false
+
+      # A suite that builds a throwaway git repository scrubs the GIT_* a hook
+      # inherits during a commit from a linked worktree (#1123).
+      - id: git-env-tests
+        name: Throwaway-repository test suites scrub inherited GIT_* variables
+        entry: python3 -m unittest tools/test_git_env.py
+        language: system
+        files: '(^|/)(test_[^/]*\.py|conftest\.py)$|^tools/gitenv\.py$'
+        pass_filenames: false
+
+      # Runs the check-credentials entry above against staged names (#1145).
+      - id: check-credentials-tests
+        name: check-credentials refuses credential files, not their templates
+        entry: python3 -m unittest tools/test_check_credentials.py
+        language: system
+        files: '^(\.pre-commit-config\.yaml|tools/(test_check_credentials|gitenv)\.py)$'
         pass_filenames: false
 
       - id: jlc-blog-tests
@@ -182,11 +217,12 @@ repos:
       # tools/kconfig_symbols, and fails when the ESP-IDF version pins (the
       # Dockerfile, docker-compose.yml's image tag, any workflow) disagree
       # with each other or with the ESP-IDF list. No build or container needed.
+      # Fenced sdkconfig snippets in tracked Markdown are checked too (#1092).
       - id: kconfig-symbols
-        name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
+        name: sdkconfig.defaults and doc snippet symbols exist in ESP-IDF, the project or its components
         entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
         language: system
-        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|\.md|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^docker-compose\.yml|^\.github/workflows/[^/]+\.ya?ml)$'
         pass_filenames: false
 
       # No run: script expands inputs.* or github.event.* through ${{ }}
@@ -225,14 +261,15 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Runs on a uv.lock, pyproject.toml, justfile or CI file change: those
-      # move what the test reads (tools/test_python_suites.py, issue #457).
+      # Runs on a uv.lock, pyproject.toml, justfile, CI file, just pin or
+      # component host-suite change: those move what the test reads
+      # (tools/test_python_suites.py, issues #457, #1103).
       - id: python-suites
         name: Every uv.lock is installed --locked, every tool test recipe runs in CI, uv and just come from setup-tools
         entry: python3 -m unittest tools/test_python_suites.py
         language: system
         pass_filenames: false
-        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$)'
+        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$|^scripts/install_pkgs\.sh$|^packages/(.*/)?components/[^/]+/tests?/|^packages/components/host-test/)'
 
       # Ruff accepts a key placed under the wrong TOML table without a warning
       # (issue #761: select and fixable sat inside [lint.per-file-ignores]).
@@ -283,6 +320,23 @@ repos:
         entry: python3 tools/check-doc-facts.py
         language: system
         files: '(pin_config\.h|WIRING\.md|README\.md|build-guide\.typ|tools/check-doc-facts\.py)$'
+        pass_filenames: false
+
+      # Every relative Markdown link names a tracked file (#1147). Moving or
+      # deleting the target breaks a link without touching any .md, so it runs
+      # on every commit; the scan takes well under a second.
+      - id: check-md-links
+        name: Relative Markdown links resolve to tracked files
+        entry: python3 tools/check-md-links.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-md-links-tests
+        name: check-md-links unit tests
+        entry: python3 -m unittest tools/test_check_md_links.py
+        language: system
+        files: '^tools/(check-md-links|test_check_md_links)\.py$'
         pass_filenames: false
 
       - id: check-ota-consumer-agreement

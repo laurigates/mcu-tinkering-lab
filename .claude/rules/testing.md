@@ -14,6 +14,16 @@ uv run pytest tests/ --cov
 - Maintain test coverage for simulation code
 - Run tests before committing Python changes
 
+## Suites That Create a Git Repository
+
+A test module that runs `git init` in a temporary directory sets
+`setUpModule = gitenv.isolate` (`tools/gitenv.py`), and a pytest project
+deletes every `GIT_*` variable in an autouse conftest fixture
+(`docs/schematics/conftest.py`): a hook run during a commit from a linked
+worktree inherits `GIT_DIR` and `GIT_INDEX_FILE`, which otherwise send those
+git calls to the repository being committed (#1123). `tools/test_git_env.py`
+fails for a suite that does neither.
+
 ## Schematics
 
 ```bash

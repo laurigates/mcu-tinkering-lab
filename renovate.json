@@ -28,6 +28,11 @@
       "groupName": "gitleaks"
     },
     {
+      "description": "Keep just in lockstep across scripts/install_pkgs.sh (cloud sessions) and .github/actions/setup-tools/action.yml (CI); both regex managers name it casey/just. tools/test_python_suites.py fails when they differ, since the `just --dry-run` text check-flash-recipes reads can change between releases.",
+      "matchDepNames": ["casey/just"],
+      "groupName": "just"
+    },
+    {
       "description": "Hold sphinx below 9.2 in the robocar simulation: sphinx 9.2 requires Python >=3.13 while the simulation's requires-python floor is 3.12, so uv cannot resolve. Drop once the simulation floor moves to 3.13.",
       "matchFileNames": ["packages/robotics/robocar/simulation/**"],
       "matchPackageNames": ["/^sphinx$/i"],

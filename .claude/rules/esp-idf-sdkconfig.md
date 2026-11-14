@@ -49,6 +49,10 @@ names a managed component as "not recorded", build the project and run the
 holds every target's symbols, so a symbol valid only on another target still
 passes; the build log is the check for that.
 
+The hook also reads every assignment inside a fenced code block of a tracked
+Markdown file (#1092), so a doc that has to name a dead symbol names it inline
+in prose, as this section does.
+
 ## sdkconfig Should Be Gitignored
 
 The generated `sdkconfig` should be in `.gitignore`. Only `sdkconfig.defaults` and named overlays (`sdkconfig.debug`, etc.) belong in version control.

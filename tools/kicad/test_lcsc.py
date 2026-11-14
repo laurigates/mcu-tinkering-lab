@@ -24,8 +24,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
+import gitenv
+
 from kicad import lcsc
 from kicad.errors import KicadError
+
+setUpModule = gitenv.isolate
 
 DATA = Path(__file__).parent / "testdata/lcsc"
 NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)

@@ -2,12 +2,11 @@
  * @file ota_github.h
  * @brief Reusable GitHub-Releases OTA update component for ESP-IDF.
  *
- * `ota_github` is a project-agnostic wrapper around `esp_ghota` and
- * `esp_https_ota` that provides:
+ * `ota_github` is a project-agnostic wrapper around `esp_https_ota` that
+ * provides:
  *
- *  - Periodic polling of GitHub Releases (PULL mode)
  *  - Externally-triggered URL download (TRIGGERED mode, e.g. from I2C/UART)
- *  - Optional MQTT push-notify to short-circuit the polling interval
+ *  - Optional MQTT push-notify, whose payload names the release tag
  *  - SHA256 verification of the downloaded app-ELF digest
  *  - Automatic rollback-cancellation after a configurable stability window
  *  - Thread-safe progress / status reporting
@@ -19,18 +18,12 @@
  * the @ref ota_github_hooks_t callback table and the optional MQTT client
  * handle injection in @ref ota_github_config_t.
  *
- * ### Minimal usage (PULL mode)
- * @code
- *   ota_github_config_t cfg = OTA_GITHUB_CONFIG_DEFAULT();
- *   cfg.mode                    = OTA_GITHUB_MODE_PULL;
- *   cfg.github_org              = "laurigates";
- *   cfg.github_repo              = "mcu-tinkering-lab";
- *   cfg.firmware_filename_match = "my-project";
- *   cfg.poll_interval_min       = 360;  // 6 hours
- *   ESP_ERROR_CHECK(ota_github_init(&cfg));
- * @endcode
+ * The component does not poll. A PULL mode wrapping esp_ghota was removed
+ * (#1081): esp_ghota could not complete an update (#539). Pull OTA lives in
+ * packages/robotics/robocar/main/ota_manager.c, which polls the web
+ * flasher's manifest.
  *
- * ### Minimal usage (TRIGGERED mode)
+ * ### Minimal usage
  * @code
  *   ota_github_config_t cfg = OTA_GITHUB_CONFIG_DEFAULT();
  *   cfg.mode        = OTA_GITHUB_MODE_TRIGGERED;
@@ -61,14 +54,10 @@ extern "C" {
 /**
  * @brief Operating mode of the OTA component.
  *
- * A single device uses exactly one mode for the lifetime of a boot. To run
- * both behaviors on the same device (e.g. periodic poll AND external
- * trigger), use PULL mode and call @ref ota_github_trigger_url when the
- * external signal fires — PULL mode supports manual triggers too.
+ * TRIGGERED is the only mode. It keeps the numeric value 1 it had when
+ * PULL (0) existed; @ref ota_github_init rejects any other value.
  */
 typedef enum {
-    /** Periodic polling of GitHub releases via esp_ghota. */
-    OTA_GITHUB_MODE_PULL = 0,
     /** Wait for explicit @ref ota_github_trigger_url / _trigger_tag calls. */
     OTA_GITHUB_MODE_TRIGGERED = 1,
 } ota_github_mode_t;
@@ -76,9 +65,9 @@ typedef enum {
 /**
  * @brief High-level state reported by @ref ota_github_get_status.
  *
- * Values intentionally match the robocar I2C protocol's `ota_status_t` so
- * they can be forwarded unchanged across the bus. The numeric values are
- * part of the ABI — do not renumber.
+ * Values match the `ota_status_t` of the dual-ESP32 robocar's I2C protocol,
+ * which forwarded them unchanged across the bus; that design is removed. The
+ * numeric values are part of the ABI — do not renumber.
  */
 typedef enum {
     OTA_GITHUB_STATUS_IDLE = 0x00,
@@ -95,12 +84,6 @@ typedef enum {
  * task unless documented otherwise, so keep them brief or dispatch work.
  */
 typedef struct {
-    /**
-     * @brief Invoked once a newer release is detected, before the download
-     *        begins. Use it to publish status, dim the LCD, etc.
-     */
-    void (*on_update_available)(const char *new_version, void *user_ctx);
-
     /**
      * @brief Invoked immediately before the device will reboot into the
      *        new firmware. Use it to quiesce peripherals (stop motors,
@@ -129,23 +112,14 @@ typedef struct {
  * @brief Full configuration passed to @ref ota_github_init.
  *
  * Prefer initializing with @ref OTA_GITHUB_CONFIG_DEFAULT() and overriding
- * the fields you care about — the defaults are tuned for the robocar
- * reference implementation (6-hour poll, 60-second rollback window,
- * 30-second HTTP timeout) and are sensible for most projects.
+ * the fields you care about — the defaults (60-second rollback window,
+ * 30-second HTTP timeout) are sensible for most projects.
  */
 typedef struct {
     /* --- Required --- */
-    ota_github_mode_t mode;
+    ota_github_mode_t mode;  /**< Must be OTA_GITHUB_MODE_TRIGGERED. */
     const char *github_org;  /**< GitHub org/user (e.g. "laurigates"). */
     const char *github_repo; /**< GitHub repo name. */
-
-    /* --- PULL mode --- */
-    /** Substring that release asset names must contain (e.g. "robocar-camera").
-     *  Matches esp_ghota's `filenamematch` semantics. Ignored in TRIGGERED mode. */
-    const char *firmware_filename_match;
-    /** Poll interval in minutes. Default 360 (6 hours). 0 disables polling
-     *  (useful when you only want MQTT-triggered checks). */
-    uint32_t poll_interval_min;
 
     /* --- TRIGGERED mode --- */
     /** Asset filename (without path) that will be appended to
@@ -167,8 +141,9 @@ typedef struct {
 
     /* --- Optional MQTT push-notify --- */
     /** If true and `mqtt_client` is set, the component subscribes to
-     *  `mqtt_notify_topic`; any inbound message triggers an immediate
-     *  update check (rate-limited to at most once per 60 seconds). */
+     *  `mqtt_notify_topic`; an inbound message's payload is taken as a
+     *  release tag and passed to @ref ota_github_trigger_tag (rate-limited
+     *  to at most once per 60 seconds). */
     bool mqtt_enabled;
     /** Caller-owned MQTT client. The component never creates or destroys
      *  MQTT clients — it only registers event handlers. */
@@ -184,45 +159,36 @@ typedef struct {
 } ota_github_config_t;
 
 /**
- * @brief Sensible defaults. Equivalent to `{0}` plus the tuned timing
- *        constants used in production by the robocar reference project.
+ * @brief Sensible defaults: TRIGGERED mode plus the timing constants.
  */
-#define OTA_GITHUB_CONFIG_DEFAULT()    \
-    ((ota_github_config_t){            \
-        .mode = OTA_GITHUB_MODE_PULL,  \
-        .poll_interval_min = 360,      \
-        .stability_timeout_ms = 60000, \
-        .http_timeout_ms = 30000,      \
-        .task_stack_size = 8192,       \
-        .task_priority = 5,            \
+#define OTA_GITHUB_CONFIG_DEFAULT()        \
+    ((ota_github_config_t){                \
+        .mode = OTA_GITHUB_MODE_TRIGGERED, \
+        .stability_timeout_ms = 60000,     \
+        .http_timeout_ms = 30000,          \
+        .task_stack_size = 8192,           \
+        .task_priority = 5,                \
     })
 
 /**
  * @brief Initialize the OTA component with the supplied configuration.
  *
- * Must be called exactly once per boot, after NVS and (for PULL mode or
- * MQTT-enabled TRIGGERED mode) after the network stack is ready.
+ * Must be called exactly once per boot, after NVS and (with MQTT
+ * push-notify enabled) after the network stack is ready.
  *
  * @return
  *  - ESP_OK on success
- *  - ESP_ERR_INVALID_ARG if required fields (org, repo) are missing
+ *  - ESP_ERR_INVALID_ARG if required fields (org, repo) are missing or
+ *    `mode` is not OTA_GITHUB_MODE_TRIGGERED
  *  - ESP_ERR_INVALID_STATE if called twice
- *  - Propagated error from esp_ghota / esp_event_handler_register
+ *  - ESP_ERR_NO_MEM if the state mutex cannot be created
  */
 esp_err_t ota_github_init(const ota_github_config_t *cfg);
 
 /**
- * @brief Trigger an immediate update check. PULL mode only.
- *
- * Equivalent to `ghota_check()`. In TRIGGERED mode this returns
- * ESP_ERR_NOT_SUPPORTED — use @ref ota_github_trigger_url instead.
- */
-esp_err_t ota_github_check_now(void);
-
-/**
  * @brief Start a firmware download from an explicit HTTPS URL.
  *
- * Available in both modes. The URL must be HTTPS and reachable with the
+ * The URL must be HTTPS and reachable with the
  * embedded ESP-IDF certificate bundle (any public CA works). The optional
  * `sha256_prefix` is compared against the first 4 bytes of the downloaded
  * firmware's embedded app description SHA256; mismatch aborts and marks
@@ -267,21 +233,6 @@ uint8_t ota_github_get_error_code(void);
 
 /** @brief Current app version string, from `esp_app_get_description()`. */
 const char *ota_github_get_version(void);
-
-/* --------------------------------------------------------------------------
- * Escape hatch: expose the underlying esp_ghota client for callers that
- * need to call esp_ghota APIs directly (e.g. `ghota_get_latest_version`
- * for peer-orchestration). The handle is only valid in PULL mode.
- *
- * Declared with `void *` to avoid forcing every consumer to pull in
- * esp_ghota headers. In the caller:
- *
- *     #include "esp_ghota.h"
- *     ghota_client_handle_t *c = ota_github_pull_get_client_handle();
- *
- * Returns NULL if PULL mode is not active.
- * -------------------------------------------------------------------------- */
-void *ota_github_pull_get_client_handle(void);
 
 /**
  * @brief Manually cancel rollback and mark this firmware valid.

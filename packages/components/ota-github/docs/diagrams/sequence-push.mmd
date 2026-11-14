@@ -8,9 +8,5 @@ sequenceDiagram
     CI->>Broker: publish mqtt_notify_topic = release_tag
     Broker-->>Device: DATA event (topic, payload)
     Device->>Device: rate-limit (max 1/60s)
-    alt PULL mode
-        Device->>Device: ota_github_check_now
-    else TRIGGERED mode
-        Device->>Device: ota_github_trigger_tag(payload)
-    end
-    Device->>GitHub: GET /releases/...
+    Device->>Device: ota_github_trigger_tag(payload)
+    Device->>GitHub: GET /releases/download/{payload}/{asset}

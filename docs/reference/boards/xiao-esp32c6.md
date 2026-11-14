@@ -106,7 +106,7 @@ GPIO14 controls the RF switch between onboard ceramic antenna and U.FL connector
 
 ## USB Limitation
 
-The ESP32-C6 has a **USB-Serial-JTAG controller** — a fixed-function peripheral hardwired for serial console and JTAG debugging only. It **cannot** be reprogrammed for USB OTG, HID, CDC-ACM, or any custom USB class. This is why we chose the ESP32-S3 over the C6 for the [IT Troubleshooter](../../packages/networking/it-troubleshooter/) project (see [ADR-005](../blueprint/adrs/ADR-005-it-troubleshooter-hardware.md)).
+The ESP32-C6 has a **USB-Serial-JTAG controller** — a fixed-function peripheral hardwired for serial console and JTAG debugging only. It **cannot** be reprogrammed for USB OTG, HID, CDC-ACM, or any custom USB class. This is why we chose the ESP32-S3 over the C6 for the [IT Troubleshooter](../../../packages/networking/it-troubleshooter/) project (see [ADR-005](../../decisions/ADR-005-it-troubleshooter-hardware.md)).
 
 ## Power Consumption
 
@@ -157,11 +157,8 @@ The ESP32-C6 includes hardware security capabilities:
 # Target
 CONFIG_IDF_TARGET="esp32c6"
 
-# Wi-Fi 6
-CONFIG_ESP_WIFI_11AX_SUPPORT=y
-
-# Zigbee (if using Zigbee stack)
-CONFIG_ZB_ENABLED=y
+# Wi-Fi 6 (802.11ax) needs no setting on the C6. Zigbee comes from the
+# espressif/esp-zigbee-lib managed component in main/idf_component.yml.
 
 # Thread (if using Thread/OpenThread)
 CONFIG_OPENTHREAD_ENABLED=y
@@ -193,7 +190,7 @@ idf.py set-target esp32c6
 
 ## In This Repository
 
-The XIAO ESP32-C6 was originally considered for the IT Troubleshooter project but was rejected due to its lack of USB OTG support ([ADR-005](../blueprint/adrs/ADR-005-it-troubleshooter-hardware.md)). It remains a strong candidate for future projects that need:
+The XIAO ESP32-C6 was originally considered for the IT Troubleshooter project but was rejected due to its lack of USB OTG support ([ADR-005](../../decisions/ADR-005-it-troubleshooter-hardware.md)). It remains a strong candidate for future projects that need:
 
 - Thread/Zigbee connectivity (e.g., Matter bridge)
 - Low-power battery-operated sensors

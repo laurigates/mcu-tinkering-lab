@@ -2,10 +2,10 @@
  * @file thinkpack_rc522.h
  * @brief MFRC522 NFC reader driver (SPI) shared across ThinkPack firmware.
  *
- * Ported from packages/games/nfc-scavenger-hunt/main/rc522_driver.{c,h}.
- * The SPI bus setup and timing are unchanged from the reference driver, which
- * is known-good on hardware. Board-specific pin selection is done at compile
- * time via the BOARD_SUPERMINI / XIAO_ESP32S3 defines.
+ * Ported from nfc-scavenger-hunt's former main/rc522_driver.{c,h}; that project
+ * now uses this component and no longer carries a copy. The SPI bus setup and
+ * timing are unchanged from that driver, which is known-good on hardware. Board-specific pin
+ * selection is done at compile time via the BOARD_SUPERMINI / XIAO_ESP32S3 defines.
  *
  * No dependencies on project-specific tag config headers — this driver only
  * reads UIDs and leaves mapping to behaviours to the application.
