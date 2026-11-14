@@ -4,6 +4,7 @@ A thumb-sized ESP32-S3 board with a USB-C connector wired to the chip's native
 USB, sold under the name "ESP32-S3 SuperMini" by several makers. It is the
 board of the ThinkPack chatterbox and finderbox (their `flasher.json` `board`
 field), and boombox, glowbug and the `thinkpack-rc522` component name it too.
+The nfc-scavenger-hunt game has a pin block for it.
 The silicon is described in [`mcu--esp32-s3.md`](../datasheets/mcu--esp32-s3.md);
 this page holds only what is particular to the board.
 
@@ -25,7 +26,9 @@ The variants a primary source describes:
 | Generic ESP32-S3 SuperMini | 15 GPIO on the castellated edges and 20 on underside pads; no charger mentioned. A unit marked `HW747 V0.0.2` drives its RGB LED in RGB rather than GRB order | ESP32-S3FH4R2 | CircuitPython's board page and board definition (`adafruit/circuitpython` at `519f3530`, `ports/espressif/boards/generic_esp32s3_supermini/`) |
 | "A random ESP32-S3 Super Mini product" | A plain LED and an addressable RGB LED, both on GPIO48 | ESP32-S3FH4R2 | [UnsignedArduino/ESP32-S3-Super-Mini-Test](https://github.com/UnsignedArduino/ESP32-S3-Super-Mini-Test) `README.md` lines 3 and 11 (at `b9ba4904`) |
 
-Every source found names the ESP32-S3FH4R2. No source was found for a
+Every source found names the ESP32-S3FH4R2, but espboards.dev hedges: "Most
+S3 SuperMinis are built on the ESP32-S3FH4R2" and "These boards come from many
+factories, so verify what you actually got". No source was found for a
 SuperMini with octal PSRAM (an R8 or R16V part).
 
 Do not confuse it with the [ESP32-C3 Super Mini](esp32-c3-super-mini.md), a
@@ -43,7 +46,7 @@ which carries the same ESP32-S3FH4R2 in a different layout
 | USB | USB-C to the chip's USB pins, GPIO19 (D−) and GPIO20 (D+), which are not broken out | Datasheet Table 2-8 (p. 24); neither pin appears in the Tenstar drawing or in CircuitPython `pins.c` |
 | Buttons | BOOT on GPIO0, RESET | CircuitPython `pins.c` lines 12–13; CircuitPython board page; Tenstar drawing labels both |
 | Addressable RGB LED | One, data on GPIO48, GRB order | CircuitPython `mpconfigboard.h` line 14; ESPHome `index.md` line 26 and YAML `pin: GPIO48`, `rgb_order: GRB`; Tenstar drawing ("WS2818 RGB LED, GP48, DIN"); UnsignedArduino `src/main.cpp` line 5. The part is called WS2812 (CircuitPython), WS2812B (ESPHome) and WS2818 (Tenstar, UnsignedArduino) |
-| Plain LED | Also on GPIO48. Blue according to Tenstar ("Onboard RGB, blue LED: common GPIO48 pin"), red according to espboards.dev | Tenstar drawing; UnsignedArduino `README.md` line 11; [espboards.dev](https://www.espboards.dev/esp32/esp32-s3-super-mini/) |
+| Plain LED | Also on GPIO48. Blue according to Tenstar ("Onboard RGB, blue LED: common GPIO48 pin"); espboards.dev lists a "Red LED - Power Indicator" on GPIO48 and a separate "Blue LED - Battery Charge Indicator" with no GPIO, so its blue LED is a charge LED, possibly the drawing's `BAT` LED | Tenstar drawing; UnsignedArduino `README.md` line 11; [espboards.dev](https://www.espboards.dev/esp32/esp32-s3-super-mini/) |
 | Charge LED and charger (Tenstar variant) | `BAT` LED, no GPIO. Battery on the `B+`/`B-` pads; closing `BOOST` raises the charge current from 100 mA to 300 mA, "only do this if your battery is larger than 500mAh" | Tenstar drawing; ESPHome `index.md` line 19 |
 | Power pins | `5V`, `GND`, `3V3` (labelled "3V3(OUT)") | Tenstar drawing |
 | Antenna | On the board, at the end opposite the USB-C connector | Tenstar drawing photo ("WIFI Antenna") |
@@ -59,7 +62,7 @@ Tenstar drawing's top view and the comments in CircuitPython `pins.c` (lines
 written as `Side`/`Pos` here. The 20 underside pads are listed in GPIO order.
 
 Analog and touch channels are from the datasheet's Table 2-8 (p. 24), JTAG and
-UART0 functions from Table 2-4 (p. 21), strapping functions from §3 and Table
+UART0 functions from Table 2-4 (pp. 21–22), strapping functions from §3 and Table
 3-1 (p. 32).
 
 | Pin | GPIO | Location | Default function | Alternate functions | Source |
@@ -180,6 +183,8 @@ CONFIG_SPIRAM_MODE_QUAD=y
 
 The flasher.json `board` field of chatterbox and finderbox names the board;
 boombox and glowbug name it in their READMEs, justfiles and `main` sources.
+nfc-scavenger-hunt has a `BOARD_SUPERMINI` pin block in `main/`, and its
+`sdkconfig.defaults` line 59 says "match board: 4MB SuperMini, 8MB XIAO".
 GPIOs each project assigns, read from the firmware sources:
 
 | GPIO | Project | Use | Where |
@@ -189,34 +194,47 @@ GPIOs each project assigns, read from the firmware sources:
 | GPIO1 | glowbug | Light sensor, ADC1_CH0 | `glowbug/main/light_sensor.h` lines 24, 27 |
 | GPIO2 | boombox | Pitch potentiometer, ADC1_CH1 | `boombox/main/pot_reader.c` line 23 |
 | GPIO2 | finderbox | Piezo, LEDC | `finderbox/main/piezo.h` line 23 |
+| GPIO3 | nfc-scavenger-hunt (both boards) | Reset button, read low; a strapping pin (JTAG signal source) | `nfc-scavenger-hunt/main/main.c` lines 23–24 |
 | GPIO4 | chatterbox | I2S TX BCLK | `chatterbox/main/audio_engine.c` line 27 |
+| GPIO4 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | I2S BCLK | `nfc-scavenger-hunt/main/i2s_audio.c` line 15 |
 | GPIO4 | finderbox, glowbug | External WS2812B ring data | `main/led_ring.h` of each |
 | GPIO4 | boombox | External WS2812 data | `boombox/main/led_single.c` line 20 |
 | GPIO5 | chatterbox | I2S TX LRCLK | `chatterbox/main/audio_engine.c` line 28 |
 | GPIO5 | boombox | Piezo, LEDC | `boombox/main/tone_engine.c` line 23 |
+| GPIO5 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | I2S LRCLK | `nfc-scavenger-hunt/main/i2s_audio.c` line 16 |
 | GPIO6 | chatterbox | I2S TX DOUT | `chatterbox/main/audio_engine.c` line 29 |
 | GPIO6 | glowbug | I2C SDA (MPU6050) | `glowbug/main/imu.h` line 23 |
+| GPIO6 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | I2S DOUT | `nfc-scavenger-hunt/main/i2s_audio.c` line 17 |
 | GPIO7 | glowbug | I2C SCL (MPU6050) | `glowbug/main/imu.h` line 26 |
 | GPIO9 | boombox, glowbug | Button, active low | `boombox/main/button.c` line 19, `glowbug/main/button.h` line 25 |
 | GPIO10 | chatterbox | I2S RX BCLK | `chatterbox/main/audio_engine.c` line 31 |
 | GPIO10 | thinkpack-rc522 (`BOARD_SUPERMINI`) | RC522 CS | `components/thinkpack-rc522/rc522_driver.c` line 33 |
+| GPIO10 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | RC522 CS | `nfc-scavenger-hunt/main/rc522_driver.c` line 22 |
 | GPIO11 | chatterbox | I2S RX LRCLK | `chatterbox/main/audio_engine.c` line 32 |
 | GPIO11 | thinkpack-rc522 (`BOARD_SUPERMINI`) | RC522 MOSI | `rc522_driver.c` line 32 |
+| GPIO11 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | RC522 MOSI | `nfc-scavenger-hunt/main/rc522_driver.c` line 21 |
 | GPIO12 | chatterbox | I2S RX DIN | `chatterbox/main/audio_engine.c` line 33 |
 | GPIO12 | thinkpack-rc522 (`BOARD_SUPERMINI`) | RC522 SCK | `rc522_driver.c` line 30 |
+| GPIO12 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | RC522 SCK | `nfc-scavenger-hunt/main/rc522_driver.c` line 19 |
 | GPIO13 | thinkpack-rc522 (`BOARD_SUPERMINI`) | RC522 MISO | `rc522_driver.c` line 31 |
+| GPIO13 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | RC522 MISO | `nfc-scavenger-hunt/main/rc522_driver.c` line 20 |
 | GPIO14 | chatterbox | Touch pad, TOUCH14 | `chatterbox/main/touch_driver.c` line 25 |
 | GPIO14 | thinkpack-rc522 (`BOARD_SUPERMINI`) | RC522 RST | `rc522_driver.c` line 34 |
+| GPIO14 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | RC522 RST | `nfc-scavenger-hunt/main/rc522_driver.c` line 23 |
+| GPIO48 | nfc-scavenger-hunt (`BOARD_SUPERMINI`) | Status LED, "SuperMini uses WS2812 RGB LED on GPIO48", driven as "a simple on/off GPIO" | `nfc-scavenger-hunt/main/status_led.c` lines 10–16 |
 
 Pins the boxes' wiring documents name but no firmware drives: GPIO15, a status
 LED chatterbox reserves ([`WIRING.md`](../../../packages/thinkpack/chatterbox/WIRING.md));
 GPIO9, a finderbox button ([`WIRING.md`](../../../packages/thinkpack/finderbox/WIRING.md)),
-with no button code in `finderbox/main/`. No project uses the on-board LEDs on
-GPIO48, or a strapping pin.
+with no button code in `finderbox/main/`. No ThinkPack box uses the on-board
+LEDs on GPIO48 or a strapping pin; nfc-scavenger-hunt uses both, GPIO48 for
+its status LED and GPIO3 for its reset button.
 
 `BOARD_SUPERMINI` is defined in no `CMakeLists.txt` or build file, so
 `thinkpack-rc522` compiles its XIAO ESP32-S3 pin block (SCK 7, MISO 8, MOSI 9,
-CS 5, RST 4) in finderbox, not the block above.
+CS 5, RST 4) in finderbox, not the block above. nfc-scavenger-hunt likewise
+compiles its XIAO pins (I2S BCLK 6, LRCLK 43, DOUT 44; RC522 SCK 7, MISO 8,
+MOSI 9, CS 5, RST 4; status LED 2) for the same reason.
 
 Project files that state the memory: chatterbox's
 [`WIRING.md`](../../../packages/thinkpack/chatterbox/WIRING.md) says "4 MB
@@ -224,6 +242,10 @@ flash, octal PSRAM" and that GPIO35–37 are taken by the octal PSRAM, and its
 [`sdkconfig.defaults`](../../../packages/thinkpack/chatterbox/sdkconfig.defaults)
 sets `CONFIG_SPIRAM_MODE_OCT=y`. finderbox, boombox and glowbug set
 `CONFIG_SPIRAM=n`. All four set `CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y`.
+nfc-scavenger-hunt's
+[`sdkconfig.defaults`](../../../packages/games/nfc-scavenger-hunt/sdkconfig.defaults)
+also sets `CONFIG_SPIRAM_MODE_OCT=y` (line 12) and
+`CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y` (line 60).
 
 ## Source
 
@@ -262,8 +284,9 @@ other people's boards and documents.**
 - [ ] Count the underside pads and confirm GPIO48 is one of them.
 - [ ] Confirm the RGB LED's colour order (GRB, or RGB as on the `HW747
       V0.0.2` unit CircuitPython names).
-- [ ] Note the plain LED's colour (blue per Tenstar, red per espboards.dev)
-      and whether it lights with GPIO48 high or low.
+- [ ] Note the plain LED's colour (blue per Tenstar, red per espboards.dev,
+      which names its blue LED as the charge indicator) and whether it
+      lights with GPIO48 high or low.
 - [ ] Read the part numbers of the 3.3 V regulator and, on a charger variant,
       the charger IC.
 - [ ] Check whether `5V` connects to the USB-C VBUS, so it can be fed as an
