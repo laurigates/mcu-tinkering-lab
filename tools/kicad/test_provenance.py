@@ -11,8 +11,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import gitenv
+
 from kicad import paths, provenance
 from kicad.errors import KicadError
+
+setUpModule = gitenv.isolate
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 PCB_SHA = "fedcba9876543210" * 4

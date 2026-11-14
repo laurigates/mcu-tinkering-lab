@@ -14,9 +14,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import gitenv
+
 from hardware import CARRIER, HARNESS, VIEWS, HardwareError, join
 from hardware.blocks import load_sidecar
 from hardware.test_hardware import BOARD_MD, HEADER_H, REPO_ROOT, write
+
+setUpModule = gitenv.isolate
 
 # LED_PIN is GPIO1 (pad D0) and BEEP_PIN GPIO7 (pad D2) on the test board.
 # BEEP_PIN is wired only on the carrier, and excused only on the harness.

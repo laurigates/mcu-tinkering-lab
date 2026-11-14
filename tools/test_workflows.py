@@ -50,7 +50,7 @@ What the tests hold:
   job grants the reusable's scopes itself, since the workflow level is
   read-only.
 - A pre-commit hook that watches CI configuration (``.github/``,
-  ``Dockerfile``, ``docker-compose.yml``, the root ``justfile``) runs on a PR
+  ``.claude/hooks/``, any root file but Markdown) runs on a PR
   that changes only that file: test.yml's ``any-code`` filter covers the file,
   or an always-on job in test.yml runs the hook (issue #1089). Every job but
   the advisory C/C++ lint reaches Test Summary's failure check.
@@ -74,6 +74,12 @@ import unittest
 from pathlib import Path
 
 import yaml
+
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_workflows.py
+    import gitenv
+setUpModule = gitenv.isolate
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -113,9 +119,12 @@ INHERITS_REPO_DEFAULT = {
 }
 
 # CI configuration: files whose hooks must run on a PR that changes nothing
-# else (issue #1089). Docs (*.md, docs/) stay out on purpose: a docs-only PR
-# should not pay for Code Quality Checks.
-CI_CONFIG = re.compile(r"^(\.github/|Dockerfile$|docker-compose\.yml$|justfile$)")
+# else (issue #1089): .github/, the Claude Code hooks, and every root file but
+# Markdown. Root files rather than a list of names: a list of four missed
+# release-please-config.json, which the OTA-agreement hooks read (#1148), and
+# ruff.toml. Docs (*.md, docs/) stay out on purpose: a docs-only PR should not
+# pay for Code Quality Checks.
+CI_CONFIG = re.compile(r"^(\.github/|\.claude/hooks/|[^/]+(?<!\.md)$)")
 CONFIG_HOOKS_JOB = "config-hooks"
 # Advisory: its result is reported but never fails the summary.
 ADVISORY_JOBS = {"lint-c"}
@@ -295,15 +304,12 @@ class BuildFirmwareTest(unittest.TestCase):
             text=True,
             check=True,
         ).stdout.split()
+        # test.yml's CI Config Hooks job fetches the tags so this runs in CI;
+        # a local clone without them skips.
         if not tags:
             self.skipTest("this clone has no release tags")
         refused = [t for t in tags if self.run_resolve_tag(t)[0] != 0]
         self.assertEqual(refused, [])
-        code, values = self.run_resolve_tag("robocar-unified-v0.2.2")
-        self.assertEqual(code, 0)
-        self.assertEqual(
-            values, {"tag": "robocar-unified-v0.2.2", "component": "robocar-unified"}
-        )
 
     def test_resolve_tag_passes_robocar_tags_from_both_sides_of_the_rename(self):
         # Needs no tag in the clone. Releases up to 0.2.23 are tagged
@@ -311,6 +317,7 @@ class BuildFirmwareTest(unittest.TestCase):
         for tag, component in (
             ("robocar-v0.2.24", "robocar"),
             ("robocar-unified-v0.2.23", "robocar-unified"),
+            ("robocar-unified-v0.2.2", "robocar-unified"),
         ):
             with self.subTest(tag=tag):
                 code, values = self.run_resolve_tag(tag)
@@ -854,6 +861,11 @@ class TestSuiteTest(unittest.TestCase):
             "check-flash-recipes: .github/actions/setup-tools/action.yml",
             "check-flash-recipes-tests: Dockerfile",
             "python-suites: .github/python-suites.json",
+            # A root config file and a Claude hook, outside .github/ (#1148,
+            # #1130).
+            "check-ota-consumer-agreement: release-please-config.json",
+            "check-ota-consumer-agreement-tests: release-please-config.json",
+            "post-edit-lint-hook: .claude/hooks/post-edit-lint.sh",
         ):
             self.assertIn(expected, gaps)
         typst_docs = "python3 tools/check-typst-docs.py"
@@ -881,6 +893,27 @@ class TestSuiteTest(unittest.TestCase):
         unknown = self.config_hooks - {h["id"] for h in local_hooks()}
         self.assertEqual(unknown, set())
 
+    def test_config_hooks_job_fetches_the_release_tags(self):
+        # workflow-structure checks every release tag in the clone, and
+        # skips when there are none; the checkout fetches no tags.
+        steps = self.jobs[CONFIG_HOOKS_JOB]["steps"]
+        runs = [str(s.get("run", "")) for s in steps]
+        fetch = [i for i, r in enumerate(runs) if "refs/tags/*:refs/tags/*" in r]
+        hooks = [i for i, r in enumerate(runs) if "pre-commit run" in r]
+        self.assertEqual(len(fetch), 1)
+        self.assertLess(fetch[0], hooks[0])
+
+    def test_a_push_runs_the_jobs_any_code_selects(self):
+        # On push, the workflow's own path filter decides whether
+        # detect-changes runs at all, so every any-code glob must be in it.
+        paths = load("test.yml")[True]["push"]["paths"]
+        (filter_step,) = [
+            s for s in self.jobs["detect-changes"]["steps"] if s.get("id") == "filter"
+        ]
+        globs = yaml.safe_load(filter_step["with"]["filters"])["any-code"]
+        self.assertIn("ruff.toml", globs)
+        self.assertEqual([g for g in globs if g not in paths], [])
+
     def test_every_gating_job_reaches_the_summary_check(self):
         summary = self.jobs["test-summary"]
         script = summary["steps"][-1]["run"]
@@ -892,6 +925,79 @@ class TestSuiteTest(unittest.TestCase):
                 self.assertIn(job_id, summary["needs"])
                 gated = f"needs.{job_id}.result" in loop
                 self.assertEqual(gated, job_id not in ADVISORY_JOBS)
+
+
+class ClangFormatPinTest(unittest.TestCase):
+    """test.yml's Format Check installs the clang-format the pre-commit hook
+    pins (#1082). Its install step runs here with stub ``yq`` and ``pipx``:
+    the runner's yq is mikefarah's, which this test does not assume."""
+
+    def setUp(self):
+        config = yaml.safe_load(PRE_COMMIT.read_text())
+        (self.repo,) = [
+            r
+            for r in config["repos"]
+            if any(h["id"] == "clang-format" for h in r.get("hooks", []))
+        ]
+        job = load("test.yml")["jobs"]["format-check"]
+        (step,) = [s for s in job["steps"] if s.get("name") == "Install clang-format"]
+        self.script = step["run"]
+
+    def run_step(self, rev: str) -> tuple[int, str]:
+        """Run the step with a yq that prints ``rev`` when asked for the
+        hook's repo, and ``null`` otherwise. Returns its exit code and the
+        arguments pipx got."""
+        with tempfile.TemporaryDirectory() as scratch:
+            bin_dir = Path(scratch)
+            for name, body in (
+                (
+                    "yq",
+                    'if [[ "$1" == *"\\"$STUB_URL\\""* && "$2" == .pre-commit-config.yaml ]]; '
+                    'then echo "$STUB_REV"; else echo null; fi\n',
+                ),
+                ("pipx", 'echo "$*" >> "$PIPX_LOG"\n'),
+            ):
+                (bin_dir / name).write_text("#!/usr/bin/env bash\n" + body)
+                (bin_dir / name).chmod(0o755)
+            log = bin_dir / "pipx.log"
+            log.touch()
+            env = {
+                **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                "STUB_URL": self.repo["repo"],
+                "STUB_REV": rev,
+                "PIPX_LOG": str(log),
+            }
+            proc = subprocess.run(
+                ["bash", "-e", "-c", self.script],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            return proc.returncode, log.read_text().strip()
+
+    def test_format_check_installs_the_hooks_rev(self):
+        rev = self.repo["rev"]
+        self.assertRegex(rev, r"^v\d")
+        self.assertEqual(self.run_step(rev), (0, f"install clang-format=={rev[1:]}"))
+        self.assertNotRegex(
+            self.script, r"clang-format==\d", "read the rev, not a copy"
+        )
+
+    def test_format_check_fails_without_a_rev(self):
+        for rev in ("null", "", "18.1.8"):
+            with self.subTest(rev=rev):
+                self.assertEqual(self.run_step(rev), (1, ""))
+
+    def test_a_rev_bump_runs_format_check(self):
+        (filter_step,) = [
+            s
+            for s in load("test.yml")["jobs"]["detect-changes"]["steps"]
+            if s.get("id") == "filter"
+        ]
+        c_code = yaml.safe_load(filter_step["with"]["filters"])["c-code"]
+        self.assertIn(".pre-commit-config.yaml", c_code)
 
 
 def drift_step() -> str:

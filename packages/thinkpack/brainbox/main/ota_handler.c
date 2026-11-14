@@ -3,7 +3,8 @@
  * @brief Brainbox-side OTA handler — wraps `ota-github` and drives the
  *        ESP-NOW chunk broadcaster.
  *
- * Architecture (modelled on packages/robocar/main/main/ota_handler.c):
+ * Architecture (modelled on the dual-ESP32 robocar's main-controller
+ * ota_handler.c, removed with that design and kept in git history):
  *   1. Configure `ota_github` in TRIGGERED mode on init so it only
  *      downloads when we explicitly ask.
  *   2. On ota_handler_check_and_push_all, fetch the latest release

@@ -35,14 +35,16 @@ runs:
     # run time. extractions/setup-just looked each version up through that API
     # and failed the Test Suite on main when the lookup came back empty
     # (issue #835). Pinned so a just release cannot change the `just --dry-run`
-    # text tools/check-flash-recipes.py reads. Renovate bumps it through the
-    # regex manager in renovate.json, since its github-actions manager does not
-    # read install-action's `tool` input. `fallback: none`: a version missing
+    # text tools/check-flash-recipes.py reads; scripts/install_pkgs.sh installs
+    # the same version for cloud sessions (tools/test_python_suites.py holds
+    # the two equal). Renovate bumps both in one PR through the regex managers
+    # in renovate.json, since its github-actions manager does not read
+    # install-action's `tool` input. `fallback: none`: a version missing
     # from the manifest fails here instead of falling back to cargo-binstall,
     # which does call the API.
     - name: Install just
       if: inputs.just == 'true'
       uses: taiki-e/install-action@v2.87.31
       with:
-        tool: just@1.58.0
+        tool: just@1.59.0
         fallback: none

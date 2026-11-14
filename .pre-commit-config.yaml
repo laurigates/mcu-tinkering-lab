@@ -84,7 +84,7 @@ repos:
       - id: check-credentials
         name: Check for credential files
         entry: >-
-          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
+          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h$|wifi_config\.h$|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
@@ -156,6 +156,23 @@ repos:
         entry: python3 -m unittest tools/test_flash_source.py
         language: system
         files: '^tools/(flash-source\.py|test_flash_source\.py)$'
+        pass_filenames: false
+
+      # A suite that builds a throwaway git repository scrubs the GIT_* a hook
+      # inherits during a commit from a linked worktree (#1123).
+      - id: git-env-tests
+        name: Throwaway-repository test suites scrub inherited GIT_* variables
+        entry: python3 -m unittest tools/test_git_env.py
+        language: system
+        files: '(^|/)(test_[^/]*\.py|conftest\.py)$|^tools/gitenv\.py$'
+        pass_filenames: false
+
+      # Runs the check-credentials entry above against staged names (#1145).
+      - id: check-credentials-tests
+        name: check-credentials refuses credential files, not their templates
+        entry: python3 -m unittest tools/test_check_credentials.py
+        language: system
+        files: '^(\.pre-commit-config\.yaml|tools/(test_check_credentials|gitenv)\.py)$'
         pass_filenames: false
 
       - id: jlc-blog-tests
@@ -244,14 +261,15 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Runs on a uv.lock, pyproject.toml, justfile or CI file change: those
-      # move what the test reads (tools/test_python_suites.py, issue #457).
+      # Runs on a uv.lock, pyproject.toml, justfile, CI file, just pin or
+      # component host-suite change: those move what the test reads
+      # (tools/test_python_suites.py, issues #457, #1103).
       - id: python-suites
         name: Every uv.lock is installed --locked, every tool test recipe runs in CI, uv and just come from setup-tools
         entry: python3 -m unittest tools/test_python_suites.py
         language: system
         pass_filenames: false
-        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$)'
+        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$|^scripts/install_pkgs\.sh$|^packages/(.*/)?components/[^/]+/tests?/|^packages/components/host-test/)'
 
       # Ruff accepts a key placed under the wrong TOML table without a warning
       # (issue #761: select and fixable sat inside [lint.per-file-ignores]).
