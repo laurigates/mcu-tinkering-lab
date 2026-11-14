@@ -1149,6 +1149,12 @@ class ActionlintGateTest(unittest.TestCase):
     pyflakes off, which this session and a developer machine may lack. The
     job installs the pinned release and checks its sha256 first."""
 
+    # `pre-commit run` with only flags after it, to the end of the line or a
+    # shell operator: a run over every hook. `pre-commit run "$hook"` names one.
+    FULL_PRE_COMMIT_RUN = re.compile(
+        r"\bpre-commit run((\s+-\S+)*)\s*($|[|;&])", re.MULTILINE
+    )
+
     def test_hook_switches_off_the_external_linters(self):
         (hook,) = [h for h in local_hooks() if h["id"] == "actionlint"]
         entry = hook["entry"].split()
@@ -1182,6 +1188,34 @@ class ActionlintGateTest(unittest.TestCase):
             self.assertRegex(path, files)
         for path in [".github/project-matrix.json", "tools/test_workflows.py"]:
             self.assertNotRegex(path, files)
+
+    def test_every_full_pre_commit_run_installs_or_skips_actionlint(self):
+        # A job that runs every hook without installing actionlint fails on
+        # "Executable `actionlint` not found" unless SKIP names it.
+        workflow = load("test.yml")
+        full_runs = 0
+        for job_id, job in workflow["jobs"].items():
+            steps = job.get("steps") or []
+            installed = False
+            for step in steps:
+                run = str(step.get("run", ""))
+                if "rhysd/actionlint" in run and "sha256sum -c" in run:
+                    installed = True
+                if not self.FULL_PRE_COMMIT_RUN.search(run):
+                    continue
+                full_runs += 1
+                skip = {
+                    **(workflow.get("env") or {}),
+                    **(job.get("env") or {}),
+                    **(step.get("env") or {}),
+                }.get("SKIP", "")
+                skipped = {s.strip() for s in str(skip).split(",")}
+                with self.subTest(job=job_id, step=step.get("name")):
+                    self.assertTrue(
+                        installed or "actionlint" in skipped,
+                        "install actionlint before this step or add it to SKIP",
+                    )
+        self.assertGreater(full_runs, 0, "found no `pre-commit run` over all hooks")
 
 
 if __name__ == "__main__":
