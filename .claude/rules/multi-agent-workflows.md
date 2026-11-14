@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # Multi-Agent Workflows: Fair Inputs, Guarded Barriers, Clean Checkpoints
@@ -31,6 +31,14 @@ completed agents replay from cache (seven did, including all five designs).
 Read the journal before trusting cached results; an empty one replays as
 empty.
 
+A container restart in a cloud session stops a run the same way, and the
+session id survives it, so the same resume works: on #1149 (2026-11-13 and
+-14) two restarts each killed one agent, and both runs resumed with the
+finished agents replayed. Before resuming, read `journal.jsonl` for which
+agent was running and `git status --short` for what it left. A killed verifier
+or reviewer leaves the tree as the last finished implementer wrote it; a killed
+implementer leaves it between edits.
+
 ## Commit only what finished agents wrote
 
 While a workflow runs, its agents are still editing files. Committing to
@@ -39,6 +47,13 @@ that does not match its geometry. Commit at checkpoints: after a run, or
 after a failed run, the files of the agents that completed. Before each
 commit, re-run the gates on what is being committed and lint through
 pre-commit (`python-lint.md`).
+
+While only a read-only stage is running (a verifier or reviewers after the
+implementer returned), the tree is that implementer's finished work and can be
+committed as a checkpoint. Run the gates in a scratch copy of the tracked and
+untracked files, not in the tree: the running agents build in the same
+`build/` and `.venv` directories. On #1149 the wave B gates ran that way while
+its verifier worked, and the verifier's later findings went in as a repair.
 
 ## Give each agent its own scratch directory
 
@@ -96,6 +111,36 @@ Linux-only `bash -c` argument-length fix, correct and kept). Run
 so a commit nobody in the session wrote is read first. `auto-resolve-conflicts.yml`
 runs on every push to `main` and can fail on a branch that is being merged at
 that moment; check that the next run passes before reading it as a defect.
+
+When it succeeds it pushes a merge of `main` to the PR branch and says so:
+"Nothing compiled or tested this merge before it was pushed". Fast-forward to
+it, read which files it resolved (`git show --name-only --diff-merges=combined
+<merge>`), and re-run the gates and pre-commit over every file the branch
+changes against `main`, since `main` may have added hooks. On #1149 it merged
+twice 72 minutes apart, once across a release that had bumped the
+simulation's version files, and `main`'s new `actionlint` hook needed
+`scripts/install_pkgs.sh` run first. Its merge commit also turns the PR's
+merge method to squash ([`pr-landing.md`](pr-landing.md)).
+
+## Have the contract built in scratch before it is implemented
+
+When implementers will work from a written contract (an ADR, a protocol
+table), have reviewers build its riskiest half in a scratch copy first, and
+correct the contract from what they find. On #1149 two reviewers built
+ADR-036's twin side and checked its packaging claims with the pinned uv before
+any implementer started. They returned 24 findings, 8 of them major: a
+fallback that was never needed, a "refused" that did not say which program
+refuses, a boot value that changes request counts, and a coverage claim that
+was false. Each would otherwise have been found by two implementers building
+halves that did not fit.
+
+## Fold a repair into the commit it repairs
+
+A verify-and-repair round leaves `fix` commits that correct work the same PR
+introduced. Left as separate commits they make the PR squash-only and, in a
+released component, put a changelog line on a bug that never shipped. Fold
+each into the commit it corrects before the PR is final, and reword that
+commit's message to cover it ([`pr-landing.md`](pr-landing.md)).
 
 ## Have agents report follow-ups, then verify them once and file
 
