@@ -599,6 +599,87 @@ class BuildDiscoveryTest(unittest.TestCase):
         self.assertEqual(len(entries), len(json.loads(MATRIX.read_text())))
 
 
+class BluepadTagTest(unittest.TestCase):
+    """tools/fetch-bluepad32.sh holds the Bluepad32 tag for the CI build and
+    the xbox-switch-bridge justfile. build-firmware.yml keeps its own copy of
+    the fetch step, so the release path does not depend on the script (#1082);
+    its tag, and what it clones and copies, must stay the script's."""
+
+    SCRIPT = ROOT / "tools" / "fetch-bluepad32.sh"
+
+    def script_tag(self) -> str:
+        proc = subprocess.run(
+            ["bash", str(self.SCRIPT), "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        tag = proc.stdout.strip()
+        self.assertRegex(tag, r"^\S+$")
+        return tag
+
+    def test_the_release_build_clones_the_scripts_tag(self):
+        (step,) = [
+            s
+            for _, _, s in steps_of(load("build-firmware.yml"))
+            if "bluepad32.git" in str(s.get("run", ""))
+        ]
+        script = step["run"]
+        branches = set(re.findall(r"--branch\s+(\S+)", script))
+        self.assertTrue(branches, "no --branch in build-firmware.yml's fetch step")
+        named = set(re.findall(r"\brelease_v\d+(?:\.\d+)*", script))
+        self.assertEqual(branches | named, {self.script_tag()})
+
+    @staticmethod
+    def fetch_facts(text: str) -> dict[str, object]:
+        """What a fetch script clones and copies, in a form that compares two
+        scripts written differently: the repository, the submodule it
+        initialises, the btstack paths, and the words of each `for` list."""
+        code = "\n".join(
+            line for line in text.splitlines() if not line.lstrip().startswith("#")
+        )
+        return {
+            "repo": sorted(set(re.findall(r"https://\S+?\.git\b", code))),
+            "submodule": sorted(
+                set(re.findall(r"submodule update\s+(.*?)\s*(?:&&|$)", code, re.M))
+            ),
+            "paths": dict(re.findall(r'^\s*(BTSTACK_\w+)="([^"]*)"', code, re.M)),
+            "loops": {
+                var: sorted(words.replace("\\\n", " ").split())
+                for var, words in re.findall(
+                    r"\bfor\s+(\w+)\s+in\s+(.*?);\s*do\b", code, re.S
+                )
+            },
+        }
+
+    def test_the_release_build_prepares_btstack_as_the_script_does(self):
+        (step,) = [
+            s
+            for _, _, s in steps_of(load("build-firmware.yml"))
+            if "bluepad32.git" in str(s.get("run", ""))
+        ]
+        ours = self.fetch_facts(self.SCRIPT.read_text())
+        # Control: a pattern that stopped matching would compare empty to empty.
+        self.assertEqual(len(ours["repo"]), 1, ours)
+        self.assertTrue(ours["submodule"], ours)
+        self.assertEqual(set(ours["paths"]), {"BTSTACK_ROOT", "BTSTACK_COMP"})
+        self.assertEqual(set(ours["loops"]), {"dir", "f"})
+        self.assertTrue(all(ours["loops"].values()), ours)
+        self.assertEqual(self.fetch_facts(step["run"]), ours)
+
+    def test_the_ci_build_and_the_justfile_call_the_script(self):
+        callers = (
+            WORKFLOWS / "_ci-build-esp32.yml",
+            ROOT / "packages/input-gaming/xbox-switch-bridge/justfile",
+        )
+        for path in callers:
+            with self.subTest(path=path.name):
+                text = path.read_text()
+                self.assertTrue(self.SCRIPT.name in text, "does not run the script")
+                self.assertFalse(self.script_tag() in text, "names the tag itself")
+                self.assertFalse("bluepad32.git" in text, "clones Bluepad32 itself")
+
+
 class ClaudeCallersTest(unittest.TestCase):
     def test_auto_fix_pushes_with_the_release_please_app(self):
         jobs = load("auto-fix.yml")["jobs"]
@@ -964,87 +1045,6 @@ class BuildGuideDriftStepTest(unittest.TestCase):
     def test_a_failing_document_discovery_fails_the_step(self):
         result = self.run_step(STUB_GIT_FAIL="ls-files")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-
-
-class BluepadTagTest(unittest.TestCase):
-    """tools/fetch-bluepad32.sh holds the Bluepad32 tag for the CI build and
-    the xbox-switch-bridge justfile. build-firmware.yml keeps its own copy of
-    the fetch step, so the release path does not depend on the script (#1082);
-    its tag, and what it clones and copies, must stay the script's."""
-
-    SCRIPT = ROOT / "tools" / "fetch-bluepad32.sh"
-
-    def script_tag(self) -> str:
-        proc = subprocess.run(
-            ["bash", str(self.SCRIPT), "--version"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        tag = proc.stdout.strip()
-        self.assertRegex(tag, r"^\S+$")
-        return tag
-
-    def test_the_release_build_clones_the_scripts_tag(self):
-        (step,) = [
-            s
-            for _, _, s in steps_of(load("build-firmware.yml"))
-            if "bluepad32.git" in str(s.get("run", ""))
-        ]
-        script = step["run"]
-        branches = set(re.findall(r"--branch\s+(\S+)", script))
-        self.assertTrue(branches, "no --branch in build-firmware.yml's fetch step")
-        named = set(re.findall(r"\brelease_v\d+(?:\.\d+)*", script))
-        self.assertEqual(branches | named, {self.script_tag()})
-
-    @staticmethod
-    def fetch_facts(text: str) -> dict[str, object]:
-        """What a fetch script clones and copies, in a form that compares two
-        scripts written differently: the repository, the submodule it
-        initialises, the btstack paths, and the words of each `for` list."""
-        code = "\n".join(
-            line for line in text.splitlines() if not line.lstrip().startswith("#")
-        )
-        return {
-            "repo": sorted(set(re.findall(r"https://\S+?\.git\b", code))),
-            "submodule": sorted(
-                set(re.findall(r"submodule update\s+(.*?)\s*(?:&&|$)", code, re.M))
-            ),
-            "paths": dict(re.findall(r'^\s*(BTSTACK_\w+)="([^"]*)"', code, re.M)),
-            "loops": {
-                var: sorted(words.replace("\\\n", " ").split())
-                for var, words in re.findall(
-                    r"\bfor\s+(\w+)\s+in\s+(.*?);\s*do\b", code, re.S
-                )
-            },
-        }
-
-    def test_the_release_build_prepares_btstack_as_the_script_does(self):
-        (step,) = [
-            s
-            for _, _, s in steps_of(load("build-firmware.yml"))
-            if "bluepad32.git" in str(s.get("run", ""))
-        ]
-        ours = self.fetch_facts(self.SCRIPT.read_text())
-        # Control: a pattern that stopped matching would compare empty to empty.
-        self.assertEqual(len(ours["repo"]), 1, ours)
-        self.assertTrue(ours["submodule"], ours)
-        self.assertEqual(set(ours["paths"]), {"BTSTACK_ROOT", "BTSTACK_COMP"})
-        self.assertEqual(set(ours["loops"]), {"dir", "f"})
-        self.assertTrue(all(ours["loops"].values()), ours)
-        self.assertEqual(self.fetch_facts(step["run"]), ours)
-
-    def test_the_ci_build_and_the_justfile_call_the_script(self):
-        callers = (
-            WORKFLOWS / "_ci-build-esp32.yml",
-            ROOT / "packages/input-gaming/xbox-switch-bridge/justfile",
-        )
-        for path in callers:
-            with self.subTest(path=path.name):
-                text = path.read_text()
-                self.assertTrue(self.SCRIPT.name in text, "does not run the script")
-                self.assertFalse(self.script_tag() in text, "names the tag itself")
-                self.assertFalse("bluepad32.git" in text, "clones Bluepad32 itself")
 
 
 if __name__ == "__main__":
