@@ -7,6 +7,8 @@
 /managed_components/
 
 # Credentials (never commit)
+main/credentials.h
+# Pre-rename name: keeps a leftover local copy out of git
 main/secrets.h
 
 # IDE

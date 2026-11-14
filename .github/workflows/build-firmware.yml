@@ -794,32 +794,35 @@ jobs:
           sparse-checkout-cone-mode: false
           path: workflow-tools
 
+      # download-artifact extracts a pattern download that matches one
+      # artifact straight into path/, and two or more into path/<name>/;
+      # merge-multiple extracts every one into path/, so the layout does not
+      # depend on how many Pico SDK projects a release builds.
       - name: Download the Pico SDK build artifacts
         uses: actions/download-artifact@v8.0.2
         with:
           pattern: '*-firmware-*'
           path: pico-artifacts
+          merge-multiple: true
 
-      # _ci-build-pico.yml uploads build/*.uf2, *.elf and *.elf.map as
-      # <project>-firmware-<sha>. All three sit under build/, so the artifact
-      # is rooted there (the least common ancestor of the uploaded paths,
-      # .claude/rules/release-publish-verification.md § 1).
+      # The layout read from the download (runs 42971182822 and 43214351218,
+      # issue #1065), not derived from the upload paths: each artifact's
+      # <project>.uf2, .elf and .elf.map at the top of pico-artifacts/.
       - name: Stage each project's UF2
         env:
           MATRIX: ${{ needs.discover-pico-release.outputs.matrix }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
           mkdir -p release-assets
           mapfile -t projects < <(jq -r '.include[].project' <<< "$MATRIX")
           missing=()
           for project in "${projects[@]}"; do
-            found=(pico-artifacts/"${project}"-firmware-*/"${project}".uf2)
-            if [ "${#found[@]}" -ne 1 ]; then
-              missing+=("$project: expected one ${project}.uf2, found ${#found[@]}")
+            uf2="pico-artifacts/${project}.uf2"
+            if [ ! -f "$uf2" ]; then
+              missing+=("$project: no ${project}.uf2")
               continue
             fi
-            cp "${found[0]}" "release-assets/${project}.uf2"
+            cp "$uf2" "release-assets/${project}.uf2"
           done
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Pico SDK firmware missing from the build artifacts:"

@@ -63,7 +63,7 @@
           "title": "WiFi UDP Log Broadcasting",
           "description": "SoftAP 'xbox-bridge-log' with UDP broadcast on port 4444",
           "status": "completed",
-          "implemented_in": ["components/log_udp/log_udp.c"]
+          "implemented_in": ["../../components/log-udp/log_udp.c"]
         },
         "FR9": {
           "id": "FR9",

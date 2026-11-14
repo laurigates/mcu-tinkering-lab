@@ -182,9 +182,14 @@ reviewers can see what changed since their last pass.
 ./tools/scaffold/new-esp32-project.sh
 ```
 
-The script asks for a name and domain folder, then generates `CMakeLists.txt`,
-`main/`, `sdkconfig.defaults` and a justfile using the shared containerized
-recipes. Then:
+The script asks for a name and domain folder, then copies
+`packages/camera-vision/cam-webserver` (or a project you name), including its
+dotfiles: `CMakeLists.txt`, `main/`, `sdkconfig.defaults`, `.gitignore` and a
+justfile using the shared containerized recipes. It leaves out the template's
+`flasher.json`, `CHANGELOG.md`, `CLAUDE.md`, `.claude/` and
+`dependencies.lock`, resets `version.txt` to 0.1.0 where the source has one
+and, where `main/` calls `mdns_hostname_set()`, sets the mDNS hostname to the
+project name. Then:
 
 1. Register the module in the root `justfile`:
    `mod <name> 'packages/<domain>/<name>'`.
@@ -199,8 +204,9 @@ recipes. Then:
    script's `NOT_IN_MATRIX` with the reason instead.
 3. Run `python3 tools/check-flash-recipes.py` to check the flash recipe against
    the partition table.
-4. Optional: add a `flasher.json` to list it in the
-   [web flasher](https://laurigates.github.io/mcu-tinkering-lab/).
+4. Optional: to release it, add a package to `release-please-config.json` and
+   `.release-please-manifest.json` at `0.1.0`, and a `flasher.json` to list it
+   in the [web flasher](https://laurigates.github.io/mcu-tinkering-lab/).
    `packages/audio/kids-audio-toy/flasher.json` shows the fields.
 
 A subproject of an existing project (the robocar's `bringup/` and `twin/`) goes

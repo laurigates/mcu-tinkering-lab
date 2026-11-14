@@ -19,8 +19,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import gitenv
+
 from kicad import symbols, vendor
 from kicad.paths import REPO_ROOT
+
+setUpModule = gitenv.isolate
 
 LIB = REPO_ROOT / "tools/kicad/lib"
 STOCK = REPO_ROOT / vendor.STOCK_REL

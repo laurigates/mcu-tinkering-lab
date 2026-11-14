@@ -14,7 +14,7 @@
 | 6 | Delta OTA Optimization | Deferred | Will revisit once full-image OTA is proven in production |
 
 **Related documentation:**
-- [ADR-004: OTA Update Architecture](adrs/ADR-004-ota-update-architecture.md) — Architecture decision
+- [ADR-004: OTA Update Architecture](../decisions/ADR-004-ota-update-architecture.md) — Architecture decision
 - `OTA_UPDATES.md` — System guide (removed with `packages/robocar/docs/`)
 - `OTA_DEPLOYMENT.md` — Operator runbook (removed with `packages/robocar/docs/`)
 

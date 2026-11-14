@@ -13,6 +13,7 @@
     ],
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -33,6 +34,7 @@
     "extra_paths": [
       "robotics/robocar/main",
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -98,7 +100,10 @@
     "project": "xbox-switch-bridge",
     "path": "input-gaming/xbox-switch-bridge",
     "target": "esp32s3",
-    "fetch_bluepad32": true
+    "fetch_bluepad32": true,
+    "extra_paths": [
+      "components/log-udp"
+    ]
   },
   {
     "system": "esp32",
@@ -127,7 +132,10 @@
     "project": "nfc-scavenger-hunt",
     "path": "games/nfc-scavenger-hunt",
     "target": "esp32s3",
-    "fetch_bluepad32": false
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/thinkpack-rc522"
+    ]
   },
   {
     "system": "esp32",
@@ -137,6 +145,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -156,6 +165,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -175,6 +185,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -194,6 +205,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -213,6 +225,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -232,6 +245,7 @@
     "fetch_bluepad32": false,
     "extra_paths": [
       "components/improv-wifi",
+      "components/log-udp",
       "components/ota-github",
       "components/thinkpack-audio",
       "components/thinkpack-behaviors",
@@ -248,7 +262,10 @@
     "project": "facedancer-espdancer-fw",
     "path": "usb-tools/facedancer-espdancer-fw",
     "target": "esp32s3",
-    "fetch_bluepad32": false
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/log-udp"
+    ]
   },
   {
     "system": "esphome",

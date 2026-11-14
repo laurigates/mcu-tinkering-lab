@@ -120,6 +120,32 @@ def assignments(text: str) -> list[tuple[int, str]]:
     return out
 
 
+_FENCE_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
+
+
+def fenced_assignments(text: str) -> list[tuple[int, str]]:
+    """(line number, symbol) for every sdkconfig assignment inside a fenced
+    code block of a Markdown file, whatever the fence's info string.
+
+    A fence closes on a line of the same character, at least as long as the
+    opener, with nothing after it; an unclosed fence runs to the end.
+    """
+    out = []
+    fence = None
+    for n, line in enumerate(text.splitlines(), 1):
+        m = _FENCE_RE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+            continue
+        closes = m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence)
+        if closes and not m.group(2).strip():
+            fence = None
+            continue
+        out.extend((n, symbol) for _, symbol in assignments(line))
+    return out
+
+
 def manifest_dependencies(text: str) -> list[str]:
     """Component names under `dependencies:` in an idf_component.yml.
 

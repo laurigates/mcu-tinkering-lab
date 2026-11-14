@@ -26,11 +26,11 @@ registry and NVS blob format.
 ## Consumers
 
 - `packages/thinkpack/finderbox/` — NFC scan-to-chime firmware.
+- `packages/games/nfc-scavenger-hunt/` — the scavenger-hunt game.
 
-Ported from the self-contained driver in
-`packages/games/nfc-scavenger-hunt/main/rc522_driver.{c,h}`, which
-remains the reference implementation for the original scavenger-hunt
-game and was the source for this component.
+Ported from the driver nfc-scavenger-hunt used to carry in its
+`main/rc522_driver.{c,h}`. That project now uses this component, so this
+is the only copy.
 
 ## Pin mapping
 

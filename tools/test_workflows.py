@@ -77,6 +77,12 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_workflows.py
+    import gitenv
+setUpModule = gitenv.isolate
+
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 PRE_COMMIT = ROOT / ".pre-commit-config.yaml"
@@ -458,6 +464,73 @@ class BuildFirmwareTest(unittest.TestCase):
             )
         ]
         self.assertEqual(copied, [])
+
+    def stage_pico_uf2(self, artifacts: list[str]) -> tuple[int, str, dict]:
+        """Run the shipped UF2 staging step in a scratch tree whose
+        pico-artifacts/ holds ``artifacts`` (relative paths), with the matrix
+        the select step builds for balancebot. Returns the exit code, stdout
+        and the staged release-assets/ files by name."""
+        (step,) = [
+            s
+            for _, _, s in steps_of({"jobs": self.jobs})
+            if s.get("name") == "Stage each project's UF2"
+        ]
+        _, selected = self.run_pico_select("balancebot", with_files=True)
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = Path(scratch)
+            for rel in artifacts:
+                (tree / "pico-artifacts" / rel).parent.mkdir(
+                    parents=True, exist_ok=True
+                )
+                (tree / "pico-artifacts" / rel).write_text(f"contents of {rel}")
+            env = {**os.environ, "MATRIX": selected["matrix"]}
+            proc = subprocess.run(
+                ["bash", "-e", "-c", step["run"]],
+                cwd=tree,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            assets = tree / "release-assets"
+            staged = (
+                {f.name: f.read_text() for f in assets.iterdir()}
+                if assets.is_dir()
+                else {}
+            )
+        return proc.returncode, proc.stdout, staged
+
+    @unittest.skipUnless(shutil.which("jq"), "the staging step needs jq")
+    def test_pico_staging_reads_the_downloaded_layout(self):
+        # The layout download-artifact left in runs 42971182822 and
+        # 43214351218 (balancebot-v0.1.13, v0.1.14): the files at the top of
+        # pico-artifacts/, with no <name>/ directory (issue #1065).
+        code, stdout, staged = self.stage_pico_uf2(
+            ["balancebot.uf2", "balancebot.elf", "balancebot.elf.map"]
+        )
+        self.assertEqual(code, 0, stdout)
+        self.assertEqual(staged, {"balancebot.uf2": "contents of balancebot.uf2"})
+
+    @unittest.skipUnless(shutil.which("jq"), "the staging step needs jq")
+    def test_pico_staging_fails_without_the_uf2(self):
+        code, stdout, staged = self.stage_pico_uf2(
+            ["balancebot.elf", "balancebot.elf.map"]
+        )
+        # Reported by the step's own collected error, not by a failing cp.
+        self.assertNotEqual(code, 0)
+        self.assertIn("::error::Pico SDK firmware missing", stdout)
+        self.assertIn("balancebot: no balancebot.uf2", stdout)
+        self.assertEqual(staged, {})
+
+    def test_pico_download_is_flat_for_any_artifact_count(self):
+        # Without merge-multiple, download-artifact extracts one matching
+        # artifact into path/ and several into path/<name>/, so the layout
+        # would change with the number of Pico SDK projects released.
+        (step,) = [
+            s
+            for _, _, s in steps_of({"jobs": self.jobs})
+            if s.get("name") == "Download the Pico SDK build artifacts"
+        ]
+        self.assertEqual(step["with"].get("merge-multiple"), True)
 
 
 @unittest.skipUnless(shutil.which("jq"), "the discovery step needs jq")

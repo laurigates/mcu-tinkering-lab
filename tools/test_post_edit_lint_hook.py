@@ -32,6 +32,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_post_edit_lint_hook.py
+    import gitenv
+
+setUpModule = gitenv.isolate
+
 REPO = Path(__file__).resolve().parent.parent
 HOOK = REPO / ".claude" / "hooks" / "post-edit-lint.sh"
 RUFF_TOML = REPO / "ruff.toml"
@@ -41,17 +48,6 @@ printf '%s\\n' "$*" >>"$RUFF_LOG"
 """
 
 
-def clean_env() -> dict[str, str]:
-    """The environment without GIT_* variables.
-
-    A pre-commit hook run from a linked worktree inherits GIT_DIR and an
-    absolute GIT_INDEX_FILE. Passed on, they send every git call here, and the
-    hook's own, to the repository being committed: `git init` set core.bare
-    in it, and the worktree test committed into it.
-    """
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-
-
 def git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(cwd), *args],
@@ -59,7 +55,7 @@ def git(cwd: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         env={
-            **clean_env(),
+            **gitenv.clean_env(),
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
         },
@@ -101,7 +97,7 @@ class PostEditLintHookTest(unittest.TestCase):
         extra_env: dict[str, str] | None = None,
     ) -> None:
         env = {
-            **clean_env(),
+            **gitenv.clean_env(),
             "CLAUDE_PROJECT_DIR": str(self.project),
             "RUFF_LOG": str(self.log),
             **(extra_env or {}),

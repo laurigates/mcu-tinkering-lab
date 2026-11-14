@@ -3,34 +3,36 @@
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-%E2%89%A55.1-red)](https://docs.espressif.com/projects/esp-idf/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-**Drop-in, project-agnostic OTA firmware updates from GitHub Releases.** Add
-the component to `EXTRA_COMPONENT_DIRS`, call `ota_github_init(&cfg)` once,
-and your device will pull new firmware on a timer (or on an MQTT push, or
-when an external controller triggers it over I2C). SHA256 verification,
-rollback protection, and esp_event-based progress reporting are all handled
-for you.
+**Drop-in, project-agnostic OTA firmware updates from GitHub Releases, on
+request.** Add the component to `EXTRA_COMPONENT_DIRS`, call
+`ota_github_init(&cfg)` once, and the device downloads a release asset when
+you name it: from an MQTT push, or when an external controller triggers it
+over I2C, UART or HTTP. SHA256 verification, rollback protection, and
+esp_event-based progress reporting are all handled for you.
+
+The component does not poll for new releases. Its PULL mode wrapped
+esp_ghota, which could not complete an update (#539), and was removed
+(#1081). Pull OTA lives in robocar:
+[`ota_manager.c`](../../robotics/robocar/main/ota_manager.c) polls the web
+flasher's manifest; [`wifi-and-ota.md`](../../robotics/robocar/docs/firmware/wifi-and-ota.md)
+describes it. A project that needs to poll copies that code.
 
 ---
 
-## Feature matrix
+## Features
 
-| Feature | PULL mode | TRIGGERED mode |
-|---|:---:|:---:|
-| Periodic GitHub poll (configurable interval) | ✔ | — |
-| Semver comparison of running vs latest release | ✔ | — |
-| External URL / tag trigger (I2C, UART, HTTP, ...) | ✔ | ✔ |
-| MQTT push-notify (rate-limited) | ✔ | ✔ |
-| `esp_https_ota` download + flash | ✔ | ✔ |
-| 4-byte SHA256 prefix verification | (via esp_ghota) | ✔ |
-| Rollback cancel after stability window | ✔ | ✔ |
-| Thread-safe status / progress / error getters | ✔ | ✔ |
-| `esp_event` bus for async observers | ✔ | ✔ |
-| Project-specific hooks (`pre_download`, `ready_to_reboot`, ...) | ✔ | ✔ |
+The component has one mode, `OTA_GITHUB_MODE_TRIGGERED`:
 
-Either mode can be combined with MQTT push-notify. PULL mode is the common
-case for a single connected device. TRIGGERED mode is for devices whose
-update is orchestrated by a peer (e.g. a dual-MCU setup where one board
-has the internet connection).
+| Feature | |
+|---|:---:|
+| External URL / tag trigger (I2C, UART, HTTP, ...) | ✔ |
+| MQTT push-notify, payload = release tag (rate-limited) | ✔ |
+| `esp_https_ota` download + flash | ✔ |
+| 4-byte SHA256 prefix verification | ✔ |
+| Rollback cancel after stability window | ✔ |
+| Thread-safe status / progress / error getters | ✔ |
+| `esp_event` bus for async observers | ✔ |
+| Project-specific hooks (`pre_download`, `ready_to_reboot`, ...) | ✔ |
 
 ---
 
@@ -45,7 +47,7 @@ list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
 # your-project/main/CMakeLists.txt
 idf_component_register(
     SRCS "main.c"
-    REQUIRES "ota_github"     # pulls in esp_ghota transitively
+    REQUIRES "ota_github"
 )
 ```
 
@@ -56,20 +58,22 @@ idf_component_register(
 void app_main(void) {
     /* ...bring up WiFi, NVS, network... */
 
-    ota_github_config_t cfg       = OTA_GITHUB_CONFIG_DEFAULT();
-    cfg.github_org                = "laurigates";
-    cfg.github_repo               = "mcu-tinkering-lab";
-    cfg.firmware_filename_match   = "my-project";   /* substring match on asset name */
-    cfg.poll_interval_min         = 360;            /* 6 h — the default */
+    ota_github_config_t cfg        = OTA_GITHUB_CONFIG_DEFAULT();  /* TRIGGERED */
+    cfg.github_org                 = "laurigates";
+    cfg.github_repo                = "mcu-tinkering-lab";
+    cfg.triggered_asset_filename   = "my-project.bin";
     ESP_ERROR_CHECK(ota_github_init(&cfg));
+
+    /* Later, when the trigger arrives with a tag + 4-byte SHA256 prefix: */
+    ota_github_trigger_tag(NULL, "my-project-v1.2.3", sha_prefix);
 }
 ```
 
-That's it. On the next GitHub release tagged e.g. `my-project@v1.2.3` with
-an asset whose filename contains `my-project`, the device will download,
-verify, flash, and reboot. Rollback protection activates automatically; if
-the new firmware panics within 60 seconds of boot, the bootloader reverts
-to the previous partition.
+The device downloads
+`https://github.com/laurigates/mcu-tinkering-lab/releases/download/my-project-v1.2.3/my-project.bin`,
+verifies, flashes, and reboots. Rollback protection activates
+automatically; if the new firmware panics within 60 seconds of boot, the
+bootloader reverts to the previous partition.
 
 ---
 
@@ -89,8 +93,11 @@ to the previous partition.
 
 Deliberate non-goals that callers must still provide:
 
+- **Release discovery.** Nothing here asks GitHub whether a newer release
+  exists. The caller (an MQTT notifier, a peer MCU, a console command)
+  decides which tag to install.
 - **Network bring-up.** You must have WiFi (or Ethernet, or tunneled LTE)
-  connected before the first OTA check. The `pre_download_hook` exists so
+  connected before the first download. The `pre_download_hook` exists so
   low-power projects can bring WiFi up on demand, but the component itself
   never calls `esp_wifi_*`.
 - **NVS credential storage.** Credentials for WiFi or the GitHub URL belong
@@ -98,10 +105,8 @@ Deliberate non-goals that callers must still provide:
 - **MQTT client lifecycle.** Pass in an already-initialized client handle;
   the component only registers event handlers on it.
 - **Multi-device orchestration.** If your product has multiple MCUs that
-  update together, coordinate them at the application layer. A typical
-  pattern is to run PULL mode on the internet-facing MCU and TRIGGERED
-  mode (invoked over I2C/UART) on the peer — see the robocar reference
-  implementation.
+  update together, coordinate them at the application layer, invoking
+  TRIGGERED mode over I2C/UART on each peer.
 - **Partition table.** You must already ship a dual-OTA partition layout
   (two `app` partitions + an `otadata` partition). Every ESP-IDF OTA
   example has one you can copy.
@@ -115,10 +120,9 @@ Key fields:
 
 | Field | Default | Notes |
 |---|---|---|
-| `mode` | `MODE_PULL` | `PULL` = periodic poll; `TRIGGERED` = externally driven |
+| `mode` | `OTA_GITHUB_MODE_TRIGGERED` | The only mode; `ota_github_init` rejects any other value |
 | `github_org` / `github_repo` | required | `https://github.com/{org}/{repo}` |
-| `firmware_filename_match` | required (PULL) | Substring matched against release asset names |
-| `poll_interval_min` | 360 | Minutes. Set to 0 to disable polling (MQTT/manual only) |
+| `triggered_asset_filename` | NULL | Asset name for `ota_github_trigger_tag`; NULL means use `ota_github_trigger_url` |
 | `stability_timeout_ms` | 60000 | Window for rollback cancellation |
 | `http_timeout_ms` | 30000 | HTTP timeout during download |
 | `task_stack_size` | 8192 | Worker task stack (raise if you hook heavy work) |

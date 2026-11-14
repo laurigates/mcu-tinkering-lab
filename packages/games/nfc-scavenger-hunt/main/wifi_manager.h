@@ -7,7 +7,7 @@
 
 /**
  * Initialize WiFi in STA mode and connect to the configured network.
- * Credentials are read from secrets.h at compile time.
+ * Credentials are read from credentials.h at compile time.
  * Blocks until connected or max retries exceeded.
  */
 esp_err_t wifi_manager_init(void);
