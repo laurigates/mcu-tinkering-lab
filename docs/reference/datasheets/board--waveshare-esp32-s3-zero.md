@@ -1,6 +1,10 @@
 # Waveshare ESP32-S3-Zero
 
-**Role in project:** IT troubleshooter, Xbox-Switch bridge
+**Role in project:** it-troubleshooter, xbox-switch-bridge, switch-usb-proxy,
+facedancer-espdancer-fw
+
+**Board page:** [waveshare-esp32-s3-zero.md](../boards/waveshare-esp32-s3-zero.md),
+with the pad order, every GPIO's wiring and the sources
 
 ## Key Specs
 
@@ -18,7 +22,9 @@
 
 ## Pin Notes
 
-- GPIO33–GPIO37 are **not exposed** (used for Octal PSRAM)
+- GPIO33–GPIO37 are **not wired to a pad**. Waveshare's wiki calls them
+  reserved for Octal PSRAM; the ESP32-S3FH4R2's PSRAM is quad SPI and does
+  not use them (see the board page)
 - UART0: TX=GPIO43, RX=GPIO44
 
 ## Datasheets & References

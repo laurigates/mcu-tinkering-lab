@@ -25,7 +25,8 @@ ESP32-S3 with native USB-OTG works).
 
 - **xbox-switch-bridge** (`packages/input-gaming/xbox-switch-bridge`) —
   provenance; this scaffold lifts its `sdkconfig.defaults`, build-variant
-  system, `components/status_led`, `components/log_udp`, justfile/Makefile, and
+  system, `components/status_led`, `log_udp` (since promoted to the shared
+  `packages/components/log-udp`), justfile/Makefile, and
   the single-writer pattern, dropping all BLE/controller logic.
 - **external/facedancer** — upstream facedancer clone; the Python backend
   `facedancer/backends/espdancer.py` (Milestone 3) lands there, not here.
@@ -78,7 +79,7 @@ Controlling PC ──WiFi SoftAP──▶ ESP32-S3 ──USB-C──▶ Target h
 | Component | Purpose | Status |
 | ----------- | --------- | -------- |
 | `status_led` | WS2812 RMT (non-DMA) — emulator-state indicator | Lifted |
-| `log_udp` | WiFi SoftAP "espdancer-log" + UDP log broadcast | Lifted (SSID renamed) |
+| `log-udp` | WiFi SoftAP "espdancer-log" + UDP log broadcast | Shared: `packages/components/log-udp`, SSID and password set in `sdkconfig.defaults` |
 | `usb_rpc` | TCP server + framed-TLV dispatcher (this firmware's host iface) | New (stub) |
 | `raw_usb` | Own `dcd_event_handler` + relay pump + DCD primitives (M1 skeleton;
   DCD calls stubbed behind `RAW_USB_DCD_VENDORED`) | **In progress** |

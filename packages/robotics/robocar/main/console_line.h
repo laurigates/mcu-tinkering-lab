@@ -32,13 +32,17 @@
  *    The packet was either cut off (a new one follows and parses from its
  *    header) or stalled (its tail follows and is dropped; the client times
  *    out and retries). A partly matched header survives a gap: the parser
- *    drops it on the first byte that does not continue it.
+ *    drops it on the first byte that does not continue it. After a gap longer
+ *    than CONSOLE_LINE_PACKET_STALE_MS the packet counts as dead, and the
+ *    burst that follows is not dropped.
  *
  * What stays possible: a dropped burst can swallow a command typed within
- * CONSOLE_LINE_BURST_GAP_MS of a packet, and a stalled packet is not
- * delivered. Neither puts a packet byte in a line. A client that paused longer
- * than CONSOLE_LINE_BURST_GAP_MS more than once inside one packet would break
- * the property, and its later bytes would be read as text.
+ * CONSOLE_LINE_BURST_GAP_MS of a packet, or within
+ * CONSOLE_LINE_PACKET_STALE_MS of one cut off inside its frame, and a stalled
+ * packet is not delivered. Neither puts a packet byte in a line. A client that
+ * paused longer than CONSOLE_LINE_BURST_GAP_MS more than once inside one
+ * packet, or longer than CONSOLE_LINE_PACKET_STALE_MS once, would break the
+ * property, and its later bytes would be read as text.
  *
  * The armed state arrives as a session count rather than a flag: the network
  * supervisor bumps it on every arm and every disarm, so it is odd while armed,
@@ -61,6 +65,14 @@
  * can see one such sleep between two of its bytes; main.c asserts this stays
  * at least twice that. */
 #define CONSOLE_LINE_BURST_GAP_MS 300u
+
+/* A packet the parser was inside when a gap began counts as dead once the gap
+ * is longer than this (issue #1103). Up to the limit, the burst after the gap
+ * is dropped as that packet's stalled tail; past it the burst is text, so a
+ * command typed after an aborted provisioning runs. The trade: a tail delayed
+ * by more than this is read as text, and its line, Wi-Fi password included,
+ * is logged and dispatched. */
+#define CONSOLE_LINE_PACKET_STALE_MS 5000u
 
 /* Longest serial console line, NUL included. 32 until issue #626: `mqtt auth
  * <user> <pass>` needs room for a 32-character username and a 64-character

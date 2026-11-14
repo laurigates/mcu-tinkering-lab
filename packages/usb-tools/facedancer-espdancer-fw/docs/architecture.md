@@ -28,7 +28,7 @@ dumb pipe between the host's RPC and the S3's USB OTG-FS PHY.
 
 The firmware has two independent planes that meet at the relay pump:
 
-- **Control plane** (`components/usb_rpc` + `components/log_udp`) — TCP server
+- **Control plane** (`components/usb_rpc` + the shared `packages/components/log-udp`) — TCP server
   on the `espdancer-log` SoftAP. Carries framed-TLV RPC (see
   `docs/rpc-protocol.md`): the host issues `CONNECT`/`CONFIGURE_EP`/`SEND`/
   `STALL`/… and the device replies `OK`/`ERROR` and emits unsolicited

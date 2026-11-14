@@ -43,13 +43,9 @@ void ota_github_set_state(ota_github_status_t status, uint8_t progress, uint8_t 
 void ota_github_set_progress(uint8_t progress);
 void ota_github_post_event(ota_github_event_id_t id, const ota_github_event_payload_t *payload);
 
-/* ---- Mode-specific initializers ---- */
-esp_err_t ota_github_pull_init(void);
-esp_err_t ota_github_pull_check_now(void);
-
-/* ---- Direct download driver (shared by TRIGGERED mode and PULL's
- *      manual-URL path). Runs the esp_https_ota state machine with
- *      progress/error bookkeeping + SHA256 verification. Blocks caller. */
+/* ---- Direct download driver (TRIGGERED mode). Runs the esp_https_ota
+ *      state machine with progress/error bookkeeping + SHA256
+ *      verification. Blocks caller. */
 esp_err_t ota_github_direct_run(const char *url, const uint8_t sha256_prefix[4]);
 
 /* ---- Optional MQTT push-notify integration ---- */

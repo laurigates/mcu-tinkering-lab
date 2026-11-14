@@ -2,8 +2,8 @@
  * @file ota_github.c
  * @brief Public API + global state + rollback-stability timer.
  *
- * The bulk of the OTA work lives in the mode-specific translation units
- * (ota_github_pull.c, ota_github_direct.c, ota_github_mqtt.c). This file
+ * The bulk of the OTA work lives in the other translation units
+ * (ota_github_direct.c, ota_github_mqtt.c). This file
  * owns the one-time initialization, the state mutex, and the manual
  * "confirm valid" path.
  */
@@ -110,7 +110,7 @@ esp_err_t ota_github_confirm_valid(void)
 
 esp_err_t ota_github_init(const ota_github_config_t *cfg)
 {
-    if (!cfg || !cfg->github_org || !cfg->github_repo) {
+    if (!cfg || !cfg->github_org || !cfg->github_repo || cfg->mode != OTA_GITHUB_MODE_TRIGGERED) {
         return ESP_ERR_INVALID_ARG;
     }
     if (g_ota_github.initialized) {
@@ -132,9 +132,6 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
     if (g_ota_github.cfg.task_priority == 0) {
         g_ota_github.cfg.task_priority = 5;
     }
-    if (g_ota_github.cfg.mode == OTA_GITHUB_MODE_PULL && g_ota_github.cfg.poll_interval_min == 0) {
-        g_ota_github.cfg.poll_interval_min = 360; /* 6 hours */
-    }
 
     g_ota_github.mutex = xSemaphoreCreateMutex();
     if (!g_ota_github.mutex) {
@@ -143,24 +140,12 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
     g_ota_github.status = OTA_GITHUB_STATUS_IDLE;
 
     const esp_app_desc_t *app_desc = esp_app_get_description();
-    ESP_LOGI(TAG, "Initializing ota_github v%s (mode=%s, repo=%s/%s)",
-             app_desc ? app_desc->version : "?",
-             cfg->mode == OTA_GITHUB_MODE_PULL ? "PULL" : "TRIGGERED", cfg->github_org,
-             cfg->github_repo);
+    ESP_LOGI(TAG, "Initializing ota_github v%s (mode=TRIGGERED, repo=%s/%s)",
+             app_desc ? app_desc->version : "?", cfg->github_org, cfg->github_repo);
 
-    /* Mode-specific bring-up. */
-    esp_err_t ret = ESP_OK;
-    if (cfg->mode == OTA_GITHUB_MODE_PULL) {
-        ret = ota_github_pull_init();
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "PULL init failed: %s", esp_err_to_name(ret));
-            return ret;
-        }
-    }
-
-    /* Optional MQTT push-notify works for both modes. */
+    /* Optional MQTT push-notify. */
     if (cfg->mqtt_enabled && cfg->mqtt_client && cfg->mqtt_notify_topic) {
-        ret = ota_github_mqtt_init();
+        esp_err_t ret = ota_github_mqtt_init();
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "MQTT notify setup failed: %s (non-fatal)", esp_err_to_name(ret));
         }
@@ -179,17 +164,6 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
     g_ota_github.initialized = true;
     ESP_LOGI(TAG, "ota_github initialized");
     return ESP_OK;
-}
-
-esp_err_t ota_github_check_now(void)
-{
-    if (!g_ota_github.initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (g_ota_github.cfg.mode != OTA_GITHUB_MODE_PULL) {
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-    return ota_github_pull_check_now();
 }
 
 esp_err_t ota_github_trigger_url(const char *url, const uint8_t sha256_prefix[4])

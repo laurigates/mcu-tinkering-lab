@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
+# log-udp is the one shared component taken from packages/components. The whole
+# directory would also compile ota-github, improv-wifi and the thinkpack
+# components, with their managed dependencies, into this build.
 set(EXTRA_COMPONENT_DIRS
     "components"
     "external/bluepad32/src/components"
     "external/bluepad32/external/btstack/port/esp32/components"
+    "${CMAKE_CURRENT_LIST_DIR}/../../components/log-udp"
 )
 
 # Read version from release-please managed version.txt
@@ -30,7 +34,7 @@ endif()
 
 # Warn if any single function in our own components uses > 512 bytes of stack.
 # Applied only to our code (not vendored bluepad32/btstack).
-set(OUR_COMPONENTS main bluepad32_host button_mapper log_udp status_led switch_pro_usb)
+set(OUR_COMPONENTS main bluepad32_host button_mapper log-udp status_led switch_pro_usb)
 foreach(comp IN LISTS OUR_COMPONENTS)
     if(TARGET __idf_${comp})
         target_compile_options(__idf_${comp} PRIVATE -Wstack-usage=512)

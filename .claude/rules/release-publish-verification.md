@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-10-13
+reviewed: 2026-11-13
 paths:
   - '.github/workflows/build-firmware.yml'
   - 'docs/flasher/**'
@@ -69,9 +69,11 @@ manifest for `robocar-unified` v0.2.2 in which every referenced path returned
 404.
 
 **A generator that reads a declaration rather than the artifact cannot detect a
-missing artifact.** That is a reasonable design — offsets belong to
-`partitions.csv` — but it means the *only* possible check is fetching what was
-published. See §5.
+missing artifact.** That is a reasonable design — offsets belong to the
+partition table the build uses (the project's CSV under
+`CONFIG_PARTITION_TABLE_CUSTOM=y`, otherwise the built-in preset's resolved copy
+in `tools/lib/idf-partition-tables/`) — but it means the *only* possible check
+is fetching what was published. See §5.
 
 ## 4. `x-cache: HIT` on a 404, and a cache-buster that is not one
 

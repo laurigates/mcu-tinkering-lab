@@ -26,12 +26,12 @@ extern "C" {
 /** @brief esp_event base used by the component. */
 ESP_EVENT_DECLARE_BASE(OTA_GITHUB_EVENTS);
 
-/** @brief Event ids posted on the @ref OTA_GITHUB_EVENTS base. */
+/** @brief Event ids posted on the @ref OTA_GITHUB_EVENTS base.
+ *
+ *  Ids 0 (UPDATE_AVAILABLE) and 1 (NO_UPDATE) were posted only by the
+ *  removed PULL mode (#1081); they stay unused so the others keep their
+ *  values. */
 typedef enum {
-    /** A newer release has been detected. `.version` is set. */
-    OTA_GITHUB_EVENT_UPDATE_AVAILABLE = 0,
-    /** No update needed — the current firmware is up to date. */
-    OTA_GITHUB_EVENT_NO_UPDATE = 1,
     /** Download/flash in progress. `.progress` is 0..100. */
     OTA_GITHUB_EVENT_PROGRESS = 2,
     /** Download + flash + verification succeeded. Reboot imminent. */
@@ -47,7 +47,6 @@ typedef enum {
 typedef struct {
     uint8_t progress;   /**< 0..100, valid for PROGRESS events. */
     uint8_t error_code; /**< Non-zero for FAILED events. */
-    char version[32];   /**< New version, for UPDATE_AVAILABLE events. */
 } ota_github_event_payload_t;
 
 #ifdef __cplusplus

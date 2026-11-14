@@ -95,15 +95,22 @@ _idf-shell:
 # Validated containerized build: filters build output to warnings/errors/size and
 # fails fast if the app binary is missing. Requires bin_name to match the CMake
 # project() name. Opt-in — compose as `build: _idf-build-checked`.
+#
+# `overlay` (optional) names an sdkconfig file layered on sdkconfig.defaults,
+# e.g. `(_idf-build-checked bin_name "sdkconfig.debug-jtag")`. It is set as
+# SDKCONFIG_DEFAULTS inside the container's bash -c, because host environment
+# does not reach the esp-idf service, and only for `idf.py set-target`, which
+# regenerates sdkconfig from it. Empty (the default) leaves the command as it
+# was before the parameter existed.
 [private]
-_idf-build-checked bin:
+_idf-build-checked bin overlay="":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Building {{bin}}..."
+    echo "Building {{bin}}{{ if overlay == "" { "" } else { " [" + overlay + "]" } }}..."
     {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
+        bash -c "{{ if overlay == "" { "" } else { 'SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;' + overlay + '\" ' } }}idf.py set-target {{target}} && idf.py build" 2>&1 \
         | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
         || true
     if [ ! -f build/{{bin}}.bin ]; then

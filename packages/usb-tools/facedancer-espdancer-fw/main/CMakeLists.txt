@@ -6,7 +6,7 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES
         status_led
-        log_udp
+        log-udp
         usb_rpc
         raw_usb
         nvs_flash

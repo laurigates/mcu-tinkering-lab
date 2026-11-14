@@ -89,7 +89,7 @@ section so it isn't rediscovered the hard way on a TinyUSB version bump.
 Two planes meeting at the relay pump:
 
 - **Control plane** — `components/usb_rpc` (TCP 4444 + framed-TLV) +
-  `components/log_udp` (SoftAP + UDP log sink). Carries `CONNECT`/`SEND`/`STALL`/…
+  `packages/components/log-udp` (SoftAP + UDP log sink). Carries `CONNECT`/`SEND`/`STALL`/…
   from the host and `EVENT_*` (BUS_RESET, SETUP, OUT_PACKET, SEND_COMPLETE, NAK)
   back.
 - **Data plane** — `components/raw_usb` driving the DWC2 OTG-FS controller via

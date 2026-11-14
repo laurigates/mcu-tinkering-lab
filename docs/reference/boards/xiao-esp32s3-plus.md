@@ -131,8 +131,9 @@ CONFIG_SPIRAM_SPEED_80M=y
 # 16 MB flash — adjust partition table accordingly
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
-# USB OTG (for HID/CDC projects)
-CONFIG_TINYUSB=y
+# USB OTG (for HID/CDC projects): the espressif/esp_tinyusb managed component
+# in main/idf_component.yml brings TinyUSB in; the class counts turn classes on
+CONFIG_TINYUSB_HID_COUNT=1
 
 # CPU frequency
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y

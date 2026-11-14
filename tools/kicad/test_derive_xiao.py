@@ -18,9 +18,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import gitenv
+
 from kicad import derive_xiao, footprints, library, symbols, vendor
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
+
+setUpModule = gitenv.isolate
 
 LIB = REPO_ROOT / "tools/kicad/lib"
 SEEED = LIB / "seeed-xiao"
