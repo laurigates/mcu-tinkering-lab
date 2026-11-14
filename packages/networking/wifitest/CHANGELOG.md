@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wifitest-v0.1.5...esp32-wifitest-v0.1.6) (2026-11-14)
+
+
+### Documentation
+
+* add READMEs for four web-flasher projects and nfc-scavenger-hunt wiring ([#1172](https://github.com/laurigates/mcu-tinkering-lab/issues/1172)) ([0aae24f](https://github.com/laurigates/mcu-tinkering-lab/commit/0aae24f3651cd47592ef00d48fcf64ec1d9933ad)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wifitest-v0.1.4...esp32-wifitest-v0.1.5) (2026-09-13)
 
 

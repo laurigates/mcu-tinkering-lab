@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.13...gamepad-synth-v0.1.14) (2026-11-14)
+
+
+### Documentation
+
+* **tools:** state esp32.just's importers as a fact, not a ban ([4797d8c](https://github.com/laurigates/mcu-tinkering-lab/commit/4797d8c041688e8d7e1a9332f2d3adbfe71d96d5)), closes [#1079](https://github.com/laurigates/mcu-tinkering-lab/issues/1079)
+
 ## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.12...gamepad-synth-v0.1.13) (2026-11-11)
 
 

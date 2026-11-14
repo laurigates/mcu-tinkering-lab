@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.12...robocar-simulation-v0.1.13) (2026-11-14)
+
+
+### Bug Fixes
+
+* **docs:** repair broken links and dead Kconfig snippets, and check both ([#1154](https://github.com/laurigates/mcu-tinkering-lab/issues/1154)) ([e54965d](https://github.com/laurigates/mcu-tinkering-lab/commit/e54965dbab14754b826f297f6b5b4ab2bb772c34))
+
 ## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.11...robocar-simulation-v0.1.12) (2026-11-09)
 
 
