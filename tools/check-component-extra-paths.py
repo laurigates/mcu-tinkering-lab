@@ -30,9 +30,9 @@ Five checks over `.github/project-matrix.json`, the list `build.yml` builds:
 the changed file paths. A project is selected when a changed file sits under its
 own `path`, or under one of the directories in its `extra_paths`
 (`.github/project-matrix.json`). A component that lives OUTSIDE the project's
-directory, such as `packages/components/improv-wifi` or
-`packages/robocar/components/i2c-protocol`, is compiled into the project but is
-not under its `path`. Unless `extra_paths` names it, a PR that changes only that
+directory, such as `packages/components/improv-wifi`, or
+`packages/robotics/robocar/main` for robocar-bringup, is compiled into the
+project but is not under its `path`. Unless `extra_paths` names it, a PR that changes only that
 component builds none of the projects that compile it, and the matrix stays green
 (issue #670; #529 is the same failure for robocar-bringup).
 
@@ -98,8 +98,8 @@ NOT_IN_MATRIX: dict[str, str] = {
         "carrier-check.yml checks the board"
     ),
     "robotics/robocar/twin": (
-        "host build of the planner C, not firmware; robocar-twin.yml builds "
-        "and tests it"
+        "host build of the planner C, not firmware; the robocar-twin suite "
+        "in .github/python-suites.json builds and tests it"
     ),
     "robotics/robocar/simulation": (
         "Python simulation, not firmware; test.yml and "
@@ -118,13 +118,7 @@ NOT_IN_MATRIX: dict[str, str] = {
 # Projects nested in a matrix entry's directory that are deliberately not in
 # its `exclude_paths`, keyed by path relative to packages/. Each needs a
 # reason; a change under one rebuilds the entry around it.
-NESTED_NOT_EXCLUDED: dict[str, str] = {
-    "audio/melody-detector/training": (
-        "predates exclude_paths: a change under training/ has always rebuilt "
-        "the melody-detector firmware, which does not read it; left as it was "
-        "when this check was added"
-    ),
-}
+NESTED_NOT_EXCLUDED: dict[str, str] = {}
 
 _MOD_LINE = re.compile(
     r"""^\s*mod\??\s+([\w-]+)(?:\s+(?:'([^']*)'|"([^"]*)"))?""", re.MULTILINE

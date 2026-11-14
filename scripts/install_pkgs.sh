@@ -37,7 +37,7 @@ else
   echo "[install_pkgs] gitleaks already installed, skipping."
 fi
 
-# --- just (latest stable) ---
+# --- just (the version .github/actions/setup-tools pins for CI; tools/test_python_suites.py holds them equal) ---
 # renovate: datasource=github-releases depName=casey/just
 JUST_VERSION="1.59.0"
 if ! has just; then

@@ -13,6 +13,7 @@ on:
       - '.gitleaks.toml'
       - '.github/issue-labels.json'
       - 'renovate.json'
+      - 'ruff.toml'
       - 'tools/**'
       - 'docker-compose.yml'
       - 'Dockerfile'
@@ -68,11 +69,14 @@ jobs:
               - '.clang-format'
               - 'tools/cquality.sh'
               - '.github/workflows/test.yml'
+              # Format Check installs the clang-format rev it names.
+              - '.pre-commit-config.yaml'
             any-code:
               - 'packages/**'
               - '.pre-commit-config.yaml'
               - '.clang-format'
               - '.gitleaks.toml'
+              - 'ruff.toml'
               - 'tools/**'
 
       # .github/python-suites.json lists each suite and the paths that select
@@ -109,10 +113,12 @@ jobs:
   # The pre-commit hooks that guard CI configuration: the workflows (#855's
   # untrusted-text rule), every ESP-IDF version pin against the Kconfig symbol
   # list and the built-in partition tables, the root justfile's module list,
-  # project-matrix.json and the just pin in setup-tools, which decides the
-  # `just --dry-run` text check-flash-recipes reads. any-code does not list
-  # those files, so a workflow-, Dockerfile- or justfile-only PR used to run
-  # none of these hooks (#1089). Widening any-code would run Code Quality
+  # project-matrix.json, the just pin in setup-tools, which decides the
+  # `just --dry-run` text check-flash-recipes reads, the release-please
+  # component the OTA notify topic is built from (#1148) and the Claude Code
+  # post-edit hook (#1130). any-code does not list those files, so a
+  # workflow-, Dockerfile- or justfile-only PR used to run none of these
+  # hooks (#1089). Widening any-code would run Code Quality
   # Checks (about 2 minutes) on every such PR; these hooks take a few seconds,
   # so they run here on every event. Commands live in .pre-commit-config.yaml;
   # this list names hooks. tools/test_workflows.py fails when a hook that
@@ -130,8 +136,17 @@ jobs:
         release-please-versions
         check-component-extra-paths
         check-component-extra-paths-tests
+        check-ota-consumer-agreement
+        check-ota-consumer-agreement-tests
+        post-edit-lint-hook
     steps:
       - uses: actions/checkout@v7.0.1
+
+      # workflow-structure runs build-firmware.yml's tag check over every
+      # release tag in the clone and skips when there are none, which a
+      # checkout leaves (#1103). At depth 1 the fetch takes a few seconds.
+      - name: Fetch the release tags
+        run: git fetch --no-tags --depth=1 origin 'refs/tags/*:refs/tags/*'
 
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
@@ -388,12 +403,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
 
+      # The version is the mirrors-clang-format rev in .pre-commit-config.yaml,
+      # so this job and the pre-commit hook in Code Quality run one
+      # clang-format, and a Renovate bump of the hook moves both (#1082).
+      # Ubuntu 24.04's apt clang-format is another patch, which disagrees on
+      # brace-wrapping in macro initializers. yq is the runner's (mikefarah),
+      # read the way security-secrets.yml reads the gitleaks rev.
       - name: Install clang-format
-        # Pin to 18.1.8 to match the pre-commit hook (mirrors-clang-format v18.1.8).
-        # Ubuntu 24.04's apt clang-format is 18.1.3, which disagrees with 18.1.8 on
-        # brace-wrapping in macro initializers, causing the Format Check and
-        # Code Quality (pre-commit) jobs to contradict each other.
-        run: pipx install clang-format==18.1.8
+        run: |
+          set -euo pipefail
+          rev=$(yq '.repos[] | select(.repo == "https://github.com/pre-commit/mirrors-clang-format") | .rev' .pre-commit-config.yaml)
+          if [[ ! "$rev" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error file=.pre-commit-config.yaml::no mirrors-clang-format rev found (yq printed '${rev}')"
+            exit 1
+          fi
+          pipx install "clang-format==${rev#v}"
 
       - name: Check C/C++ formatting
         # Shared find/exclude list lives in tools/cquality.sh (same as justfile format-check-c).

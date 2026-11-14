@@ -124,7 +124,8 @@
     "project": "melody-detector",
     "path": "audio/melody-detector",
     "target": "esp32s3",
-    "fetch_bluepad32": false
+    "fetch_bluepad32": false,
+    "exclude_paths": ["audio/melody-detector/training"]
   },
   {
     "system": "esp32",
