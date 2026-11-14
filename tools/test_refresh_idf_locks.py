@@ -24,6 +24,13 @@ import textwrap
 import unittest
 from pathlib import Path
 
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_refresh_idf_locks.py
+    import gitenv
+
+setUpModule = gitenv.isolate
+
 SCRIPT = Path(__file__).with_name("refresh-idf-locks.py")
 
 REGISTRY_LOCK = textwrap.dedent(

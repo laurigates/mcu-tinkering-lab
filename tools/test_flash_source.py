@@ -14,6 +14,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+try:
+    from tools import gitenv
+except ImportError:  # run as a script: python3 tools/test_flash_source.py
+    import gitenv
+
+setUpModule = gitenv.isolate
+
 _SPEC = importlib.util.spec_from_file_location(
     "flash_source", Path(__file__).with_name("flash-source.py")
 )
