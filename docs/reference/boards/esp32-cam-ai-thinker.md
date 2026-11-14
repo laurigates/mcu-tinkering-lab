@@ -2,7 +2,7 @@
 
 A 27 × 40.5 mm camera board from Ai-Thinker: an ESP-32S module (ESP32, 4 MB
 flash), an external PSRAM chip, a 24-pin camera connector for an OV2640, a
-microSD slot, a white flash LED and a small status LED, on two 8-pin headers
+microSD slot, a flash LED and a small status LED, on two 8-pin headers
 with no USB. It is the board named by `cam-i2s-audio`, `cam-webserver` and
 `llm-telegram` (each project's `flasher.json` `board` field). The silicon and
 the module summary are on their own pages:
@@ -90,9 +90,9 @@ p.1 shows is unconfirmed (see the checklist).
 | GPIO2 | 2 | Must be 0 for download boot; ignored for flash boot | Pull-down | R10 47K pull-up to 3V3 | Table 3-1, Table 3-3; schematic R10 |
 | GPIO12 | 6 | MTDI: 0 = VDD_SDIO from VDD3P3_RTC (3.3 V); 1 = internal 1.8 V LDO | Pull-down | None (R7 not fitted) | Table 3-1, §3.2; schematic R7 |
 | GPIO15 | 4 | MTDO: 1 = boot log printed on U0TXD; 0 = silent | Pull-up | R9 47K pull-up to 3V3 | Table 3-1, Table 3-4; schematic R9 |
-| GPIO5 | — (camera D0) | With MTDO: SDIO slave timing | Pull-up | Camera data line | Table 3-1; ESP-32S spec V1 p.6 (Strapping 管脚) |
+| GPIO5 | — (camera D0) | With MTDO: SDIO slave timing | Pull-up | Camera data line | Table 3-1, §3.4 (Table 3-5); ESP-32S spec V1 p.7 (Strapping 管脚) |
 
-The ESP-32S module specification (V1, 2019, p.6) gives the same strapping
+The ESP-32S module specification (V1, 2019, p.7) gives the same strapping
 table as the ESP32 datasheet.
 
 ### Camera connector (Cam1)
@@ -102,9 +102,13 @@ the V1.6 schematic, and the `CAMERA_MODEL_AI_THINKER` block of Espressif's
 Arduino example `camera_pins.h` (`espressif/arduino-esp32` at
 `3ed7b779f2b4c797b3512f3fc10a7a978a78fb18`,
 `libraries/ESP32/examples/Camera/CameraWebServer/camera_pins.h` lines
-160–180). `espressif/esp32-camera` itself carries the same map as
-`BOARD_ESP32CAM_AITHINKER` in `test/test_camera.c` lines 45–64 (at
-`b3f7fe802f41f17fd7a104d517c53f1f62c8414d`); it has no board header.
+160–180). `espressif/esp32-camera` carries the same map in its example's
+pin header, `examples/camera_example/main/camera_pinout.h` lines 24–45 (at
+`b3f7fe802f41f17fd7a104d517c53f1f62c8414d`), under the macro
+`BOARD_ESP32CAM_AITHINKER` with `CAM_PIN_*` names, and again in
+`test/test_camera.c` lines 45–64 with the `*_GPIO_NUM` names used in the
+table below. `CAMERA_MODEL_AI_THINKER` is arduino-esp32's macro name, not
+esp32-camera's.
 
 | GPIO | Camera signal | Connector pin | Net (schematic) | esp32-camera name | Source |
 |---|---|---|---|---|---|
@@ -231,11 +235,12 @@ All three projects flash with GPIO0 to GND (their justfiles' `flash` and
 - **Camera, microSD, LED, PSRAM and power nets:** schematic V1.6, read from a
   600 dpi render of the PDF; camera and SD pins also from spec V1.0 p.3.
 - **Camera pin map in working code:** `espressif/arduino-esp32`
-  `camera_pins.h` and `espressif/esp32-camera` `test/test_camera.c` at the
-  commits named above.
+  `camera_pins.h`, and `espressif/esp32-camera`
+  `examples/camera_example/main/camera_pinout.h` and `test/test_camera.c`, at
+  the commits named above.
 - **Strapping, UART0 and VDD_SDIO:** Espressif *ESP32 Series Datasheet*
   v5.3, Table 2-1, §2.5, §3 (Tables 3-1, 3-3, 3-4) and §3.2; Ai-Thinker
-  *ESP32-S 规格书* V1 (2019), table 2.2 and p.6.
+  *ESP32-S 规格书* V1 (2019), table 2.2 and p.7.
 - **Brownout:** `cam-webserver` as the only witness, with the level voltage
   from the ESP-IDF v5.5.1 Kconfig reference. The repo builds with ESP-IDF
   v5.5.6 (`Dockerfile`).
@@ -276,6 +281,7 @@ size, the sensor fitted, the LED colours, and the brownout behaviour.
 - [Ai-Thinker ESP32-S module specification V1 (LCSC copy, C277944)](https://datasheet.lcsc.com/datasheet/pdf/64c809fa198202a6fe4f560f9dddd0e6.pdf)
 - [Espressif ESP32 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf) (v5.3 read)
 - [`camera_pins.h`, espressif/arduino-esp32](https://github.com/espressif/arduino-esp32/blob/3ed7b779f2b4c797b3512f3fc10a7a978a78fb18/libraries/ESP32/examples/Camera/CameraWebServer/camera_pins.h#L160-L180)
+- [`examples/camera_example/main/camera_pinout.h`, espressif/esp32-camera](https://github.com/espressif/esp32-camera/blob/b3f7fe802f41f17fd7a104d517c53f1f62c8414d/examples/camera_example/main/camera_pinout.h#L24-L45)
 - [`test/test_camera.c`, espressif/esp32-camera](https://github.com/espressif/esp32-camera/blob/b3f7fe802f41f17fd7a104d517c53f1f62c8414d/test/test_camera.c#L45-L64)
 - [ESP-IDF v5.5.1 Kconfig reference, `CONFIG_ESP_BROWNOUT_DET_LVL_SEL`](https://docs.espressif.com/projects/esp-idf/en/v5.5.1/esp32/api-reference/kconfig-reference.html#config-esp-brownout-det-lvl-sel)
 - [M5Stack ESP32CAM product page (chipdip mirror)](https://static.chipdip.ru/lib/849/DOC041849252.pdf)
