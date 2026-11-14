@@ -13,8 +13,13 @@ uv run pytest tests/ --cov
 ```
 
 - Maintain test coverage for simulation code. CI enforces
-  `--cov-fail-under=25` on the core and `dev` dependencies; the plant's tests
-  meet it, and no module is omitted from the measurement to meet it (ADR-036)
+  `--cov-fail-under=25` over the whole package on the core and `dev`
+  dependencies, and no module is omitted from the measurement to meet it
+  (ADR-036). That floor does not hold the plant's tests in place: with
+  `test_plant.py`, `test_plant_stepper.py` and `test_plant_demo.py` left out
+  the total still passes it (31 % on 2026-11-14, against 41 % with them, when
+  `plant.py` stood at 99 %). Read `plant.py` and `arena.py` in the
+  `--cov-report=term` table when changing the plant's tests
 - Run tests before committing Python changes
 - The plant (`robocar_sim.plant`) must stay deterministic: `tests/test_plant.py`
   and `tests/test_plant_stepper.py` compare two runs in-process and across

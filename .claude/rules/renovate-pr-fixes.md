@@ -45,9 +45,10 @@ its token. Instead, on a branch outside the patterns above (#993 for #920):
 - **Compare per-file diff sizes with the bot PR.** At #993 they matched #920's
   within 2 lines; a larger gap means a different resolver or a moved base.
 - **Run the checks a lockfile-only diff skips.** The `ty` pre-commit hook
-  fires only on `packages/robotics/robocar/simulation/src/*.py`, so a ty bump in
+  fires only on a `.py` file under `packages/robotics/robocar/simulation/src/`
+  at any depth (the sources are in `src/robocar_sim/`), so a ty bump in
   `pyproject.toml` or `uv.lock` alone is never type-checked in CI; run
-  `uv run ty check src/` there. melody-train leaves `ty` unpinned, so a lock
+  `uv run --extra dev ty check src/` there. melody-train leaves `ty` unpinned, so a lock
   refresh can jump it many releases: #920 moved it 0.0.34 to 0.0.99, past
   ty 0.0.97's rename of the `unresolved-import` rule to `import-not-found`,
   and `ty check src` failed on the renamed-rule warning.

@@ -131,6 +131,12 @@ source already states, written so a scenario can test it.
 | US-F2 | As an owner, a 429 from the model backs off instead of retrying at full rate | Backoff doubles to `PLANNER_MAX_BACKOFF_PERIODS`, resets on success | D | planner_task.c |
 | US-F3 | As a person, a malformed or truncated model reply never makes him move unpredictably | Parse failure forces STOP; no goal is written | D | gemini_parse |
 
+### N. Notes to his developers
+
+| ID | Story | Acceptance | Oracle | Source |
+|----|-------|------------|--------|--------|
+| US-N1 | As a developer, I get a note from him when something happened, and not one per cycle | The `note` tool is offered on the first request after the obstacle reflex trips, then not again until `NOTE_GATE_MIN_INTERVAL_MS` (5 min) has passed, however often the reflex trips in between; a `note` call in a reply to a request that did not offer the tool is dropped and flagged | D | ADR-033 §4, note_gate |
+
 ## User stories — the harness
 
 | ID | Story | Acceptance |
@@ -211,7 +217,10 @@ source already states, written so a scenario can test it.
    records to the trace. US-D5 (a wall) and US-D6 (a table edge) pass under
    `just robocar-twin::test-physics`, which CI runs as the
    `robocar-twin-physics` suite; `just robocar-twin::test` runs the scripted
-   scenarios and never starts the plant. Both physics scenarios drive at 40 %:
+   scenarios and never starts the plant. Two more run against the plant: a
+   reverse toward a wall behind (US-D3), which only the plant's rear range
+   can stop, and a drive to one side (US-C5), the one run in which the two
+   wheels get different commands. The physics scenarios drive at 40 %:
    on the plant's estimates the robot reaches the wall at 80 %, and the margin
    at the table edge falls from 3.8 cm to 0.9 cm between 40 % and 80 %. None
    of the plant's figures is measured (ADR-036, open question 1), so those are

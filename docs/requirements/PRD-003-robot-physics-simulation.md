@@ -50,7 +50,8 @@ simulation's external interface is the JSONL stepper
 `python -m robocar_sim.plant` (ADR-036 §3). What depended on the bridge goes
 with it: the two Goals about the UART protocol and the WebSocket interface,
 `websockets` and `pyserial` in R15, and the `--demo-only` flag in the Success
-Criteria (the demo is the only mode left).
+Criteria (the demo is the only mode left). R12, R14, R15 and the Success
+Criteria below are written for the package as it is after that change.
 
 | Req | Description |
 |-----|-------------|
@@ -69,19 +70,19 @@ Criteria (the demo is the only mode left).
 
 | Req | Description |
 |-----|-------------|
-| R11 | pytest suite with coverage reporting (`uv run pytest --cov`) |
-| R12 | Target: all non-physics-calibration tests pass (currently 18/24) |
+| R11 | pytest suite with coverage reporting (`uv run --extra dev pytest tests/ --cov`) |
+| R12 | Every test passes on the core and `dev` dependencies, which is what CI installs; a test that needs a `viz` package skips there. `uv run --extra dev pytest tests/ -q` in `packages/robotics/robocar/simulation` prints the counts |
 | R13 | CI runs simulation build and test suite on every push |
 
 ### Package Management
 
 | Req | Description |
 |-----|-------------|
-| R14 | Python 3.11 required; managed with `uv` (pyproject.toml) |
-| R15 | Core dependencies: `pymunk`, `numpy`, `matplotlib`, `websockets`, `pyserial` |
+| R14 | Python 3.12 or newer (`requires-python` in `pyproject.toml`; `.python-version` selects 3.12); managed with `uv` |
+| R15 | Core dependencies: `numpy`, `pymunk`, `pyyaml`. `matplotlib` and the visualiser's other packages are in the `viz` extra (ADR-036 §2) |
 
 ## Success Criteria
 
-- Demo mode (`--demo-only --headless`) completes a 30 s movement pattern without errors.
+- The legacy demo (`uv run --extra viz python -m robocar_sim.main --headless`) completes a 30 s movement pattern without errors.
 - Straight-line simulation matches physical robot trajectory within 2% over 5 m.
-- All CI simulation checks pass on GitHub Actions (`ubuntu-latest`, Python 3.11).
+- All CI simulation checks pass on GitHub Actions (`ubuntu-latest`, Python 3.12).
