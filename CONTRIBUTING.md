@@ -25,6 +25,9 @@ Requirements:
 - [just](https://github.com/casey/just)
 - [uv](https://github.com/astral-sh/uv) and Python 3.11+ for the simulation and
   Python tooling
+- [actionlint](https://github.com/rhysd/actionlint), which the `actionlint`
+  pre-commit hook runs from PATH. `just install-dev-tools` prints how to
+  install it; cloud sessions get it from `scripts/install_pkgs.sh`
 - Git
 
 ```bash
