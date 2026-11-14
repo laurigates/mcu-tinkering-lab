@@ -41,6 +41,12 @@ CONFIG_ESP_WIFI_11KV_SUPPORT=n
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
 CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
 
+# --- UDP log SoftAP (packages/components/log-udp) ---
+# This project's own network name, so a phone that saved another project's
+# log AP does not join this one.
+CONFIG_LOG_UDP_AP_SSID="espdancer-log"
+CONFIG_LOG_UDP_AP_PASSWORD="espdancer"
+
 # --- Logging ---
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 

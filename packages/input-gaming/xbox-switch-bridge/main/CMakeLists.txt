@@ -7,7 +7,7 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES
         status_led
-        log_udp
+        log-udp
         driver
         esp_timer
         nvs_flash

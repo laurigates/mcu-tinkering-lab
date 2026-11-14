@@ -22,8 +22,10 @@ that job's matrix. What these tests hold:
 - One install path for uv and just (#835): only
   `.github/actions/setup-tools/action.yml` names `astral-sh/setup-uv` or
   `taiki-e/install-action`, nothing names `extractions/setup-just` (it asks
-  the Releases API at run time), the action pins both versions literally, and
-  the Renovate regex that bumps just still matches the pin.
+  the Releases API at run time), the action pins both versions literally,
+  the Renovate regex that bumps just still matches the pin, and
+  `scripts/install_pkgs.sh` installs the same just. Every
+  `python-version: 'X.Y.Z'` pin of one minor names one patch (#1082).
 - Tool suites (#838): every `test` recipe in a `tools/*/justfile` runs in CI,
   through the suites job, a workflow that runs its command and lists its
   directory in its trigger paths, or a pre-commit hook (which `test.yml`'s
@@ -53,6 +55,7 @@ SETUP_ACTION = REPO_ROOT / ".github" / "actions" / "setup-tools" / "action.yml"
 TEST_WORKFLOW = WORKFLOWS / "test.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
 RENOVATE = REPO_ROOT / "renovate.json"
+INSTALL_PKGS = REPO_ROOT / "scripts" / "install_pkgs.sh"
 
 # uv projects that a workflow other than the suites job installs. Each named
 # workflow must run `uv sync --locked` with this working directory.
@@ -111,6 +114,13 @@ def just_modules() -> dict[str, str]:
     """Root justfile `mod name 'path'` lines, as name -> path."""
     text = (REPO_ROOT / "justfile").read_text()
     return dict(re.findall(r"^mod\s+([\w-]+)\s+'([^']+)'", text, re.MULTILINE))
+
+
+def python_suites_hook_files() -> re.Pattern:
+    """The `files:` regex of the pre-commit hook that runs this suite."""
+    text = PRE_COMMIT.read_text()
+    block = re.search(r"- id: python-suites\n((?:        .*\n)+)", text)
+    return re.compile(re.search(r"files: '([^']*)'", block.group(1)).group(1))
 
 
 def recipe_body(justfile: Path, recipe: str) -> list[str] | None:
@@ -443,6 +453,38 @@ class SetupAction(unittest.TestCase):
         pinned = re.search(r"tool: just@(\S+)", text).group(1)
         self.assertEqual(hits[0].group("currentValue"), pinned)
 
+    def test_cloud_sessions_install_the_just_ci_pins(self):
+        # The `just --dry-run` text check-flash-recipes reads can change
+        # between releases, so a session and CI run one just (#1103).
+        # renovate.json groups the two pins into one PR.
+        session = re.search(
+            r'^JUST_VERSION="([^"]+)"', INSTALL_PKGS.read_text(), re.MULTILINE
+        )
+        ci = re.search(r"tool: just@(\S+)", SETUP_ACTION.read_text())
+        self.assertIsNotNone(session)
+        self.assertIsNotNone(ci)
+        self.assertEqual(session.group(1), ci.group(1))
+        self.assertTrue(
+            python_suites_hook_files().search("scripts/install_pkgs.sh"),
+            "add scripts/install_pkgs.sh to the python-suites hook's files:",
+        )
+
+    def test_python_pins_of_one_minor_agree(self):
+        # Each workflow pins its setup-python patch, where Renovate bumps it
+        # (setup-tools/action.yml says why); pins of one minor move together
+        # (#1082).
+        pins: dict[str, dict[str, list[str]]] = {}
+        for path in ci_files():
+            for n, line in code_lines(path):
+                # Quoted either way or bare: YAML reads all three as the pin.
+                m = re.search(r"""python-version:\s*['"]?((\d+\.\d+)\.\d+)\b""", line)
+                if m:
+                    where = pins.setdefault(m.group(2), {}).setdefault(m.group(1), [])
+                    where.append(f"{path.name}:{n}")
+        self.assertTrue(pins, "no python-version: 'X.Y.Z' pin found")
+        split = {minor: found for minor, found in pins.items() if len(found) > 1}
+        self.assertEqual(split, {}, "bump every pin of a minor together")
+
     def test_workflows_running_just_install_it(self):
         for path in sorted(WORKFLOWS.glob("*.yml")):
             text = path.read_text()
@@ -575,6 +617,19 @@ class ComponentHostSuites(unittest.TestCase):
                     [suite],
                     f"add the component to the {COMPONENTS_SUITE!r} suite's paths",
                 )
+
+    def test_the_hook_runs_on_a_component_suite_change(self):
+        # The python-suites hook's files: must take these, or a suite the
+        # recipe would not run fails only in CI (#1103).
+        files = python_suites_hook_files()
+        inputs = [
+            f
+            for f in self.files
+            if COMPONENT_TEST_DIR.match(f) or f.startswith(SHARED_STUBS + "/")
+        ]
+        self.assertTrue(inputs)
+        missed = [f for f in inputs if not files.search(f)]
+        self.assertEqual(missed, [], "extend the python-suites hook's files:")
 
     def test_no_stub_is_copied_between_suites(self):
         by_content: dict[bytes, list[str]] = {}

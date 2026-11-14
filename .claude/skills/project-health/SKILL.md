@@ -35,10 +35,14 @@ For each project, check these items. Report pass/warn/fail for each.
 To determine if a project uses hardware: check for `gpio_config`, `#define.*GPIO`, `ledc_`, `i2c_`, `spi_`, `uart_` in source files.
 
 ### 4. justfile
-- **Pass**: File exists and imports `tools/esp32.just`
-- **Warn**: File exists but doesn't import shared config
+- **Pass**: File exists and imports `tools/esp32-idf.just` (which imports
+  `tools/esp32.just` itself)
+- **Warn**: File exists but imports `tools/esp32.just` alone, so it misses the
+  shared build and flash recipes (xbox-switch-bridge is the one such project
+  today), or imports no shared config
 - **Fail**: Missing (for ESP-IDF projects)
-- **Skip**: ESPHome or non-ESP-IDF projects
+- **Skip**: ESPHome (`tools/esphome.just`), Pico SDK (`tools/pico.just`) and
+  other non-ESP-IDF projects
 
 ### 5. Root justfile registration
 - **Pass**: Project appears as `mod` in root `justfile`
@@ -52,7 +56,11 @@ Check by grepping root `justfile` for the project directory name.
 
 ### 7. version.txt
 - **Pass**: File exists
-- **Fail**: Missing
+- **Fail**: Missing, and the project has a package in `release-please-config.json`
+  (every package there is `release-type: simple`, which keeps its version in
+  `version.txt`)
+- **Skip**: The project has no release-please package; some unreleased
+  firmware projects carry a `version.txt` anyway
 
 ### 8. .gitignore coverage
 - **Pass**: Project has own `.gitignore` OR root `.gitignore` covers common patterns (build/, sdkconfig)
@@ -73,6 +81,23 @@ Check by grepping for `#include "credentials.h"`, `#include "secrets.h"`, `wifi_
 - **Fail**: WiFi STA project without mDNS
 
 Check by grepping for `esp_wifi_set_mode.*WIFI_MODE_STA` or `wifi_init_sta` in source.
+
+### Projects that build no firmware
+
+Checks 4, 5 and 7 are written for firmware. What the repo does today for the
+projects that build none:
+
+| Project | Kind | justfile | `mod` line | version.txt |
+|---------|------|----------|------------|-------------|
+| `packages/bench/phone-microscope` | CAD only: `design.py` (build123d), built and gated by `just mechanism::build <dir>` and `just mechanism::check <dir>` | none | none | none |
+| `packages/robotics/robocar/twin` | Host only: the planner C on a virtual clock | own recipes, no shared import | `robocar-twin` | none |
+| `packages/robotics/robocar/integrated` | Hardware only: a carrier PCB | imports `tools/kicad.just` | `robocar-integrated` | none |
+
+Report check 4 as Skip for all three (none is an ESP-IDF project) and check 7
+as Skip (none has a release-please package). phone-microscope has no recipes
+of its own to register, so report its check 5 as Skip. `all` mode reads the
+`mod` lines and never reaches a project without one: audit phone-microscope
+by path.
 
 ## Output Format
 

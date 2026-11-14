@@ -73,6 +73,12 @@ CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
 CONFIG_ESP_WIFI_ENABLE_SAE_PK=n
 CONFIG_ESP_WIFI_11KV_SUPPORT=n
 
+# --- UDP log SoftAP (packages/components/log-udp) ---
+# This project's own network name, so a phone that saved another project's
+# log AP does not join this one.
+CONFIG_LOG_UDP_AP_SSID="xbox-bridge-log"
+CONFIG_LOG_UDP_AP_PASSWORD="xboxbridge"
+
 # --- Logging ---
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 

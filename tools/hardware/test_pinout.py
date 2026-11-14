@@ -22,6 +22,8 @@ import xml.etree.ElementTree as ET
 from contextlib import redirect_stdout
 from pathlib import Path
 
+import gitenv
+
 from hardware import HardwareError, join, parse_layout
 from hardware.pinout import (
     OUT_DIR,
@@ -35,6 +37,8 @@ from hardware.pinout import (
     regenerate,
     render_svg,
 )
+
+setUpModule = gitenv.isolate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROBOCAR = REPO_ROOT / "packages/robotics/robocar"

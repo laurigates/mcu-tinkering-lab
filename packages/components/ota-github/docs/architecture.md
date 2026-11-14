@@ -182,4 +182,4 @@ you need a new mode (e.g. update from HTTP basic-auth server) the cleanest
 approach is a new `ota_github_<mode>.c` that exposes `ota_github_<mode>_run`
 and an enum value. Keep the public API stable.
 
-[robocar-partitions]: ../../../esp32-projects/robocar-main/partitions.csv
+[robocar-partitions]: ../../../robotics/robocar/partitions.csv

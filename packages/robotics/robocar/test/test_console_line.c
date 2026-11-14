@@ -545,6 +545,85 @@ static void test_odd_sessions_are_armed(void)
     TEST_ASSERT(console_line_improv_armed(UINT32_MAX));
 }
 
+/* feed() reads its first byte 1 ms after the pause, so pause(ms) leaves a gap of
+ * ms + 1 between the last byte before it and the first one after. */
+
+/* Issue #1103: a disarm cuts a packet inside its frame and the rest never
+ * comes (the client gave up). After more than CONSOLE_LINE_PACKET_STALE_MS of
+ * silence that packet is dead, so the next command, typed at the 1 ms a byte
+ * a paste or a fast typist gives, runs instead of being dropped as its tail. */
+static void test_a_command_after_a_stale_cut_packet_runs(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 6; cut < n; cut++) { /* the header complete, the parser in the frame */
+        reset();
+        feed(pkt, cut, true);
+        set_armed(false);
+        pause(CONSOLE_LINE_PACKET_STALE_MS); /* a gap of the limit plus 1 ms */
+        feed((const uint8_t *)"status\n", 7, false);
+        /* A cut after the checksum leaves only the newline, so that one landed. */
+        TEST_ASSERT(s_creds_calls == (delivered_across_a_stall(cut, n) ? 1 : 0));
+        TEST_ASSERT(s_line_count == 1);
+        TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+    }
+}
+
+/* Up to the limit the burst after the gap is still the stalled tail and is
+ * dropped: the stalled-rest test above, with the gap at exactly
+ * CONSOLE_LINE_PACKET_STALE_MS. */
+static void test_a_tail_within_the_stale_limit_is_still_dropped(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+
+    for (size_t cut = 1; cut < n; cut++) {
+        reset();
+        feed(pkt, cut, true);
+        pause(CONSOLE_LINE_PACKET_STALE_MS - 1); /* a gap of exactly the limit */
+        feed(pkt + cut, n - cut, false);
+        TEST_ASSERT(s_creds_calls == (delivered_across_a_stall(cut, n) ? 1 : 0));
+        assert_cut_leaks_nothing(cut);
+    }
+}
+
+/* Both rules across the uint32 millisecond wrap (day 49), with the cut packet's
+ * last byte read before it and the next burst after it. Two placements, so that
+ * neither now > last + limit nor now - limit > last, each wrong somewhere near
+ * the wrap, can pass for the subtraction the burst gap uses. */
+static void test_the_stale_limit_survives_the_millisecond_wrap(void)
+{
+    uint8_t pkt[128];
+    uint8_t checksum = 0;
+    const size_t n = build_credentials_packet(pkt, "HomeNet", "s3cr3tpass", &checksum);
+    static const uint32_t before_wrap_ms[] = {6000u, 100u};
+
+    for (size_t i = 0; i < sizeof(before_wrap_ms) / sizeof(before_wrap_ms[0]); i++) {
+        /* Stale: the command runs. */
+        reset();
+        s_now_ms = UINT32_MAX - before_wrap_ms[i] - 14u;
+        feed(pkt, 14, true);
+        set_armed(false);
+        pause(CONSOLE_LINE_PACKET_STALE_MS + 2000u);
+        TEST_ASSERT(s_now_ms < CONSOLE_LINE_PACKET_STALE_MS + 2000u); /* wrapped */
+        feed((const uint8_t *)"status\n", 7, false);
+        TEST_ASSERT(s_line_count == 1);
+        TEST_ASSERT(strcmp(s_lines[0], "status") == 0);
+
+        /* Within the limit: the tail is dropped. */
+        reset();
+        s_now_ms = UINT32_MAX - before_wrap_ms[i] - 14u;
+        feed(pkt, 14, true);
+        pause(CONSOLE_LINE_PACKET_STALE_MS - 1);
+        feed(pkt + 14, n - 14, false);
+        TEST_ASSERT(s_creds_calls == 0);
+        assert_cut_leaks_nothing(14);
+    }
+}
+
 int main(void)
 {
     printf("console_line tests\n");
@@ -566,6 +645,9 @@ int main(void)
     RUN_TEST(test_a_disarm_and_re_arm_inside_the_burst_finishes_the_packet);
     RUN_TEST(test_a_link_edge_keeps_a_half_typed_command);
     RUN_TEST(test_odd_sessions_are_armed);
+    RUN_TEST(test_a_command_after_a_stale_cut_packet_runs);
+    RUN_TEST(test_a_tail_within_the_stale_limit_is_still_dropped);
+    RUN_TEST(test_the_stale_limit_survives_the_millisecond_wrap);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }

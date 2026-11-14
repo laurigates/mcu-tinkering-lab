@@ -16,6 +16,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+import gitenv
+
 from hardware import HardwareError, join
 from hardware.docs import (
     BEGIN,
@@ -30,6 +32,8 @@ from hardware.docs import (
     render_block,
     signals_table,
 )
+
+setUpModule = gitenv.isolate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROBOCAR = REPO_ROOT / "packages/robotics/robocar"
