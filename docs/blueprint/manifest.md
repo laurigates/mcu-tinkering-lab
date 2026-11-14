@@ -72,7 +72,7 @@ Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, p
 |-----------|-------|
 | Repository | https://github.com/laurigates/mcu-tinkering-lab |
 | Primary Language (Firmware) | C/C++ (ESP-IDF v5.4+) |
-| Primary Language (Simulation) | Python 3.11 |
+| Primary Language (Simulation) | Python 3.12 |
 | Build System | CMake via ESP-IDF, Make, justfile |
 | CI/CD | GitHub Actions (11+ workflows) |
 | Active Platforms | ESP32 (16 projects), Simulation |

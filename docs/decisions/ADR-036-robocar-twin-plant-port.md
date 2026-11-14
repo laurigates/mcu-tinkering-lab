@@ -154,7 +154,9 @@ range from the plant, and any trigger latched before the first `range` event
 or plant response) is the bus accepting the trigger and failing the read, so
 the cycle stays 165 ms. Ranges are whole centimetres in 2..400, the bounds
 `ultrasonic_core_decode()` accepts: the loader refuses other values in a
-scenario, and the twin treats any other plant value as a failed read.
+scenario, and the twin treats any other plant value as a failed read. The
+failed read before the first `range` event or plant response has no test:
+nothing the trace records depends on it.
 
 **Trace.** Two records, emitted on change only:
 
@@ -373,8 +375,8 @@ stale simulation lock fails as a setup error, then `pytest -m physics`. It is
 the scorecard for every scenario and primes the plant the same way.
 
 `.github/python-suites.json` gains `robocar-twin-physics` with the
-`robocar-twin` suite's paths plus the simulation's `src/**`, `pyproject.toml`
-and `uv.lock`. Both suites also list `test/servo_controller_stub.c`, which the
+`robocar-twin` suite's paths plus the simulation's `src/**`, `pyproject.toml`,
+`uv.lock` and `.python-version`. Both suites also list `test/servo_controller_stub.c`, which the
 twin compiles from outside `test/include/`. The recipe and the suite entry
 land with the first physics scenario.
 
@@ -396,8 +398,10 @@ tolerances, not distances, until the plant is calibrated.
   divergences from the firmware (`robot_moving`, scripted reflex latches).
 - The limitation list in the twin README shrinks: the executor is modelled,
   and the head and its dwell poses are when `head` is set. Still unmodelled:
-  TTS playback time, the start cue, manual leases, and the microphone's
-  quarantine after a head movement (`ambient_head_quiet`).
+  TTS playback time, the start cue, manual leases, the microphone's
+  quarantine after a head movement (`ambient_head_quiet`), and the reflex
+  horn (`sound_clips_request()` in `reactive_task()`), so the microphone is
+  never quarantined by its playback.
 - `robocar-twin` stays buildable with a C compiler and cJSON alone; the plant
   is needed only for scenarios that name it.
 - The simulation's CI install drops from the full Genesis stack to numpy,
@@ -405,8 +409,12 @@ tolerances, not distances, until the plant is calibrated.
   the `ty` sync that runs on every code PR. `ty` in CI then no longer resolves
   the `viz` packages, so the legacy demo modules are type-checked only against
   the core until the visualiser follow-up.
-- The simulation's `--cov-fail-under=25` floor stays and is met by the plant's
-  own tests, not by omitting the legacy modules from the measurement.
+- The simulation's `--cov-fail-under=25` floor stays, with no module omitted
+  from the measurement. It is a whole-package figure and passes with or
+  without the plant's tests (31 % without, 41 % with, 2026-11-14), so it does
+  not hold those tests in place.
+- No CI job installs the `viz` extra any more, so a Renovate bump of one of
+  its pins is checked only by lock resolution.
 - PRD-003's bridge requirements are withdrawn. Nothing speaks that protocol
   since the dual-board firmware was removed, and the JSONL stepper replaces
   the WebSocket interface.
@@ -442,10 +450,25 @@ tolerances, not distances, until the plant is calibrated.
 ## Open questions
 
 1. Bench measurements for `plant.yaml`: track width, wheel diameter, speed and
-   yaw rate per duty, stopping distance, sensor offsets.
+   yaw rate per duty, stopping distance, sensor offsets, and what the
+   rangefinder returns with a target inside its 2 cm blind zone. The plant
+   reports no reading there, which the reflex takes for a clear path (#1188).
 2. Whether the executor's boot range value (400 cm, valid, before the first
-   read) reaches the planner on the robot as it does in the twin.
+   read) reaches the planner on the robot as it does in the twin (#1187).
 3. Whether the plant should select a frame's scene from the robot's pose, so
    a coupled scenario does not script frames by hand.
 4. Whether the legacy `DifferentialDriveRobot` and Genesis visualiser are
-   worth porting to the plant or are deleted.
+   worth porting to the plant or are deleted (#1189).
+
+## Firmware behaviour the coupled twin surfaced
+
+Three behaviours of the firmware as it stands, each reproduced in the twin
+and none yet seen on the robot. The scenarios pin what the firmware does
+today and change with the fixes.
+
+- One failed rangefinder read releases a latched obstacle reflex, and a
+  failed rear read releases a held reverse (#1185).
+- With a fresh drive goal the cliff reflex shuttles at an edge, and the
+  planner is not told of cliff trips (#1186).
+- The executor reports 400 cm as a valid range before its first read
+  (#1187).
