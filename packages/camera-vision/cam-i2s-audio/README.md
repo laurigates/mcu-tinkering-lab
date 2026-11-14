@@ -1,7 +1,7 @@
 # cam-i2s-audio
 
 **Status: placeholder.** The firmware does not yet use the camera, WiFi or
-I2S. `main/main.c` prints four "Initializing ..." lines and then
+I2S. `main/main.c` prints its start-up lines (lines 10 to 24) and then
 `Main loop running... waiting for tasks.` every 10 seconds; every feature is
 a `TODO` comment. The release on the web flasher is this placeholder.
 
