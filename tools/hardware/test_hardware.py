@@ -342,6 +342,31 @@ class WaveshareEsp32S3ZeroReferenceTest(unittest.TestCase):
         right = [p.gpio for p in by_pos if p.side == "R"]
         left = [p.gpio for p in by_pos if p.side == "L"]
         self.assertEqual(right + left[::-1], p15)
+        # The pad names in the same order, so that 5V and GND, or TX and RX,
+        # cannot trade places while the GPIO column stays right.
+        names = [
+            "TX",
+            "RX",
+            "13",
+            "12",
+            "11",
+            "10",
+            "9",
+            "8",
+            "7",
+            "6",
+            "5",
+            "4",
+            "3",
+            "2",
+            "1",
+            "3V3",
+            "GND",
+            "5V",
+        ]
+        right = [p.name for p in by_pos if p.side == "R"]
+        left = [p.name for p in by_pos if p.side == "L"]
+        self.assertEqual(right + left[::-1], names)
 
     def test_silkscreen_names_the_gpio(self):
         for pin in self.board.pins:
