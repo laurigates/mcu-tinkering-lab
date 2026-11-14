@@ -58,6 +58,7 @@ All ESP-IDF project justfiles import either `tools/esp32.just` (directly) or `to
 | `_monitor_baud` | Serial monitor baud rate (default 115200, override via `MONITOR_BAUD` env var) |
 | `require-port` | Private recipe — fails if `port` is empty |
 | `_serial-monitor` | Private recipe — pyserial monitor using `port` and `_monitor_baud` |
+| `_serial-monitor-on mon_port mon_baud` | Private recipe — the same monitor on any port and baud, with no port check of its own; a second adapter composes it behind its own check, e.g. `uart-monitor: require-uart-port (_serial-monitor-on uart_port uart_baud)` |
 
 ### `tools/esp32-idf.just` — Shared build recipes
 
@@ -68,7 +69,7 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 | `_idf-build` | Private recipe — containerized `idf.py set-target + build` |
 | `_idf-clean` | Private recipe — containerized `idf.py fullclean` |
 | `_idf *args` | Private recipe — run any `idf.py` command in the container |
-| `_idf-build-checked bin` | Private — validated build: filters output to warnings/errors/size and fails fast if `build/{{bin}}.bin` is missing. Pass the app basename. |
+| `_idf-build-checked bin overlay=""` | Private — validated build: filters output to warnings/errors/size and fails fast if `build/{{bin}}.bin` is missing. Pass the app basename. An optional `overlay` (`"sdkconfig.debug-jtag"`) is layered on `sdkconfig.defaults` through `SDKCONFIG_DEFAULTS` for `idf.py set-target`. |
 | `_esp32-flash bin` | Private — native ESP32 flash (bootloader @0x1000, flash-size detect). Pass the app basename. |
 | `_s3-flash bin` | Private — native ESP32-S3 flash (bootloader @0x0, 4MB @80MHz). Pass the app basename. |
 | `_s3-argfile-flash` | Private — native ESP32-S3 flash of everything the build's `build/flash_args` lists (otadata included), at its offsets and flash size. For tables `_s3-flash` does not fit; the four ThinkPack OTA receivers use it (#1076). |

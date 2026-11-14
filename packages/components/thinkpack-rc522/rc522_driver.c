@@ -2,10 +2,10 @@
  * @file rc522_driver.c
  * @brief MFRC522 NFC reader driver implementation.
  *
- * Ported verbatim from packages/games/nfc-scavenger-hunt/main/rc522_driver.c.
- * SPI bus setup, register sequences, anticollision and select logic are all
- * unchanged — only public function names and UID constants have been rebound
- * to the thinkpack_rc522_ prefix.
+ * Ported verbatim from nfc-scavenger-hunt's former main/rc522_driver.c; that
+ * project now uses this component and no longer carries a copy. SPI bus setup, register sequences,
+ * anticollision and select logic are all unchanged — only public function names and UID constants
+ * have been rebound to the thinkpack_rc522_ prefix.
  */
 
 #include "thinkpack_rc522.h"

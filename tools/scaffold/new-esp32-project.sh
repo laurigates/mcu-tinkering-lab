@@ -109,12 +109,45 @@ echo
 # Create project directory
 mkdir -p "$PROJECT_DIR"
 
-# Copy template files
+# Copy template files. `/.` rather than `/*`, so dotfiles such as .gitignore
+# (which keeps credentials.h, build/ and sdkconfig out of git) come along.
 echo -e "${CYAN}Copying template files...${NC}"
-cp -r "$TEMPLATE_DIR"/* "$PROJECT_DIR/" 2>/dev/null || true
+cp -R "$TEMPLATE_DIR"/. "$PROJECT_DIR/"
 
-# Remove build artifacts if any
-rm -rf "$PROJECT_DIR/build" "$PROJECT_DIR/sdkconfig"
+# Remove build artifacts and local state if any; credentials.h may hold real
+# WiFi credentials from the template's checkout
+rm -rf "$PROJECT_DIR/build" "$PROJECT_DIR/sdkconfig" "$PROJECT_DIR/sdkconfig.old" \
+    "$PROJECT_DIR/managed_components" "$PROJECT_DIR/main/credentials.h"
+
+# Drop the template's release identity (issue #1078). flasher.json names its
+# release asset and OTA topic, CHANGELOG.md, CLAUDE.md and .claude/ describe
+# it, and dependencies.lock is resolved for its components. A new project
+# starts at 0.1.0, the fallback its CMakeLists uses when version.txt is absent.
+# Editor config such as robocar's .clangd stays: it works around the container
+# build's compile database and names no project.
+# NOT_COPIED lists only what the source had, for the closing summary.
+NOT_COPIED=""
+for f in flasher.json CHANGELOG.md CLAUDE.md dependencies.lock .claude/; do
+    if [ -e "$PROJECT_DIR/$f" ]; then
+        rm -rf "${PROJECT_DIR:?}/$f"
+        NOT_COPIED="${NOT_COPIED:+$NOT_COPIED, }$f"
+    fi
+done
+if [ -f "$PROJECT_DIR/version.txt" ]; then
+    echo "0.1.0" > "$PROJECT_DIR/version.txt"
+fi
+
+# Use the project name as the mDNS hostname (.claude/rules/mdns-hostname.md),
+# in the mdns_hostname_set() call and in the "<host>.local" comments and logs.
+if [ -d "$PROJECT_DIR/main" ]; then
+    grep -rlE 'mdns_hostname_set\("[a-z0-9-]+"\)' "$PROJECT_DIR/main" | while IFS= read -r src; do
+        OLD_HOST=$(sed -n 's/.*mdns_hostname_set("\([a-z0-9-]*\)").*/\1/p' "$src" | head -n 1)
+        [ -n "$OLD_HOST" ] || continue
+        echo -e "${CYAN}Setting mDNS hostname in ${src#"$PROJECT_DIR"/}...${NC}"
+        EXPR="s/mdns_hostname_set(\"$OLD_HOST\")/mdns_hostname_set(\"$PROJECT_NAME\")/g; s/$OLD_HOST\.local/$PROJECT_NAME.local/g"
+        sed -i "$EXPR" "$src" 2>/dev/null || sed -i '' "$EXPR" "$src"
+    done
+fi
 
 # Update CMakeLists.txt
 if [ -f "$PROJECT_DIR/CMakeLists.txt" ]; then
@@ -210,7 +243,21 @@ echo -e "     (plus ${CYAN}fetch_bluepad32: true${NC} if it vendors bluepad32)"
 echo -e "  3. Check the flash recipe: ${CYAN}python3 tools/check-flash-recipes.py${NC}"
 echo -e "  4. Build: ${CYAN}just $PROJECT_NAME::build${NC}"
 echo
-echo "Optional:"
+# Each line only when it is true: a type-4 source may lack these files or the
+# mdns_hostname_set() call.
+if [ -n "$NOT_COPIED" ]; then
+    echo "Not copied from the template: $NOT_COPIED."
+fi
+if [ -f "$PROJECT_DIR/version.txt" ]; then
+    echo "version.txt starts at 0.1.0."
+fi
+if grep -rqF "mdns_hostname_set(\"$PROJECT_NAME\")" "$PROJECT_DIR/main" 2>/dev/null; then
+    echo "The mDNS hostname is $PROJECT_NAME."
+fi
+echo
+echo "Optional, to release it:"
+echo -e "  - Add a package to ${CYAN}release-please-config.json${NC} and ${CYAN}.release-please-manifest.json${NC} (\"0.1.0\");"
+echo -e "    release-please then bumps version.txt and writes CHANGELOG.md"
 echo -e "  - Add ${CYAN}flasher.json${NC} to list it in the web flasher (see packages/audio/kids-audio-toy/flasher.json)"
 echo
 echo "Details: CONTRIBUTING.md § Adding a project, .claude/rules/containerized-builds.md"

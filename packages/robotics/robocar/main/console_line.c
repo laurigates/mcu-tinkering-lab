@@ -31,8 +31,9 @@ bool console_line_improv_armed(uint32_t improv_session)
  * would split it into a line. A fresh header in the burst still parses. A
  * partly matched header is kept: the parser drops it by itself on the first
  * byte that does not continue it, and if it was a packet's start, the rest of
- * the header completes it. */
-static void on_quiet_gap(console_line_t *line)
+ * the header completes it. After a gap longer than CONSOLE_LINE_PACKET_STALE_MS
+ * the packet counts as dead and the burst is not dropped (issue #1103). */
+static void on_quiet_gap(console_line_t *line, uint32_t gap_ms)
 {
     const bool in_frame = line->in_packet && !improv_wifi_parser_idle();
     if (in_frame) {
@@ -40,14 +41,15 @@ static void on_quiet_gap(console_line_t *line)
         line->draining = false;
     }
     line->in_packet = false;
-    line->dropping = in_frame;
+    line->dropping = in_frame && gap_ms <= CONSOLE_LINE_PACKET_STALE_MS;
 }
 
 const char *console_line_feed(console_line_t *line, char ch, uint32_t improv_session,
                               uint32_t now_ms)
 {
-    if ((uint32_t)(now_ms - line->last_ms) > CONSOLE_LINE_BURST_GAP_MS) {
-        on_quiet_gap(line);
+    const uint32_t gap_ms = (uint32_t)(now_ms - line->last_ms);
+    if (gap_ms > CONSOLE_LINE_BURST_GAP_MS) {
+        on_quiet_gap(line, gap_ms);
     }
     line->last_ms = now_ms;
 

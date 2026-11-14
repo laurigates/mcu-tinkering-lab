@@ -38,6 +38,14 @@ pre-commit run --files <changed files>   # what CI runs; repeat until clean
   in `git diff -- <path>` is the reverse trap: it is relative to the current
   directory, so a root-relative path there matches nothing and prints nothing.
 - **A script that edits `sys.path` before importing** needs `# noqa: E402` on
-  each import after it. Keep them; do not let a newer ruff's fixer strip them.
+  the imports after it only when another statement comes first. ruff does not
+  count a bare `sys.path.insert(...)`, `.append(...)` or `.extend(...)` call,
+  or an `if` block, as ending the imports, so an import after those needs no
+  noqa, and `RUF100` (selected through `RUF`) reports one there as unused. An
+  assignment does end them: `ROOT = Path(...)` before the insert, or a slice
+  assignment such as `sys.path[:0] = [...]`, so the imports after it need the
+  noqa (`docs/schematics/metrics.py`, `packages/bench/phone-microscope/design.py`).
+  Lint with the pinned ruff before adding or removing one: another version's
+  fixer can strip a noqa the pinned version needs.
 - **Agent-written Python** (workflow designers, generated tools) gets the same
   pass before it is committed. Five design scripts failed on these two rules.

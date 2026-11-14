@@ -1,6 +1,6 @@
 stateDiagram-v2
     [*] --> IDLE
-    IDLE --> IN_PROGRESS : update detected / trigger
+    IDLE --> IN_PROGRESS : trigger
     IN_PROGRESS --> SUCCESS : download + verify OK
     IN_PROGRESS --> FAILED : any error
     SUCCESS --> [*] : esp_restart

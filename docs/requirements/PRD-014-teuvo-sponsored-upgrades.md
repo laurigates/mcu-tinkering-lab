@@ -386,12 +386,11 @@ Secrets:
   - `auto-resolve-conflicts.yml`, `claude.yml`, `claude-code-review.yml` and
     `security-secrets.yml`;
   - `build-firmware.yml`, whose dispatch redeploys the web flasher and the OTA
-    manifest from any tag. It also interpolates `inputs.release_tag` into
-    `run:` (`build-firmware.yml:217`, `:462`, `:485`), which would turn Actions:
-    write into its `contents: write` token. That input moves to an `env:`
-    variable in the same change and is checked against the release-please
-    tag pattern before use. It lands with the guards, so the interpolation is
-    closed before the App exists.
+    manifest from any tag. Its `inputs.release_tag` no longer reaches a
+    `run:` script: since #1084 it passes through an `env:` variable and the
+    `resolve-tag` job checks it against the release-please tag pattern before
+    any job uses it, so Actions: write cannot turn it into the workflow's
+    `contents: write` token.
 
   A re-run uses the original run's workflow file and is allowed for 30 days,
   so these guards land at least 30 days before the App is created.
@@ -664,7 +663,8 @@ not the overlay.
      (PRD-015 FR-033). The step is `continue-on-error`, so without it the step
      would fail silently;
    - check whether `vars.MQTT_ENABLED` lets GitHub runners publish anonymously
-     to the broker today (`build-firmware.yml:584-632`).
+     to the broker today (`build-firmware.yml`, the step "Notify the released
+     project's robot via MQTT").
 7. **Phase 0.** #853 (device: FR-024, FR-025) after steps 2–6. #854
    (concierge: FR-026, FR-027) can be built against the sandbox earlier and
    needs step 6 for the demo. #855's workflow (FR-028, FR-029) once step 1's

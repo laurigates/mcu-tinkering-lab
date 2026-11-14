@@ -1,6 +1,10 @@
 # ESP32-CAM (AI Thinker)
 
-**Role in project:** Camera module for robocar vision system (OV2640 capture, AI inference, MQTT)
+**Role in project:** the board of cam-webserver, cam-i2s-audio and llm-telegram.
+The robocar design that used it as a camera module has been removed.
+
+**Board page:** [esp32-cam-ai-thinker.md](../boards/esp32-cam-ai-thinker.md),
+with the header pinout, the camera, microSD and PSRAM pins, and the sources
 
 ## Key Specs
 
@@ -15,16 +19,19 @@
 | Bluetooth | BT 4.2 + BLE |
 | USB | None (requires external FTDI for programming) |
 
-## Pin Assignments (project-specific)
+## On-board pins
 
-- **UART to main controller:** TX=GPIO14, RX=GPIO15 (chosen to avoid PSRAM conflicts)
-- **Camera flash LED:** GPIO4
+- **Camera flash LED:** GPIO4 (also microSD DATA1)
 - **Red status LED:** GPIO33 (active low)
-- **Camera power down:** GPIO32
+- **Camera power switch:** GPIO32, low powers the camera. It drives a P-MOS
+  ahead of the camera regulators, not the sensor's PWDN pin
 
-## Safe GPIOs for General Use
+## Header GPIOs
 
-GPIO2, GPIO16, GPIO17 (most flexible, no conflicts with camera/PSRAM)
+No header GPIO is free of another duty. GPIO2, GPIO4, GPIO12, GPIO13, GPIO14
+and GPIO15 are the microSD bus, and GPIO16 is the PSRAM's chip select. GPIO17
+is the PSRAM clock and is not on a header. The board page's tables give each
+pin with its source.
 
 ## Datasheets & References
 

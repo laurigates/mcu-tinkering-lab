@@ -14,6 +14,13 @@
 #     _esphome-config  — create secrets file from template
 #     _esphome-upload  — compile and upload via USB (with secrets check)
 #     _esphome-logs    — view device logs
+#
+# _esphome-upload and _esphome-logs take an optional port_pattern: a grep -E
+# alternation of /dev/cu.* names (macOS) to auto-detect the board's USB port,
+# e.g. `upload: (_esphome-upload "usbserial|SLAB|wchusbserial")`. The first
+# matching name wins, so keep the set to the adapters the board uses. logs
+# falls back to OTA ({{device_name}}.local) when no port matches. Without a
+# pattern, ESPHome chooses the port itself.
 
 # Install ESPHome
 [group: "setup"]
@@ -34,19 +41,42 @@ _esphome-config:
 
 # Compile and upload via USB — private helper for custom upload logic
 [private]
-_esphome-upload:
+_esphome-upload port_pattern="":
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -f {{secrets_file}} ]; then
         echo "Error: {{secrets_file}} not found — run 'just config' first"
         exit 1
     fi
-    esphome run {{config_file}}
+    if [ -z "{{port_pattern}}" ]; then
+        exec esphome run {{config_file}}
+    fi
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1)
+    if [ -z "$PORT" ]; then
+        echo "Error: No ESP32 device found on USB"
+        echo "Available ports:"
+        ls /dev/cu.* 2>/dev/null | grep -v -E "(Bluetooth|debug|Suunto)" || echo "  None found"
+        exit 1
+    fi
+    echo "Found device at $PORT"
+    esphome run {{config_file}} --device "$PORT"
 
 # View device logs — private helper for custom log logic
 [private]
-_esphome-logs:
-    esphome logs {{config_file}}
+_esphome-logs port_pattern="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port_pattern}}" ]; then
+        exec esphome logs {{config_file}}
+    fi
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1)
+    if [ -z "$PORT" ]; then
+        echo "No USB device found, trying OTA..."
+        esphome logs {{config_file}} --device {{device_name}}.local
+    else
+        echo "Monitoring $PORT"
+        esphome logs {{config_file}} --device "$PORT"
+    fi
 
 # Validate ESPHome configuration
 [group: "build"]

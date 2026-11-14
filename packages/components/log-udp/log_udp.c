@@ -3,7 +3,14 @@
  * @brief WiFi AP + UDP broadcast log sink.
  *
  * Starts a SoftAP so any device can connect directly and receive logs.
- * No external router or credentials needed.
+ * No external router needed. The SSID and password come from
+ * Kconfig (CONFIG_LOG_UDP_AP_SSID, CONFIG_LOG_UDP_AP_PASSWORD); each consumer
+ * sets its own in sdkconfig.defaults.
+ *
+ * The S3 SoftAP workarounds (country FI, HT20, 19.5 dBm here; AMPDU and WiFi
+ * NVS off in the consumer's sdkconfig.defaults) were validated in
+ * xbox-switch-bridge ADR-0007. Without them the AP is invisible on ESP32-S3
+ * (espressif/esp-idf#13508).
  */
 
 #include "log_udp.h"
@@ -20,15 +27,25 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "lwip/sockets.h"
+#include "sdkconfig.h"
+#if LOG_UDP_HAVE_STATUS_LED
 #include "status_led.h"
+#endif
 
 static const char *TAG = "log_udp";
 
-#define LOG_AP_SSID "xbox-bridge-log"
-#define LOG_AP_PASS "xboxbridge"
+#define LOG_AP_SSID CONFIG_LOG_UDP_AP_SSID
+#define LOG_AP_PASS CONFIG_LOG_UDP_AP_PASSWORD
 #define LOG_AP_CHANNEL 6
 #define LOG_AP_MAX_CONN 2
 #define LOG_BUF_SIZE 256
+
+/* wifi_ap_config_t holds 32 SSID bytes; WPA2-PSK needs an 8-63 character
+ * passphrase, or esp_wifi_set_config() fails and ESP_ERROR_CHECK aborts. */
+_Static_assert(sizeof(LOG_AP_SSID) - 1 >= 1 && sizeof(LOG_AP_SSID) - 1 <= 32,
+               "CONFIG_LOG_UDP_AP_SSID must be 1 to 32 bytes");
+_Static_assert(sizeof(LOG_AP_PASS) - 1 >= 8 && sizeof(LOG_AP_PASS) - 1 <= 63,
+               "CONFIG_LOG_UDP_AP_PASSWORD must be 8 to 63 characters");
 
 /* Broadcast to the AP subnet (192.168.4.255) */
 #define LOG_AP_BROADCAST "192.168.4.255"
@@ -147,8 +164,10 @@ esp_err_t log_udp_init(uint16_t port)
              "socat UDP-RECV:%u STDOUT",
              port, LOG_AP_SSID, port);
 
+#if LOG_UDP_HAVE_STATUS_LED
     /* Cyan flash = AP ready, waiting for client */
     status_led_flash(0, 32, 32, 500);
+#endif
 
     return ESP_OK;
 }

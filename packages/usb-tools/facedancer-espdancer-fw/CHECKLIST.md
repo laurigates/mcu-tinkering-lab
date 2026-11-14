@@ -21,7 +21,7 @@ milestone. Strikethrough (`~~`) = done. Source provenance tagged
 - [x] Build variants: `sdkconfig.debug-uart`, `sdkconfig.debug-jtag`,
       `sdkconfig.debug-usb` `[xbox-switch-bridge]`
 - [x] `components/status_led/` — relabeled modes for emulator states `[xbox-switch-bridge]`
-- [x] `components/log_udp/` — SoftAP + UDP log sink (SSID `espdancer-log`) `[xbox-switch-bridge]`
+- [x] `log_udp` — SoftAP + UDP log sink (SSID `espdancer-log`) `[xbox-switch-bridge]`; now the shared `packages/components/log-udp`
 - [x] `components/usb_rpc/` — length-prefixed framing header + TCP server stub `[new]`
 - [x] `main/main.c` — bring-up: status LED, (debug-usb) WiFi log, rpc transport, idle `[new]`
 - [x] ADRs 0001–0005 + `docs/rpc-protocol.md` (the contract the firmware implements) `[new]`

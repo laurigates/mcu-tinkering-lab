@@ -4,6 +4,12 @@ This document explains the internal structure of the component. Read it if
 you're debugging an update failure, tuning memory usage, or extending the
 component with a new mode.
 
+The component has one mode, TRIGGERED: it downloads when the application
+or an MQTT message names a release, and never polls. The PULL mode that
+wrapped esp_ghota was removed (#1081) after #539 found esp_ghota could not
+complete an update; pull OTA lives in robocar's
+[`ota_manager.c`](../../../robotics/robocar/main/ota_manager.c).
+
 ## Module layout
 
 ```
@@ -13,9 +19,8 @@ ota_github/
 │   └── ota_github_events.h   ← esp_event bus declarations
 └── src/
     ├── ota_github.c          ← init, state mutex, stability timer, API entry points
-    ├── ota_github_pull.c     ← PULL mode: wraps esp_ghota's event stream
     ├── ota_github_direct.c   ← TRIGGERED mode: esp_https_ota worker task + SHA256
-    ├── ota_github_mqtt.c     ← optional MQTT subscribe → check/trigger
+    ├── ota_github_mqtt.c     ← optional MQTT subscribe → trigger
     └── ota_github_internal.h ← private shared state
 ```
 
@@ -27,7 +32,7 @@ state in `g_ota_github` (mutex-guarded) and the public esp_event bus.
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE
-    IDLE --> IN_PROGRESS : update detected / trigger
+    IDLE --> IN_PROGRESS : trigger
     IN_PROGRESS --> SUCCESS : download + verify OK
     IN_PROGRESS --> FAILED : any error
     SUCCESS --> [*] : esp_restart
@@ -39,46 +44,9 @@ stateDiagram-v2
 Source: [diagrams/state-machine.mmd](diagrams/state-machine.mmd).
 
 The `MAINTENANCE_MODE` status is not produced by the component itself — it's
-reserved for callers (like the robocar main controller) that want to report
+reserved for callers that want to report
 a "we're out of service while a peer updates us" state over the same
 reporting API.
-
-## PULL mode sequence
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App
-    participant ota_github
-    participant esp_ghota
-    participant GitHub
-
-    App->>ota_github: ota_github_init(PULL)
-    ota_github->>esp_ghota: ghota_init + start_update_timer
-    loop every poll_interval_min
-        esp_ghota->>GitHub: GET /releases/latest
-        GitHub-->>esp_ghota: JSON (tag, assets)
-        alt newer tag
-            esp_ghota-->>ota_github: GHOTA_EVENT_UPDATE_AVAILABLE
-            ota_github->>App: hooks.on_update_available
-            ota_github->>App: hooks.pre_download_hook
-            App-->>ota_github: ESP_OK
-            ota_github->>esp_ghota: ghota_start_update
-            esp_ghota->>GitHub: GET /releases/download/…
-            GitHub-->>esp_ghota: firmware stream
-            esp_ghota-->>ota_github: PROGRESS events
-            ota_github->>App: hooks.on_progress
-            esp_ghota-->>ota_github: FINISH_FIRMWARE_UPDATE
-            ota_github->>App: hooks.on_update_ready_to_reboot
-            App-->>ota_github: ESP_OK
-            ota_github->>ota_github: esp_restart
-        else no update
-            esp_ghota-->>ota_github: NOUPDATE_AVAILABLE
-        end
-    end
-```
-
-Source: [diagrams/sequence-pull.mmd](diagrams/sequence-pull.mmd).
 
 ## MQTT-notify sequence
 
@@ -93,12 +61,8 @@ sequenceDiagram
     CI->>Broker: publish mqtt_notify_topic = release_tag
     Broker-->>Device: DATA event (topic, payload)
     Device->>Device: rate-limit (max 1/60s)
-    alt PULL mode
-        Device->>Device: ota_github_check_now
-    else TRIGGERED mode
-        Device->>Device: ota_github_trigger_tag(payload)
-    end
-    Device->>GitHub: GET /releases/…
+    Device->>Device: ota_github_trigger_tag(payload)
+    Device->>GitHub: GET /releases/download/{payload}/{asset}
 ```
 
 Source: [diagrams/sequence-push.mmd](diagrams/sequence-push.mmd).
@@ -108,7 +72,7 @@ Source: [diagrams/sequence-push.mmd](diagrams/sequence-push.mmd).
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Orchestrator as Peer MCU (PULL + orchestration)
+    participant Orchestrator as Peer MCU (orchestrator)
     participant Target as Target MCU (TRIGGERED)
     participant GitHub
 
@@ -175,13 +139,11 @@ repo-wide byte limit — see
 | Task | Stack | Priority | When alive |
 |---|---|---|---|
 | `ota_github_dl` | `cfg.task_stack_size` (default 8192) | `cfg.task_priority` (default 5) | During a TRIGGERED download; ends with `vTaskDelete` |
-| esp_ghota internal | configured by esp_ghota | configured by esp_ghota | Always (PULL mode) |
 | `ota_stability` (software timer) | FreeRTOS timer task | timer task priority | Always, for `stability_timeout_ms` after boot |
 
 **RAM overhead** (approximate, ESP32, release build):
 
 - `ota_github` itself: ~1 KB for `g_ota_github` + mutex + timer
-- `esp_ghota` (PULL only): ~6 KB task stack + heap for release JSON parsing
 - `esp_https_ota` during download: ~10 KB TLS context + 4 KB HTTP buffer
 - Certificate bundle (flash, not RAM): ~50 KB
 
@@ -209,7 +171,7 @@ to run the bad image on the next reset.
 - All status/progress getters take a 50 ms mutex — safe to call from any
   task including interrupt-level code via `xSemaphoreTakeFromISR` variants
   (not currently exposed; open an issue if you need it).
-- Event handlers (ghota, mqtt) may run on separate tasks; they only touch
+- The MQTT event handler may run on a separate task; it only touches
   state through the public helpers, which acquire the mutex.
 - `ota_github_init` is NOT thread-safe — call it once during startup.
 
@@ -220,4 +182,4 @@ you need a new mode (e.g. update from HTTP basic-auth server) the cleanest
 approach is a new `ota_github_<mode>.c` that exposes `ota_github_<mode>_run`
 and an enum value. Keep the public API stable.
 
-[robocar-partitions]: ../../../esp32-projects/robocar-main/partitions.csv
+[robocar-partitions]: ../../../robotics/robocar/partitions.csv

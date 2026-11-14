@@ -55,6 +55,12 @@ to the parent entry's `exclude_paths` in `.github/project-matrix.json`
 parent is rebuilt and released on every change to the subproject; the same
 check fails until both lists name it. See CONTRIBUTING.md § Adding a project.
 
+A project that ships firmware also needs a package in `release-please-config.json`
+(and `.release-please-manifest.json`) with a `version.txt`: `build-firmware.yml`
+builds on a `<component>-v<semver>` release. To list it in the web flasher, add
+a `flasher.json`; its manifest, card and offsets are generated (see
+`.claude/rules/web-flasher.md`).
+
 ### 4. Check Standard File Inventory
 
 Report which standard files exist and which are missing:

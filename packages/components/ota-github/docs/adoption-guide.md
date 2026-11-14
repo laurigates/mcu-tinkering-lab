@@ -3,11 +3,16 @@
 Estimated effort: 20 minutes to first successful OTA, assuming the project
 already has WiFi working.
 
+`ota_github` downloads a release asset when the application asks for one
+(TRIGGERED mode); it does not poll GitHub. A project that should discover
+new releases by itself copies robocar's manifest poll,
+[`ota_manager.c`](../../../robotics/robocar/main/ota_manager.c), instead.
+
 ---
 
 ## 1. Prerequisites
 
-- ESP-IDF ≥ 5.1 (≥ 6.0 if using the newest esp_ghota releases)
+- ESP-IDF ≥ 5.1
 - Project boots and connects to WiFi before `app_main` hands control to your
   business logic
 - `nvs_flash` initialized
@@ -38,8 +43,8 @@ idf_component_register(
 )
 ```
 
-`ota_github`'s `idf_component.yml` declares `fishwaldo/esp_ghota` as a
-transitive dependency — you do NOT need to list it yourself.
+`ota_github` has no managed-component dependencies; it uses ESP-IDF's own
+`esp_https_ota` and `mqtt`.
 
 ### 2.3. Enable rollback in sdkconfig
 
@@ -54,7 +59,7 @@ CONFIG_ESP_TLS_INSECURE=n
 Delete the generated `sdkconfig` (not `sdkconfig.defaults`) so the new
 defaults take effect, then run a clean build.
 
-## 3. Call `ota_github_init`
+## 3. Call `ota_github_init`, then trigger
 
 The minimum useful snippet:
 
@@ -62,10 +67,11 @@ The minimum useful snippet:
 #include "ota_github.h"
 
 static void start_ota(void) {
-    ota_github_config_t cfg     = OTA_GITHUB_CONFIG_DEFAULT();
-    cfg.github_org              = "laurigates";
-    cfg.github_repo             = "mcu-tinkering-lab";
-    cfg.firmware_filename_match = "my-project";
+    ota_github_config_t cfg      = OTA_GITHUB_CONFIG_DEFAULT();  /* TRIGGERED */
+    cfg.github_org               = "laurigates";
+    cfg.github_repo              = "mcu-tinkering-lab";
+    cfg.triggered_asset_filename = "my-project.bin";  /* = flasher.json otaAssetName */
+    cfg.hooks.pre_download_hook  = bring_up_wifi;      /* optional, see § 6 */
     ESP_ERROR_CHECK(ota_github_init(&cfg));
 }
 
@@ -74,20 +80,28 @@ void app_main(void) {
     wait_for_wifi_connected();
     start_ota();
 }
+
+/* Later, when a peer, console command or MQTT message names a release: */
+ota_github_trigger_tag(NULL, received_tag, received_sha_prefix);
+
+/* The caller (or a peer over I2C) polls: */
+ota_github_get_status();
+ota_github_get_progress();
 ```
+
+`ota_github_trigger_url` takes a full HTTPS URL instead, for an asset that
+does not follow the release-download URL shape.
 
 ## 4. Release-side requirements
 
-Two things must be true on GitHub for the device to find firmware:
+Two things must be true on GitHub for the download to succeed:
 
-1. A release exists with a semver tag. This monorepo's release-please tags
-   are `<component>-v1.2.3`; esp_ghota still picks the correct version
-   because the comparison is done on the appended semver, not the prefix.
-2. A release **asset** whose filename `fnmatch(cfg.firmware_filename_match,
-   name, 0)` matches — a **full-string** match, not a substring match. Set
-   `firmware_filename_match` to your project's `flasher.json` `otaAssetName`
-   exactly, or to a pattern with an explicit wildcard (e.g. `"my-project*"`)
-   if you want to match more than one exact name.
+1. A release exists under the tag you pass. This monorepo's release-please
+   tags are `<component>-v1.2.3`; the component puts the tag in the URL as
+   given and never parses it.
+2. The release has an **asset** named exactly `cfg.triggered_asset_filename`
+   (or the `asset_override` argument). Set it to your project's
+   `flasher.json` `otaAssetName`; there is no pattern matching.
 
 See [release-workflow.md](release-workflow.md) for the full CI pipeline,
 which is [`build-firmware.yml`](../../../../.github/workflows/build-firmware.yml)
@@ -96,9 +110,9 @@ workflow caller.
 
 ## 5. Optional: add MQTT push-notify
 
-Lets you trigger an immediate update without waiting for the poll
-interval. Requires a working `esp_mqtt_client_handle_t` from your
-application.
+Lets the release pipeline trigger the download: the message payload is the
+release tag, passed to `ota_github_trigger_tag`. Requires a working
+`esp_mqtt_client_handle_t` from your application.
 
 ```c
 cfg.mqtt_enabled      = true;
@@ -143,11 +157,11 @@ reboot.
 static void on_ota_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     ota_github_event_payload_t *p = data;
     switch (id) {
-        case OTA_GITHUB_EVENT_UPDATE_AVAILABLE:
-            ESP_LOGI("app", "new version: %s", p->version);
-            break;
         case OTA_GITHUB_EVENT_PROGRESS:
             ui_set_progress_bar(p->progress);
+            break;
+        case OTA_GITHUB_EVENT_FAILED:
+            ESP_LOGW("app", "OTA failed, error %u", p->error_code);
             break;
         /* … */
     }
@@ -157,29 +171,7 @@ esp_event_handler_register(OTA_GITHUB_EVENTS, ESP_EVENT_ANY_ID,
                            &on_ota_event, NULL);
 ```
 
-## 8. TRIGGERED mode (peer orchestration)
-
-Use this when your device doesn't poll GitHub itself — a peer tells it
-what to download. The robocar main controller is the reference example.
-
-```c
-ota_github_config_t cfg        = OTA_GITHUB_CONFIG_DEFAULT();
-cfg.mode                       = OTA_GITHUB_MODE_TRIGGERED;
-cfg.github_org                 = "laurigates";
-cfg.github_repo                = "mcu-tinkering-lab";
-cfg.triggered_asset_filename   = "robocar-main.bin";
-cfg.hooks.pre_download_hook    = bring_up_wifi;   /* WiFi-on-demand */
-ESP_ERROR_CHECK(ota_github_init(&cfg));
-
-/* Later, when the peer sends BEGIN_OTA over I2C: */
-ota_github_trigger_tag(NULL, received_tag, received_sha_prefix);
-
-/* The peer polls: */
-ota_github_get_status();
-ota_github_get_progress();
-```
-
-## 9. First-boot considerations
+## 8. First-boot considerations
 
 - The rollback timer starts inside `ota_github_init`. If your
   `app_main` takes >10 s to reach that point, tune
@@ -190,7 +182,7 @@ ota_github_get_progress();
 - Web Flasher users get the full standard partition layout, so the second
   OTA will use `ota_1` and have full rollback safety.
 
-## 10. Verification checklist
+## 9. Verification checklist
 
 - [ ] `idf.py build` succeeds — it fails by itself if the binary exceeds the
       smallest `ota_0`/`ota_1` partition of your table; read the
@@ -198,17 +190,14 @@ ota_github_get_progress();
 - [ ] Device boots; logs show `ota_github initialized`
 - [ ] `Rollback stability timer started (60000 ms)` appears once
 - [ ] `Firmware marked as valid — rollback cancelled` appears 60 s later
-- [ ] Poll fires on schedule (log `Triggering manual update check` or
-      the equivalent ghota "No update available")
-- [ ] On a staged release: update downloads, flashes, reboots into new
+- [ ] On a staged release: a trigger downloads, flashes, reboots into the new
       version, and the rollback message appears again
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
-| `ghota_init failed` | GitHub unreachable during init, or missing `firmware_filename_match` |
-| `esp_https_ota_begin: ESP_FAIL` | DNS / captive portal / redirect loop |
-| `SHA256 prefix mismatch` | Device received wrong asset — check `firmware_filename_match` or the CI artifact name |
+| `ota_github_init` returns `ESP_ERR_INVALID_ARG` | `github_org` or `github_repo` unset, or `mode` is not `OTA_GITHUB_MODE_TRIGGERED` (a zeroed config instead of `OTA_GITHUB_CONFIG_DEFAULT()`) |
+| `esp_https_ota_begin: ESP_FAIL` | DNS / captive portal / redirect loop, or no asset of that name under that tag (404) |
+| `SHA256 prefix mismatch` | Device received wrong asset — check `triggered_asset_filename` or the CI artifact name |
 | Device loops between two versions | Your new firmware panics within the stability window — check the bootloader console for rollback reason |
-| `No update available` forever | The tag on GitHub parses to a semver ≤ the running `esp_app_get_description()->version`; bump the version in CMakeLists |
