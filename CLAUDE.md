@@ -61,6 +61,7 @@ mcu-tinkering-lab/
 │   └── components/                 # Reusable ESP-IDF components
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
 │       ├── ota-github/             # GitHub Releases OTA updater
+│       ├── log-udp/                # SoftAP + UDP broadcast log sink (SSID and password via Kconfig)
 │       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
 ├── .github/workflows/              # CI/CD pipelines
 ├── tools/scaffold/                 # Project scaffolding scripts
