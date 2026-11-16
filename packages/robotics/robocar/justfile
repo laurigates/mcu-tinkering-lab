@@ -360,6 +360,27 @@ live-probe clip="" out="../../../tmp/live-probe" model="gemini-3.8-live":
 live-probe-models:
     cd tools/live-probe && uv sync --quiet && uv run python live_probe.py --list-models
 
+# Play with Teuvo live: webcam + mic in, speaker out, tool calls stubbed and
+# logged (tools/live-probe/README.md § Interactive play). `game` is a file in
+# tools/live-probe/games/ without its .fi.toml; `camera` is an AVFoundation
+# index (2 = Desk View on a MacBook, which looks down at the desk). Ctrl-C ends
+# the session; transcript.md and the rest land in tmp/live-probe/play/.
+# `args` passes extra play.py flags: live-play building 0 gemini-3.8-live "--barge-in --heartbeat-s 12".
+[group: "voice"]
+live-play game="building" camera="0" model="gemini-3.8-live" args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p ../../../tmp/live-probe/play
+    out="$(cd ../../../tmp/live-probe/play && pwd)"
+    cd tools/live-probe
+    uv sync --quiet --extra play
+    uv run --extra play python play.py "$out" --game "games/{{game}}.fi.toml" --camera "{{camera}}" --model "{{model}}" {{args}}
+
+# Cameras and audio devices play.py can use, with the indices its flags take.
+[group: "voice"]
+live-play-devices:
+    cd tools/live-probe && uv sync --quiet --extra play && uv run --extra play python play.py --list-devices
+
 # Offline tests for the Live probe — no key, no network.
 [group: "test"]
 live-probe-test:

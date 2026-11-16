@@ -1,10 +1,15 @@
 [project]
 name = "robocar-live-probe"
 version = "0.1.0"
-description = "Workstation probe of the Gemini Live API for robocar real-time conversation (issue #619)"
+description = "Workstation probe of the Gemini Live API for robocar real-time conversation (issue #619) and interactive play"
 requires-python = ">=3.11"
 dependencies = [
     "google-genai==2.34.0",
+]
+
+[project.optional-dependencies]
+play = [
+    "sounddevice==0.5.6",  # play.py only; PortAudio is bundled in the macOS wheel
 ]
 
 [dependency-groups]
