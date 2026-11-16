@@ -27,3 +27,14 @@ Applies to repos that have a `release-please-config.json` or `.release-please-ma
 ## Rule: PR titles follow conventional commits
 
 On squash-merge repos the PR title becomes the commit subject on the default branch, so PR titles must themselves be valid conventional commits. In release-please repos, that subject is what release-please parses.
+
+## Rule: A fix under a hidden commit type is not released
+
+release-please opens a release PR only for commit types that the repo's `release-please-config.json` does not mark `hidden` (`feat`, `fix` and `perf` in the usual config). A dependency or security fix merged as `chore(deps)`, `build` or `ci` therefore stays unreleased until the next releasable commit. Renovate's lock refreshes are `chore(deps)`.
+
+When such a fix has to ship:
+
+- Title the PR `fix(deps): ...` before merging it, or
+- Land a commit whose body ends with a `Release-As: X.Y.Z` footer. On a squash merge the footer has to be in the squash commit message. A footer that exists only in a branch commit is lost when the squash message is rewritten.
+
+Do not re-run a failed release job to publish the fix. The job checks out the tag, and the tag's tree predates the fix.
