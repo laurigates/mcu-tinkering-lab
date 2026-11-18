@@ -66,6 +66,11 @@ render = { kind = "chip", l = 2.0, w = 1.25, term = 0.45 }   # optional drawing 
 stock = "c0805-100n-50v-x7r"      # the parts-stock slug; candidates skips linked items
 ```
 
+Every SMD part gets both stickers: the 35 mm drawer label and a `lid`, since
+SMD parts live in the flip-lid boxes as well as the divided containers. A
+reprint for a missing lid sticker carries the whole entry (there is no
+lid-only form), so the drawer label prints again as a spare.
+
 Render kinds and their keys are in `tools/labels/render.typ`; `labels.py`
 rejects a kind it does not list. Packages with datasheet dimensions (`chip`,
 `tant`, `polymer`, `sop8`, `usbc`, `dip8`, `led`) also get a 1:1 outline; set
@@ -106,7 +111,7 @@ they were used over Bluetooth LE and are untested over USB.
 | Sticker stock | depth | pressure | speed | Result |
 |---|---|---|---|---|
 | A4 sticker sheet of the 2026-11 inventory run | 1 | 20 (the preset) | 0 (preset: 10) | Three pages cut, 2026-11-11. Stickers peel, but under some cuts the liner is cut part-way and tears when a sticker is removed: slightly too much force |
-| the same stock | 1 | 10 | 0 (preset: 10) | Not yet cut. The default since that run; start the next sheet with `test-cut` |
+| the same stock, printed as `photographic-matte` | 1 | 10 | 0 (preset: 10) | Test cut clean, then the full page (35 stickers, 2 min over BLE), 2026-11-18 |
 
 ### Where the mark search starts
 
@@ -155,7 +160,13 @@ pairing is required was not tested.
 
 1. **Print at 100 % on A4.** The Epson queue defaults to Letter. `labels::print`
    passes `media=A4` and `print-scaling=none`; printing from a viewer with "fit
-   to page" moves the marks and every cut lands off its sticker.
+   to page" moves the marks and every cut lands off its sticker. It also
+   passes `sides=one-sided`, since the queue defaults to two-sided and would
+   put page 2 on the back of a sticker sheet, and `cupsPrintQuality=High`
+   with `MediaType=photographic-matte`: on the 2026-11 sticker stock the
+   matte type printed small text visibly clearer than the default `any`
+   (2026-11-18). The driverless queue offers 300 dpi only, so there is no
+   resolution setting to raise.
 2. **The marks own the corners.** The 5 mm square and the 20 mm L marks at the
    top-left, top-right and bottom-left take a 24 mm square each; the layout
    keeps stickers 2 mm clear, so the first row and the last start at x = 32.
