@@ -32,7 +32,7 @@ build data=_data guides="false":
 
 # Print the built PDF at 100 % on A4 (CUPS; LABEL_PRINTER overrides the queue)
 print data=_data pages="":
-    cd {{_root}} && lp -d {{_printer}} -o media=A4 -o print-scaling=none -o cupsPrintQuality=High {{ if pages != "" { "-o page-ranges=" + pages } else { "" } }} tmp/labels/$(basename {{data}} .toml)/labels.pdf
+    cd {{_root}} && lp -d {{_printer}} -o media=A4 -o print-scaling=none -o cupsPrintQuality=High -o MediaType=photographic-matte -o sides=one-sided {{ if pages != "" { "-o page-ranges=" + pages } else { "" } }} tmp/labels/$(basename {{data}} .toml)/labels.pdf
 
 # Install the inkscape-silhouette driver headless (pinned; ~/.cache/inkscape-silhouette)
 setup:

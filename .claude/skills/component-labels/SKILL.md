@@ -160,7 +160,13 @@ pairing is required was not tested.
 
 1. **Print at 100 % on A4.** The Epson queue defaults to Letter. `labels::print`
    passes `media=A4` and `print-scaling=none`; printing from a viewer with "fit
-   to page" moves the marks and every cut lands off its sticker.
+   to page" moves the marks and every cut lands off its sticker. It also
+   passes `sides=one-sided`, since the queue defaults to two-sided and would
+   put page 2 on the back of a sticker sheet, and `cupsPrintQuality=High`
+   with `MediaType=photographic-matte`: on the 2026-11 sticker stock the
+   matte type printed small text visibly clearer than the default `any`
+   (2026-11-18). The driverless queue offers 300 dpi only, so there is no
+   resolution setting to raise.
 2. **The marks own the corners.** The 5 mm square and the 20 mm L marks at the
    top-left, top-right and bottom-left take a 24 mm square each; the layout
    keeps stickers 2 mm clear, so the first row and the last start at x = 32.
