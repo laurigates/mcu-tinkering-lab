@@ -66,6 +66,11 @@ render = { kind = "chip", l = 2.0, w = 1.25, term = 0.45 }   # optional drawing 
 stock = "c0805-100n-50v-x7r"      # the parts-stock slug; candidates skips linked items
 ```
 
+Every SMD part gets both stickers: the 35 mm drawer label and a `lid`, since
+SMD parts live in the flip-lid boxes as well as the divided containers. A
+reprint for a missing lid sticker carries the whole entry (there is no
+lid-only form), so the drawer label prints again as a spare.
+
 Render kinds and their keys are in `tools/labels/render.typ`; `labels.py`
 rejects a kind it does not list. Packages with datasheet dimensions (`chip`,
 `tant`, `polymer`, `sop8`, `usbc`, `dip8`, `led`) also get a 1:1 outline; set
