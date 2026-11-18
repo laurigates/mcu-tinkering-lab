@@ -111,7 +111,7 @@ they were used over Bluetooth LE and are untested over USB.
 | Sticker stock | depth | pressure | speed | Result |
 |---|---|---|---|---|
 | A4 sticker sheet of the 2026-11 inventory run | 1 | 20 (the preset) | 0 (preset: 10) | Three pages cut, 2026-11-11. Stickers peel, but under some cuts the liner is cut part-way and tears when a sticker is removed: slightly too much force |
-| the same stock | 1 | 10 | 0 (preset: 10) | Not yet cut. The default since that run; start the next sheet with `test-cut` |
+| the same stock, printed as `photographic-matte` | 1 | 10 | 0 (preset: 10) | Test cut clean, then the full page (35 stickers, 2 min over BLE), 2026-11-18 |
 
 ### Where the mark search starts
 
