@@ -19,6 +19,65 @@ prompt, reused on later runs), `report.json`, and `reply.wav` — the last only
 when every reply chunk declared the same rate, since a WAV at a guessed rate
 plays back pitch-shifted.
 
+## Interactive play
+
+`play.py` turns the probe into a play session. Teuvo watches through a
+workstation camera, listens on its mic and talks through its speaker while a
+child plays. Every session leaves a transcript to tune the game against. No
+board is involved, and tool calls are answered by a stub and logged.
+
+```bash
+just robocar::live-play-devices                       # camera and audio indices
+just robocar::live-play                               # building game, built-in camera
+just robocar::live-play moomins 2                     # Moomin game, Desk View camera
+just robocar::live-play building 0 gemini-3.8-live --barge-in   # headphones: never mute the mic
+```
+
+The session ends on Ctrl-C, on `--max-minutes` (default 10), or on the server's
+`GoAway`. Each run writes `tmp/live-probe/play/<UTC stamp>-<game>/`:
+
+| File | Contents |
+|---|---|
+| `transcript.md` | Who said what and when, heartbeats, tool calls. Read this first |
+| `instruction.txt` | The exact system instruction sent |
+| `session.json` | Duration, end reason, heartbeat, turn and tool-call counts, last usage |
+| `events.jsonl` | Every logged event, for scripts |
+| `frames/` | Each JPEG sent, numbered as in the transcript |
+| `teuvo.wav`, `mic.wav` | Teuvo's audio (24 kHz) and what the mic sent (16 kHz) |
+
+### How a session works
+
+- **Instruction**: the persona from `main/voice_persona.c` (as in the latency
+  probe), then `games/register.fi.txt`, then the game's `prompt`. The register
+  covers how Teuvo plays in every game: short lines, the child leads, he
+  comments only on what is visible, and he calls `wait` when nothing is new.
+- **Games** are TOML files in `games/` with `title`, `prompt`, `heartbeat` and
+  `opening`. A new game is a new file.
+- **Frames** go in at 1 per second, the documented video rate. A frame alone
+  never starts a reply. The game's `heartbeat` text goes out at most every
+  `--heartbeat-s` (8 s), and only after `--quiet-s` (2.5 s) of silence from
+  both sides. It is never sent while Teuvo is talking, since a prompt during
+  generation cancels it.
+- **Silence is a tool call.** `wait` lets Teuvo answer a heartbeat by saying
+  nothing. With proactive audio and "stay silent" in the prompt alone, a
+  30-second run on 2026-11-16 with nothing in view drew a spoken reply to 4 of
+  4 heartbeats, one of them about a tower that was not there. With `wait`, a
+  45-second run gave the greeting and then answered 4 of 4 heartbeats with
+  `wait`.
+- **Tools**: `wait`, `look(pan_deg, tilt_deg)` and `sound(name)`. The sound
+  names are extracted from `main/sound_clips_core.c`. All three are
+  `NON_BLOCKING`, and the stub's answers go back with `SILENT` scheduling so
+  Teuvo does not talk about them.
+- **Echo**: the mic is muted from Teuvo's first reply sample until
+  `--hangover-ms` (400 ms) after the last one, so laptop speakers do not make
+  him interrupt himself. `--barge-in` turns that off.
+- **Session length**: context-window compression is on. Without it an
+  audio+video session ends after 2 minutes.
+- **Not set**: `enable_affective_dialog`. The docs list it for
+  `gemini-3.8-live`, but on 2026-11-16 it closed the session with 1007
+  "invalid argument" on both v1beta and v1alpha. A bisect that kept every other
+  field showed it alone causes the close.
+
 ## What it measures
 
 | `report.json` field | Meaning |
