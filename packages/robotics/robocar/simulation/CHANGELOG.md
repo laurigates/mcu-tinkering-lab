@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.2.0...robocar-simulation-v0.2.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#1206](https://github.com/laurigates/mcu-tinkering-lab/issues/1206)) ([7d07269](https://github.com/laurigates/mcu-tinkering-lab/commit/7d07269a2ef55bee6df7e9708db3a4a4f02fe446))
+
 ## [0.2.0](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.13...robocar-simulation-v0.2.0) (2026-11-14)
 
 

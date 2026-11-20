@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.14...balancebot-v0.1.15) (2026-11-20)
+
+
+### Documentation
+
+* **balancebot:** add BRINGUP.md for the buck, straps and Vref ([#1225](https://github.com/laurigates/mcu-tinkering-lab/issues/1225)) ([1684a2a](https://github.com/laurigates/mcu-tinkering-lab/commit/1684a2af386a09bf63b6fbb9f9be38ece3df5529))
+
 ## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.13...balancebot-v0.1.14) (2026-11-12)
 
 
