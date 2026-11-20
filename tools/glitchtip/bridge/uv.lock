@@ -107,13 +107,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "paho-mqtt", specifier = ">=2.2.0" },
-    { name = "pyelftools", specifier = ">=0.33" },
-    { name = "sentry-sdk", specifier = ">=2.74.0" },
+    { name = "paho-mqtt", specifier = "==2.2.0" },
+    { name = "pyelftools", specifier = "==0.33" },
+    { name = "sentry-sdk", specifier = "==2.74.0" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.2.0" }]
+dev = [{ name = "pytest", specifier = "==9.2.0" }]
 
 [[package]]
 name = "sentry-sdk"
