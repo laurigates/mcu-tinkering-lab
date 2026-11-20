@@ -22,6 +22,7 @@ Lauri asks; checking out and paying are always Lauri's.
 | Add to cart | `mtop.aliexpress.trade.cart.add` (POST) | any `/item/<id>.html` page |
 | Cart contents | `mtop.aliexpress.trade.cart.render` (GET) | `/p/shoppingcart/index.html` |
 | Delivered total for chosen lines | `/p/trade/confirm.html?availableProductShopcartIds=<ids>` in an iframe (`__checkout`) | any aliexpress.com page |
+| Tracking numbers and delivery status of an order | `mtop.ae.ld.querydetail` (GET) | `/p/tracking/index.html` |
 
 ## How each was found
 
@@ -31,6 +32,15 @@ Lauri asks; checking out and paying are always Lauri's.
   request as one page with `pageSize` 200, and check the body component's
   `hasMore` is false. 2026-10-30: 187 orders, 203 order lines, May 2017 to
   Sep 2026.
+- **Tracking:** the tracking page's own request, replayed per order with
+  `data: {tradeOrderId, tradeOrderLineId: '', terminalType: 'PC',
+  needPageDisplayInfo: true, timeZone, _lang, _currency}`. The response holds
+  every tracking number of the order (the domestic `LP…`/`AP…` leg and the
+  last-mile number, e.g. Posti `JJFI…`) and status text such as
+  "Delivered：Nov. 13". It answers "which orders were in that parcel" from the
+  carrier's number. The order list cannot: it says "Awaiting delivery" until
+  Lauri confirms receipt, whatever the carrier reports (2026-11-17: 20
+  orders delivered on 13 Nov all still read "Awaiting delivery" on the 16th).
 - **Search:** the result page's HTML embeds each item as JSON; split on
   `"productId":"` and read `displayTitle`, `salePrice.formattedPrice` and
   `tradeDesc` (units sold). The price is the cheapest variant, often a 1- or
@@ -46,7 +56,11 @@ Lauri asks; checking out and paying are always Lauri's.
   `fulfillmentservice` is the product's `bizData.deliveryOptionCode`
   (`CAINIAO_FULFILLMENT_STD` for Choice, `CAINIAO_STANDARD`,
   `AE_CN_SUPER_ECONOMY_G`). Resolve the variant to exactly one `skuId` by
-  name before adding. `cart.render` lists ten lines per page with each
+  name before adding. The capture click is itself an add, of whichever
+  variant the page has selected, and pages open on one (2026-11-17: the BMS
+  listing opened on "2S 20A Balance"). Click the wanted variant's
+  `[data-sku-col]` element first and check the selected title, so the
+  captured line is one of the lines asked for. `cart.render` lists ten lines per page with each
   line's `itemView` (item, sku text, `createTimeStamp`) and `quantityView`;
   `cart.count` returns the line count.
 
@@ -133,6 +147,15 @@ Lauri asks; checking out and paying are always Lauri's.
     lists the collected platform codes with their minimum spend and dates
     (2026-10-31: NWED1108, €8 off €45, valid 1–19 Nov). Store coupons there
     need a minimum per store, which one-line global orders never reach.
+15. **"BMS" in a charger's title does not mean the cells are protected.**
+    USB-C "Type C BMS 2S 3S 4S" boost boards protect only their own output;
+    the "2S 3S Type-C USB BMS 15W … Balanced" board balances only when set
+    for 2S (2026-11-17, listing 1005010706867355's text). A BMS protects
+    each cell: over-charge, over-discharge and over-current thresholds per
+    cell. Read the description for those numbers before counting a board as
+    a BMS. The description often sits in an image or carries a block pasted
+    from another product: the IP2368 charger listing quotes a BMS's "balanced
+    starting voltage" and "1–10A charging current".
 
 ## Sourcing check: can every part be bought?
 
@@ -145,9 +168,15 @@ BOM line, in order:
    (surface-mount only); `<sha7>` is the commit in the order's hand-off CSV.
    Order only the rest: on 2026-10-31 a 16 V / 4 A fuse for the robocar was
    added and then dropped, because F1 was on the assembled boards.
-1. **Owned?** Search the order history, then the "Electronics Purchases"
-   artifact (it also holds the eBay history). A matching line names the part
-   or its exact rating; a kit counts only if the kit's listing names the value.
+1. **Owned?** Search the private parts-stock repo first
+   (`~/repos/laurigates/parts-stock`, `just find <terms>`): it holds the
+   quantity on hand and links each item to the order it came from. Then the
+   order history, then the "Electronics Purchases" artifact (it also holds
+   the eBay history). A matching line names the part or its exact rating; a
+   kit counts only if the kit's listing names the value. A shopping-plan
+   artifact ("Carrier Parts Order, Nov 2026") records what was planned, not
+   what was bought: its TME basket was never ordered, and the same parts came
+   from AliExpress (2026-11-16).
 2. **Sold here?** `__scan` with the exact part number. A hit counts when:
    - the title or variant names the exact part number, or, for a passive, the
      value, package, voltage and current the design needs (trap 5);
