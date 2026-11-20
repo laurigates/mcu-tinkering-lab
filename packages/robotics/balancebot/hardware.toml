@@ -339,8 +339,12 @@ part = "r0805"
 ref = "R2"
 value = "100k"
 lcsc = "C149504"
-buy = "aliexpress:32901883276"  # 100K variant
+buy = "owned:0805 100 kOhm, 300 pcs (AliExpress 32901883276, 2026-11)"
 
+# The delivered boards (8d18cd8d layout, carrier README) take R3 = 27 kOhm,
+# their design value: 300 x 0805 27 kOhm are owned (same listing, 2026-11).
+# Their ratio is 27/127 = 0.2126, so 12.6 V reads 2.68 V and they stay 3S
+# only (16.8 V would read 3.57 V). Firmware must use that ratio there (#747).
 # 22 kOhm (rev3; 27 kOhm before) so D0 reads a 4S pack: ratio 22/122 = 0.1803,
 # 16.8 V (full 4S) reads 3.03 V and 12.6 V (full 3S) 2.27 V, under the
 # RP2350 ADC's 3.3 V reference either way. JLC Basic. AliExpress listing
