@@ -136,13 +136,9 @@ actively driven (push-pull) and uses no internal pull on it.
 
 ### Current limit (Vref)
 
-Set per driver, motors connected, before first `arm`:
-
-1. Power VMOT (logic too), drivers disabled (default).
-2. Measure Vref between the trim pot wiper and GND.
-3. DRV8825: `I_limit = 2 × Vref`. For a typical 1.5 A/phase NEMA17 at 1/8
-   microstep, start conservative: Vref ≈ 0.4 V → 0.8 A/phase. Increase
-   only if steps are skipped under load (with cooling as needed).
+Set per driver before the first `arm`: the procedure, limits and traps are in
+[`BRINGUP.md`](BRINGUP.md) § 3, after setting the buck and checking the
+straps.
 
 ## MPU6050 mounting
 

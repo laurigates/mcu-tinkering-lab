@@ -13,7 +13,8 @@ The repo's first non-ESP32 project — built with the Raspberry Pi Pico SDK
 Design docs: [PRD-012](../../../docs/requirements/PRD-012-balancebot.md) ·
 [ADR-018](../../../docs/decisions/ADR-018-pico-sdk-balancebot.md) ·
 [ADR-026](../../../docs/decisions/ADR-026-balancebot-lqr-live-switch.md) ·
-[WIRING.md](WIRING.md)
+[WIRING.md](WIRING.md) ·
+[BRINGUP.md](BRINGUP.md) (buck, straps and Vref before the first `arm`)
 
 A carrier PCB replaces the hand-wired harness: see
 [`hardware/carrier/README.md`](hardware/carrier/README.md) for what is on it,

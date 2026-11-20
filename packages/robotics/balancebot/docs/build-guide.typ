@@ -276,7 +276,8 @@ it for most of the curve, so 3S is the only supported pack.
 + *Wire the MPU6050*: VCC to 3V3, GND, SDA to GPIO#PIN_IMU_SDA, SCL to
   GPIO#PIN_IMU_SCL, INT to GPIO#PIN_IMU_INT. Mount it rigidly at axle height,
   X forward.
-+ *Connect the stepper coils* (A1/A2, B1/B2) — but set Vref first (§6.1).
++ *Connect the stepper coils* (A1/A2, B1/B2) with the power off; Vref is set
+  with them connected (§6.1).
 + *Check before power-up* with a multimeter: continuity on every ground, no
   continuity between VMOT and 3V3, and nENABLE reading 3V3 through the pull-up
   with the XIAO unpowered.
@@ -296,7 +297,18 @@ Do this per driver, motors connected, before the first `arm`:
 + Measure Vref between the trim-pot wiper and GND.
 + The DRV8825 limits current to *2 × Vref*. For a typical 1.5 A/phase NEMA17
   at 1/8 microstep, start conservative: Vref ≈ 0.4 V gives 0.8 A/phase. Raise
-  it only if steps are skipped under load, with cooling as needed.
+  it only if steps are skipped under load, with cooling as needed, in steps of
+  0.05–0.1 V and never above the motor's rated current ÷ 2.
++ Set both drivers to the same Vref.
+
+#callout("Driver traps", kind: "danger")[
+  *Never connect or disconnect a motor while VMOT is powered*: the spike can
+  destroy the DRV8825. Use an *insulated or ceramic screwdriver*: a metal one
+  that slips off the pot can short it to a pin. Check that the heatsink leaves
+  the pot reachable and touches no pin. An overheated driver cuts its outputs
+  (thermal shutdown) and the robot falls, so a fall after minutes of good
+  balancing points at Vref or cooling first.
+]
 
 = 7 · Build & Flash the Firmware
 
