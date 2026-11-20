@@ -332,7 +332,8 @@ so JLCPCB assembly remains possible:
   arrow points to the board's FWD mark; the firmware computes pitch from X and
   Z (Z up). The carrier must sit at axle height for
   the IMU placement the build guide describes.
-- Set each DRV8825's Vref before connecting motors, as in the build guide.
+- Set each DRV8825's Vref before the first `arm`, with the motors connected
+  before power-up, as in [`BRINGUP.md`](../../BRINGUP.md) § 3.
 
 ## Regenerate and check
 
