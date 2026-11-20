@@ -50,3 +50,11 @@ concurrency:
   group: <workflow-name>-${{ github.ref }}
   cancel-in-progress: true
 ```
+
+## Rule: A blocked container release is fixed forward, not re-run
+
+`reusable-container-release.yml` scans the release candidate and creates no release tag in the registry when the scan reports fixable CRITICAL or HIGH findings. The git tag and the GitHub Release then exist without an image, and `latest` stays on the previous release.
+
+- Re-running the release job scans the same image and fails again. Refresh the lockfile or base image on the default branch, then cut a new patch release (see the hidden-commit-type rule in the commits and releases rules).
+- Before merging a release PR, read the scan result in its `build / build` job. That job scans the `:next-<version>` image the tag run promotes.
+- Audit the dependency lockfile on every pull request (for example pip-audit, or the osv-scanner job in `reusable-security-deps.yml`), so a finding shows on a PR and not after the tag exists.
