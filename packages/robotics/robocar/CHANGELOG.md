@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.25](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.24...robocar-v0.2.25) (2026-11-20)
+
+
+### Miscellaneous
+
+* **robocar:** add an interactive play mode to the Gemini Live probe ([#1210](https://github.com/laurigates/mcu-tinkering-lab/issues/1210)) ([1d28faa](https://github.com/laurigates/mcu-tinkering-lab/commit/1d28faa990a5370529628d3e407c401acf38aa03))
+* **robocar:** commit both carriers' .kicad_pro in KiCad 10's saved form ([#1226](https://github.com/laurigates/mcu-tinkering-lab/issues/1226)) ([fda6790](https://github.com/laurigates/mcu-tinkering-lab/commit/fda6790a420d20374a43b8501ff084705c5460be))
+
 ## [0.2.24](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.23...robocar-v0.2.24) (2026-11-14)
 
 
