@@ -43,6 +43,9 @@ typedef struct {
     // ---- v3 (PARAM_VERSION 3): IMU mounting. The v2 fields above stay a
     // prefix; a v2 record migrates with imu_mount = IMU_MOUNT_UP.
     uint32_t imu_mount;  // imu_mount_t
+    // ---- v4 (PARAM_VERSION 4): pitch trim. The v3 fields above stay a
+    // prefix; a v3 record migrates with pitch_trim_deg = 0.
+    float pitch_trim_deg;  // pitch read at the balance point; subtracted from every sample
 } balance_params_t;
 
 typedef enum {
@@ -79,6 +82,7 @@ typedef enum {
     PARAM_Q_X,
     PARAM_Q_DX,
     PARAM_R,
+    PARAM_PITCH_TRIM,
     PARAM_COUNT,
 } param_id_t;
 

@@ -125,5 +125,5 @@ measurement), with the file and line that decided it.
 | I2C rangefinders instead of echo timing | robocar `ultrasonic.c` (#782, #790) | moved pulse capture into the sensor module |
 
 Counter-example: balancebot's bitwise `crc32_calc()` runs once per parameter
-save over one small parameter record (`PARAM_V3_SIZE`). The RP2350 DMA CRC sniffer would save nothing
+save over one small parameter record (`PARAM_V4_SIZE`). The RP2350 DMA CRC sniffer would save nothing
 measurable, and the bitwise loop is host-testable as-is.

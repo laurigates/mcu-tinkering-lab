@@ -12,6 +12,7 @@
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 #include "lqr.h"
+#include "param_record.h"
 #include "param_store.h"
 #include "pico/stdlib.h"
 #include "pin_config.h"
@@ -85,6 +86,7 @@ typedef enum {
     RANGE_ANY,       // PID-side: forwarded as typed (existing behaviour)
     RANGE_POSITIVE,  // > 0, finite
     RANGE_NONNEG,    // >= 0, finite
+    RANGE_TRIM,      // finite, within +/- PITCH_TRIM_MAX_DEG (pitch_trim_valid)
 } range_t;
 
 typedef struct {
@@ -113,6 +115,7 @@ static const param_entry_t param_table[PARAM_COUNT] = {
     PENTRY("q_x", PARAM_Q_X, q_x, RANGE_NONNEG, true),
     PENTRY("q_dx", PARAM_Q_DX, q_dx, RANGE_NONNEG, true),
     PENTRY("r", PARAM_R, r, RANGE_POSITIVE, true),
+    PENTRY("trim", PARAM_PITCH_TRIM, pitch_trim_deg, RANGE_TRIM, false),
 };
 
 static float *field_of(balance_params_t *p, const param_entry_t *e)
@@ -129,6 +132,8 @@ static bool in_range(const param_entry_t *e, float v)
             return isfinite(v) && v > 0.0f;
         case RANGE_NONNEG:
             return isfinite(v) && v >= 0.0f;
+        case RANGE_TRIM:
+            return pitch_trim_valid(v);
         case RANGE_ANY:
         default:
             return true;
@@ -278,7 +283,11 @@ static void cmd_set(const char *name, const char *value_str)
         return;
     }
     if (!in_range(e, value)) {
-        printf("ERR: %s must be %s\n", name, e->range == RANGE_NONNEG ? ">= 0" : "> 0");
+        if (e->range == RANGE_TRIM) {
+            printf("ERR: %s must be within +/-%g deg\n", name, (double)PITCH_TRIM_MAX_DEG);
+        } else {
+            printf("ERR: %s must be %s\n", name, e->range == RANGE_NONNEG ? ">= 0" : "> 0");
+        }
         return;
     }
     if (!e->lqr) {
@@ -548,6 +557,7 @@ static void cmd_help(void)
     printf("  stat                 system status\n");
     printf("  get                  list tunable params\n");
     printf("  set <name> <value>   set param: kp ki kd vkp vki alpha maxrate\n");
+    printf("                       trim: angle read at the balance point (deg)\n");
     printf("                       LQR (re-solves K): l_eff_m wheel_diam_m steps_per_rev\n");
     printf("                       q_theta q_dtheta q_x q_dx r\n");
     printf("  ctrl [pid|lqr]       show / switch the balance law (live, bumpless)\n");
