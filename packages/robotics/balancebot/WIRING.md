@@ -153,8 +153,9 @@ straps.
 
 ## Bring-up checklist
 
-1. No motor power: flash, `just balancebot::monitor`, `stat` shows
-   `imu: ok`; `stream on`, tilt → angle tracks, level ≈ 0°.
+1. No motor power: flash, `just balancebot::stat` shows `imu: ok`;
+   `just balancebot::cli "stream on"`, then `just balancebot::monitor`:
+   tilt → angle tracks, level ≈ 0°.
 2. `cal` with the robot still; verify no drift over a minute.
 3. Motor power, wheels off the ground: `rate l 400`, `rate r 400` — both
    spin the same direction (as the robot would drive); reverse cleanly

@@ -75,6 +75,24 @@ flash-monitor: flash monitor
 [group: "device"]
 develop: build flash monitor
 
+# Send CLI commands and print the replies, e.g. just balancebot::cli "mount down" save
+[group: "device"]
+[positional-arguments]
+cli +lines: require-port
+    @uvx --from pyserial python3 -I ../../../tools/serial-send.py "{{port}}" "$@"
+
+# Arm (enter RUN); the robot balances, so hold it upright
+[group: "device"]
+arm: (cli "arm")
+
+# Disarm (motors off, back to IDLE)
+[group: "device"]
+disarm: (cli "disarm")
+
+# Print the controller state, mount and parameters
+[group: "device"]
+stat: (cli "stat")
+
 ##########
 # Docs
 ##########
