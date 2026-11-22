@@ -35,7 +35,7 @@ dependencies = [
     # The plant (robocar_sim.plant) and the robot model need only these.
     # ADR-036 section 3 has the behaviour twin start the plant in this
     # environment, so anything heavier belongs in the viz extra.
-    "numpy==2.5.4",
+    "numpy==2.5.5",
     "pymunk==7.3.1",
     "pyyaml==6.0.3",
 ]
@@ -44,13 +44,13 @@ dependencies = [
 # The legacy demo's camera, visualiser and main entry point, and the plant
 # demo's plot. The only optional runtime extra.
 viz = [
-    "genesis-world==1.4.5",
+    "genesis-world==1.4.7",
     # PyTorch (required by Genesis)
     "torch==2.15.0",
-    "opencv-python==5.0.0.93",
+    "opencv-python==5.1.0.95",
     "matplotlib==3.11.2",
-    "trimesh==5.2.0",
-    "spatialmath-python==1.1.18",
+    "trimesh==5.2.1",
+    "spatialmath-python==1.1.19",
     # genesis-world -> moviepy 2.2.1 (May 2025, the newest release) caps
     # pillow<12, but the fixes for Pillow's CVEs are in 12.1.1/12.2.0.
     # The [tool.uv] override-dependencies entry lifts that cap; keep the two
@@ -60,18 +60,18 @@ viz = [
 dev = [
     # Testing framework
     "pytest==9.2.0",
-    "pytest-asyncio==1.4.1.post1",
+    "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
 
     # Code quality
-    "ruff==0.17.4",
+    "ruff==0.17.6",
     # Pinned: ty is pre-1.0 and its diagnostic set moves between releases
     # (e.g. 0.0.79 added the `redundant-condition` rule and 0.0.78 does not
     # recognise a `# ty: ignore[redundant-condition]` suppression for it).
     # An unpinned resolve reddened every PR with no commit to explain it
     # (issue #515). Bump deliberately, verifying `uv run ty check src/`
     # still passes, rather than dropping the pin.
-    "ty==0.0.98",
+    "ty==0.0.107",
     "types-PyYAML",
     "types-toml",
 
