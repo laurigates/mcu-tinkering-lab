@@ -25,6 +25,8 @@
 #define DEFAULT_VEL_KP 0.004f  // degrees of lean per (steps/s) of wheel velocity error
 #define DEFAULT_VEL_KI 0.0005f
 #define DEFAULT_MAX_RATE_SPS 4000.0f  // step-rate clamp (steps/s), 2.5 rev/s at 1/8 ustep
+#define DEFAULT_PITCH_TRIM_DEG 0.0f   // PARAM_VERSION 4; subtracted from the filtered pitch
+#define PITCH_TRIM_MAX_DEG 10.0f      // |trim| above this is refused (CLI) or defaulted (flash)
 
 // Default LQR model and weights (runtime-tunable, PARAM_VERSION 2). The
 // values and their rationale live once, in lqr.h. ctrl_mode defaults to PID.

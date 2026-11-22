@@ -71,6 +71,7 @@ set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual
 ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
 mount down           # GY-521 fitted component side down (disarmed only); `mount up` is the default
+set trim 1.8         # pitch trim, deg: makes the balance point read 0 (see "Pitch trim")
 arm | disarm         # start/stop balancing (or hold upright 3 s to auto-arm)
 rate l 800           # open-loop motor bench test (disarmed only)
 cal                  # gyro bias calibration (keep the robot still)
@@ -110,12 +111,29 @@ mounting is a setting:
 
 ```
 mount down           # negate accel X and Z before the filter
-save                 # stored in the flash record (PARAM_VERSION 3)
+save                 # stored in the flash record (PARAM_VERSION 3 and later)
 ```
 
 Change it only while disarmed; `stat` shows the mounting core 1 applies. With
 the right setting a level board reads about 0° and tilting forward reads
 positive. Records saved by older firmware load as `mount up`.
+
+### Pitch trim
+
+A module that sits a degree or two off parallel to the carrier, or a robot
+whose centre of mass is not over the axle when the carrier is level, balances
+at a pitch other than 0. The controllers, the 3 s auto-arm window (±1°) and
+the tilt cutoff all work from 0, so the robot then drives to correct a lean
+that is not there, and may never auto-arm. `trim` moves 0 to the balance point:
+
+1. `set trim 0`, `stream on`, and hold the robot still where it balances.
+2. Read `angle_deg` there, say 1.8.
+3. `set trim 1.8`, check that the same pose now reads about 0, then `save`.
+
+`trim` is subtracted from every pitch sample, so telemetry shows the trimmed
+angle; with a trim already set, add the residual reading to it. It is limited
+to ±10° and can be changed while armed. Records saved before PARAM_VERSION 4
+load with `trim 0`.
 
 `arm` is refused while the robot rests with the mounted Z axis reading below
 -0.5 g (more than 120° from upright), because at rest that means the setting

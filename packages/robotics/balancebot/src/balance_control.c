@@ -9,6 +9,7 @@
 #include "imu_filter.h"
 #include "lqr.h"
 #include "mpu6050.h"
+#include "param_record.h"
 #include "param_store.h"
 #include "pico/flash.h"
 #include "pico/stdlib.h"
@@ -233,6 +234,11 @@ static void handle_command(const balance_cmd_t *cmd)
                 case PARAM_R:
                     params.r = cmd->value;
                     break;
+                case PARAM_PITCH_TRIM:
+                    if (pitch_trim_valid(cmd->value)) {
+                        params.pitch_trim_deg = cmd->value;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -378,10 +384,12 @@ void balance_control_core1_main(void)
             // to body forward/up (component side down = turned 180 degrees
             // about Y, so X and Z negate; gyro Y keeps its sign). The filter
             // runs in that body convention; IMU_PITCH_SIGN maps it to
-            // "positive = falling forward" once, here.
+            // "positive = falling forward" once, here. The trim moves 0 to the
+            // balance point, for the controllers, the cutoff, the gestures and
+            // telemetry alike; the arm gate's gravity check reads raw accel.
             imu_body_accel_t a = imu_mount_accel(params.imu_mount, s.accel_g[0], s.accel_g[2]);
             float raw = imu_filter_update(&filter, a.forward_g, a.up_g, s.gyro_dps[1], dt);
-            pitch = IMU_PITCH_SIGN * raw;
+            pitch = IMU_PITCH_SIGN * raw - params.pitch_trim_deg;
             gyro_rate = IMU_PITCH_SIGN * s.gyro_dps[1];
         }
         arm_gate_observe(&arm_gate, params.imu_mount, imu_ok, s.accel_g, s.gyro_dps);
