@@ -58,7 +58,9 @@ just balancebot::flash-uf2      # or: BOOTSEL drag-and-drop instructions
 ## Tune
 
 ```bash
-just balancebot::monitor        # USB CDC serial console
+just balancebot::cli "mount down" save   # send commands, print the replies
+just balancebot::stat           # also: arm, disarm
+just balancebot::monitor        # watch output only; it sends nothing you type
 ```
 
 ```
