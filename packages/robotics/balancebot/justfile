@@ -93,6 +93,20 @@ disarm: (cli "disarm")
 [group: "device"]
 stat: (cli "stat")
 
+# Record telemetry at 100 Hz to a CSV (default: tmp/balancebot/capture-<time>.csv at the repo root)
+[group: "device"]
+capture seconds="20" out="": require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{out}}"
+    [ -n "$out" ] || out="../../../tmp/balancebot/capture-$(date +%Y%m%d-%H%M%S).csv"
+    uvx --from pyserial python3 -I ../../../tools/serial-capture.py "{{port}}" "{{seconds}}" "$out"
+
+# Fit l_eff_m (and the pitch offset) from a capture of the robot balancing on its own
+[group: "tune"]
+fit-leff csv wheel_diam_m steps_per_rev="1600":
+    python3 -I tools/fit_leff.py "{{csv}}" --wheel-diam {{wheel_diam_m}} --steps-per-rev {{steps_per_rev}}
+
 ##########
 # Docs
 ##########

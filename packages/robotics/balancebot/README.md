@@ -100,6 +100,22 @@ CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,p
 (`ctrl` 0 = PID, 1 = LQR; `pos_m` = commanded wheel travel since arming).
 Columns are only ever appended, so plots that index by position keep working.
 
+### Fitting `l_eff_m` from a capture
+
+```bash
+just balancebot::capture 20                         # 20 s at 100 Hz -> tmp/balancebot/capture-<time>.csv
+just balancebot::fit-leff tmp/balancebot/capture-<time>.csv 0.065   # path from the repo root; wheel diameter in m
+```
+
+Arm the robot, let it balance on its own for the capture, and do not push it:
+a push is a force the LQR model lacks and drags the fit. `fit-leff` fits the
+model in `src/lqr.h` to the RUN rows and prints `l_eff_m` with a 1-sigma
+range, R², and the angle the balance point reads (what to add to `trim`).
+Stretches where a motor stalled or skipped steps break the fit too, since the
+wheel speed in the CSV is the commanded one; with R² under 0.3 it says not to
+trust the result. On simulated captures it is within about 11 % (1 sigma);
+`tools/fit_leff.py --self-test` runs in the host test suite.
+
 ### IMU mounting
 
 The filter expects the GY-521 component side up, X arrow forward. On the

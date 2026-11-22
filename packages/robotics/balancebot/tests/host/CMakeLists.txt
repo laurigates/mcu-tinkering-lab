@@ -28,3 +28,9 @@ target_sources(test_lqr PRIVATE ${SRC}/pid.c)
 # lqr.c mixes a double solver with a float control law: keep every
 # float->double promotion explicit.
 set_source_files_properties(${SRC}/lqr.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
+
+# tools/fit_leff.py (just balancebot::fit-leff) checks itself against
+# simulated captures with a known L_eff and pitch offset.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME fit_leff
+    COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/fit_leff.py --self-test)
