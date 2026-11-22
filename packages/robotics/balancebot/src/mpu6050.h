@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "imu_cal.h"
+
 typedef struct {
     float accel_g[3];   // X, Y, Z in g
     float gyro_dps[3];  // X, Y, Z in deg/s, bias-corrected
@@ -21,8 +23,10 @@ bool mpu6050_init(void);
 bool mpu6050_read(mpu6050_sample_t *out);
 
 // Average `samples` gyro readings (robot at rest) into the bias that
-// mpu6050_read() subtracts. Takes samples/500 s.
-void mpu6050_calibrate_gyro(int samples);
+// mpu6050_read() subtracts. Takes samples/500 s. Applies the new bias only
+// on IMU_CAL_OK; if the robot moved (gyro_cal_finish) or too few samples
+// read, the previous bias stays (zero before the first success).
+imu_cal_status_t mpu6050_calibrate_gyro(int samples);
 
 // True while the data-ready INT line is asserted.
 bool mpu6050_data_ready(void);

@@ -15,6 +15,8 @@
 // IMU
 #define IMU_I2C_BAUD 400000
 #define IMU_CAL_SAMPLES 500     // gyro bias calibration, ~1 s at 500 Hz
+#define IMU_CAL_BOOT_TRIES 5    // boot retries the calibration while the robot moves
+#define TRIM_CAPTURE_MS 2000    // `trim capture` averages the pitch this long
 #define IMU_PITCH_SIGN (+1.0f)  // flip if the robot drives into the fall
 
 // Default filter / PID parameters (runtime-tunable)

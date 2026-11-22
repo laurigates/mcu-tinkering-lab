@@ -11,6 +11,7 @@
 #include "config.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
+#include "imu_cal.h"
 #include "lqr.h"
 #include "param_record.h"
 #include "param_store.h"
@@ -324,6 +325,104 @@ static void cmd_set(const char *name, const char *value_str)
     print_lqr();
 }
 
+// `cal`: core 1 runs the gyro calibration (~1 s, its loop paused) and counts
+// it in the snapshot; wait for the count to move and report the result.
+static void cmd_cal(void)
+{
+    balance_snapshot_t s;
+    if (!wait_core1(&s)) {
+        printf("ERR: core 1 busy — earlier commands not applied yet; cal again\n");
+        return;
+    }
+    if (s.state != BAL_STATE_IDLE) {
+        printf("ERR: state %s — 'disarm' first; gyro not calibrated\n", state_name(s.state));
+        return;
+    }
+    const uint32_t before = s.gyro_cal_count;
+    balance_cmd_t cmd = {.cmd = CMD_CALIBRATE};
+    if (!balance_control_send_cmd(&cmd)) {
+        printf("ERR: command queue full — gyro not calibrated\n");
+        return;
+    }
+    printf("calibrating gyro — keep the robot still for ~1 s\n");
+    const absolute_time_t deadline = make_timeout_time_ms(IMU_CAL_SAMPLES * 2 + 1000);
+    do {
+        sleep_ms(20);
+        balance_control_get_snapshot(&s);
+    } while (s.gyro_cal_count == before &&
+             absolute_time_diff_us(get_absolute_time(), deadline) > 0);
+    if (s.gyro_cal_count == before) {
+        printf("ERR: core 1 did not run the calibration (armed meanwhile?) — check 'stat'\n");
+    } else if (s.gyro_cal == IMU_CAL_OK) {
+        printf("OK gyro calibrated\n");
+    } else {
+        printf("ERR: gyro cal %s — previous bias kept; hold the robot still and 'cal' again\n",
+               imu_cal_status_name(s.gyro_cal));
+    }
+}
+
+// `trim capture`: average the published pitch while the robot is held still
+// at its balance point, and set the trim that makes that pose read 0.
+static void cmd_trim(const char *arg)
+{
+    if (arg == NULL) {
+        printf("trim: %g deg\n", (double)mirror->pitch_trim_deg);
+        return;
+    }
+    if (strcmp(arg, "capture") != 0) {
+        printf("usage: trim [capture]   (or: set trim <deg>)\n");
+        return;
+    }
+    balance_snapshot_t s;
+    if (!wait_core1(&s)) {
+        printf("ERR: core 1 busy — earlier commands not applied yet; trim capture again\n");
+        return;
+    }
+    if (s.state == BAL_STATE_RUN) {
+        printf("ERR: armed — 'disarm' first; trim unchanged\n");
+        return;
+    }
+    printf("hold the robot still at its balance point for %d s\n", TRIM_CAPTURE_MS / 1000);
+    trim_capture_t t;
+    trim_capture_init(&t);
+    uint32_t last_tick = s.tick;
+    const absolute_time_t deadline = make_timeout_time_ms(TRIM_CAPTURE_MS);
+    while (absolute_time_diff_us(get_absolute_time(), deadline) > 0) {
+        sleep_ms(10);
+        balance_control_get_snapshot(&s);
+        if (s.state == BAL_STATE_RUN) {
+            // The hold-upright gesture armed it: the pose was already level.
+            printf("ERR: armed during the capture (auto-arm) — trim unchanged\n");
+            return;
+        }
+        if (s.tick != last_tick) {
+            last_tick = s.tick;
+            trim_capture_add(&t, s.pitch_deg, s.imu_ok, s.gravity.still);
+        }
+    }
+    float trim = 0.0f;
+    switch (trim_capture_finish(&t, mirror->pitch_trim_deg, &trim)) {
+        case IMU_CAL_OK: {
+            char value[24];
+            snprintf(value, sizeof value, "%.2f", (double)trim);
+            cmd_set("trim", value);
+            printf("('save' to keep it)\n");
+            break;
+        }
+        case IMU_CAL_MOVED:
+            printf("ERR: the robot moved during the capture — trim unchanged\n");
+            break;
+        case IMU_CAL_RANGE:
+            printf("ERR: the balance point reads beyond +/-%g deg — check 'mount'; trim "
+                   "unchanged\n",
+                   (double)PITCH_TRIM_MAX_DEG);
+            break;
+        default:
+            printf("ERR: no IMU data during the capture — trim unchanged\n");
+            break;
+    }
+}
+
 static void cmd_ctrl(const char *arg)
 {
     if (arg == NULL) {
@@ -527,6 +626,9 @@ static void cmd_stat(void)
     printf("ctrl:     %s\n", ctrl_name(s.ctrl_mode));
     printf("imu:      %s (mount %s)\n", s.imu_ok ? "ok" : "NOT RESPONDING",
            mount_name(s.imu_mount));
+    printf("gyro cal: %s (%lu run%s)\n", imu_cal_status_name(s.gyro_cal),
+           (unsigned long)s.gyro_cal_count, s.gyro_cal_count == 1 ? "" : "s");
+    printf("trim:     %g deg\n", (double)mirror->pitch_trim_deg);
     printf("angle:    %.2f deg (setpoint %.2f)\n", (double)s.pitch_deg, (double)s.angle_setpoint);
     printf("rate:     %.0f steps/s\n", (double)s.rate_cmd_sps);
     printf("pos:      %.3f m since arm\n", (double)s.pos_m);
@@ -567,6 +669,8 @@ static void cmd_help(void)
     printf("  arm | disarm         start/stop balancing\n");
     printf("  rate <l|r> <sps>     open-loop motor test (disarmed only)\n");
     printf("  cal                  gyro bias calibration (robot still!)\n");
+    printf("  trim [capture]       show the pitch trim, or set it from 2 s held still\n");
+    printf("                       at the balance point (disarmed)\n");
     printf("  save | load          persist / reload params (flash; disarmed only)\n");
 }
 
@@ -595,6 +699,8 @@ static void handle_line(char *l)
         cmd_ctrl(strtok(NULL, " \t"));
     } else if (strcmp(tok, "mount") == 0) {
         cmd_mount(strtok(NULL, " \t"));
+    } else if (strcmp(tok, "trim") == 0) {
+        cmd_trim(strtok(NULL, " \t"));
     } else if (strcmp(tok, "stream") == 0) {
         const char *arg = strtok(NULL, " \t");
         const char *hz_str = strtok(NULL, " \t");
@@ -626,9 +732,7 @@ static void handle_line(char *l)
         balance_control_send_cmd(&cmd);
         printf("OK (disarmed bench mode only)\n");
     } else if (strcmp(tok, "cal") == 0) {
-        balance_cmd_t cmd = {.cmd = CMD_CALIBRATE};
-        balance_control_send_cmd(&cmd);
-        printf("calibrating gyro — keep the robot still for ~1 s\n");
+        cmd_cal();
     } else if (strcmp(tok, "save") == 0) {
         balance_cmd_t cmd = {.cmd = CMD_SAVE};
         balance_control_send_cmd(&cmd);
