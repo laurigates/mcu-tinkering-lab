@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.16](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.15...balancebot-v0.1.16) (2026-11-23)
+
+
+### Features
+
+* **balancebot:** add a saved pitch trim ([#1232](https://github.com/laurigates/mcu-tinkering-lab/issues/1232)) ([9d3e023](https://github.com/laurigates/mcu-tinkering-lab/commit/9d3e023730999a0d78b783b386f62b469f887304))
+* **balancebot:** capture and fit-leff recipes ([#1234](https://github.com/laurigates/mcu-tinkering-lab/issues/1234)) ([113b125](https://github.com/laurigates/mcu-tinkering-lab/commit/113b12509cae36c930cd227a3fad325bc2da09c9))
+* **balancebot:** trim capture and a stillness check on the gyro calibration ([#1233](https://github.com/laurigates/mcu-tinkering-lab/issues/1233)) ([d8236dc](https://github.com/laurigates/mcu-tinkering-lab/commit/d8236dc4626578561bf8a5873d8a372fcccbc84f))
+
+
+### Miscellaneous
+
+* **balancebot:** add cli, arm, disarm and stat recipes ([#1229](https://github.com/laurigates/mcu-tinkering-lab/issues/1229)) ([d51a6cf](https://github.com/laurigates/mcu-tinkering-lab/commit/d51a6cf1954a67e894453043c3ce18b232e6512f))
+
 ## [0.1.15](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.14...balancebot-v0.1.15) (2026-11-20)
 
 
