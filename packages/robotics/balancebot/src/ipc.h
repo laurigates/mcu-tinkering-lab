@@ -65,6 +65,7 @@ typedef enum {
     CMD_SET_CONTROLLER = 7,  // ctrl_mode; LQR is refused while no valid K is held
     CMD_SET_IMU_MOUNT = 8,   // imu_mount (imu_mount_t); refused in RUN
     CMD_HOLD_OFF_ARM = 9,    // value = seconds the auto-arm gesture is ignored
+    CMD_DRIVE = 10,          // drive (drive.h); RUN only, cleared on any state change
 } command_id_t;
 
 typedef enum {
@@ -95,6 +96,11 @@ typedef struct {
         float lqr_K[LQR_N];  // CMD_SET_LQR_GAINS, u = -(K . s) in m/s^2
         uint8_t ctrl_mode;   // CMD_SET_CONTROLLER (ctrl_mode_t)
         uint8_t imu_mount;   // CMD_SET_IMU_MOUNT (imu_mount_t)
+        struct {             // CMD_DRIVE; core 1 clamps all three
+            float speed_sps;
+            float turn_sps;
+            float seconds;
+        } drive;
     };
 } balance_cmd_t;
 
@@ -117,7 +123,12 @@ typedef struct {
     bool lqr_k_valid;      // core 1 holds a K (so LQR may be selected)
     float lqr_K[LQR_N];    // the K core 1 is using / would use
     float pos_m;           // wheel travel since arming (commanded), m
-    uint8_t imu_mount;     // imu_mount_t core 1 is applying
+    // Drive (drive.h): the ramped references the balance law is following,
+    // and the seconds left before the targets drop to 0.
+    float drive_speed_sps;
+    float drive_turn_sps;
+    float drive_remaining_s;
+    uint8_t imu_mount;  // imu_mount_t core 1 is applying
 
     // Last sample's gravity check under that tick's imu_mount (zeroed if the
     // read failed).

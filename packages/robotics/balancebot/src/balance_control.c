@@ -5,6 +5,7 @@
 
 #include "arm_gate.h"
 #include "config.h"
+#include "drive.h"
 #include "hardware/watchdog.h"
 #include "imu_filter.h"
 #include "lqr.h"
@@ -44,6 +45,7 @@ static bool lqr_k_valid;
 static float x_ref_steps;          // position the LQR holds (set on PID->LQR)
 static float steps_per_m;          // from steps_per_rev and wheel_diam_m
 static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
+static drive_t drive;              // speed/turn references; zeroed on every state change
 static float open_loop_sps[STEPPER_COUNT];
 static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
 static arm_gate_t arm_gate;     // last raw sample and CMD_ARM's gravity gate
@@ -155,6 +157,9 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
         snapshot.lqr_K[i] = lqr_K[i];
     }
     snapshot.pos_m = wheel_pos_steps / steps_per_m;
+    snapshot.drive_speed_sps = drive.speed_ref_sps;
+    snapshot.drive_turn_sps = drive.turn_ref_sps;
+    snapshot.drive_remaining_s = drive.remaining_s;
     snapshot.imu_mount = (uint8_t)params.imu_mount;
     snapshot.gravity = arm_gate.check;
     snapshot.arm_refusals = arm_gate.refusals;
@@ -174,6 +179,7 @@ static void enter_state(balance_state_t next)
     if (next == state) {
         return;
     }
+    drive_reset(&drive);  // a drive never outlives the RUN it was sent in
     if (next == BAL_STATE_RUN) {
         pid_reset(&angle_pid);
         pid_reset(&vel_pid);
@@ -285,6 +291,14 @@ static void handle_command(const balance_cmd_t *cmd)
             break;
         case CMD_HOLD_OFF_ARM:
             hold_off_arm(cmd->value);
+            break;
+        case CMD_DRIVE:
+            // Core 0 checks the state first and reports; this is the last line.
+            if (state == BAL_STATE_RUN) {
+                drive_command(&drive, cmd->drive.speed_sps, cmd->drive.turn_sps, cmd->drive.seconds,
+                              DRIVE_SPEED_MAX_FRAC * params.max_rate_sps,
+                              DRIVE_TURN_MAX_FRAC * params.max_rate_sps);
+            }
             break;
         case CMD_CALIBRATE:
             if (state == BAL_STATE_IDLE) {
@@ -444,13 +458,25 @@ void balance_control_core1_main(void)
                     break;
                 }
                 {
+                    // The drive is a moving reference for both laws: they
+                    // regulate the error against it, so the lean that
+                    // accelerates the robot comes from the law itself.
+                    drive_step(&drive, dt, DRIVE_SPEED_ACCEL_SPS2, DRIVE_TURN_ACCEL_SPS2);
                     float accel;
                     if (ctrl_mode == CTRL_LQR) {
-                        // u = -K [theta, theta_dot, x - x_ref, x_dot] in m/s^2,
-                        // scaled to steps/s^2. theta's sign follows the PID
-                        // (see lqr.h), so IMU_PITCH_SIGN carries over.
+                        // u = -K [theta, theta_dot, x - x_ref, x_dot - v_ref]
+                        // in m/s^2, scaled to steps/s^2. theta's sign follows
+                        // the PID (see lqr.h), so IMU_PITCH_SIGN carries over.
+                        // x_ref advances only while driving, so station
+                        // keeping at rest is unchanged; after a drive it holds
+                        // where the reference stopped.
+                        if (drive.speed_ref_sps != 0.0f) {
+                            x_ref_steps =
+                                drive_advance_ref(x_ref_steps, wheel_pos_steps, drive.speed_ref_sps,
+                                                  dt, DRIVE_X_LEAD_MAX_M * steps_per_m);
+                        }
                         float x_err_m = (wheel_pos_steps - x_ref_steps) / steps_per_m;
-                        float x_dot = wheel_rate_sps / steps_per_m;
+                        float x_dot = (wheel_rate_sps - drive.speed_ref_sps) / steps_per_m;
                         float u = lqr_accel(lqr_K, lqr_theta_from_pitch(pitch),
                                             lqr_theta_dot_from_gyro(gyro_rate), x_err_m, x_dot);
                         accel = u * steps_per_m;
@@ -462,22 +488,24 @@ void balance_control_core1_main(void)
                         }
                     } else {
                         // Outer loop (100 Hz): lean against wheel velocity to
-                        // hold station. Positive wheel rate = drifting forward
-                        // -> lean back.
+                        // hold the drive speed (0 at rest = hold station).
+                        // Wheel rate above it = drifting forward -> lean back.
                         if (pid_bumpless_pending) {
                             // LQR -> PID: the velocity PI restarts from a zero
                             // integral, then the angle integral is loaded so
                             // this tick's PID output equals the last LQR one.
                             pid_reset(&vel_pid);
-                            angle_setpoint = pid_update(&vel_pid, 0.0f, wheel_rate_sps, NAN,
-                                                        dt * VELOCITY_LOOP_DIV);
+                            angle_setpoint =
+                                pid_update(&vel_pid, drive.speed_ref_sps, wheel_rate_sps, NAN,
+                                           dt * VELOCITY_LOOP_DIV);
                             pid_set_integral(
                                 &angle_pid, pid_bumpless_integral(&angle_pid, angle_setpoint, pitch,
                                                                   gyro_rate, dt, last_accel_sps2));
                             pid_bumpless_pending = false;
                         } else if (tick % VELOCITY_LOOP_DIV == 0) {
-                            angle_setpoint = pid_update(&vel_pid, 0.0f, wheel_rate_sps, NAN,
-                                                        dt * VELOCITY_LOOP_DIV);
+                            angle_setpoint =
+                                pid_update(&vel_pid, drive.speed_ref_sps, wheel_rate_sps, NAN,
+                                           dt * VELOCITY_LOOP_DIV);
                         }
                         // Inner loop: PID output is wheel acceleration
                         // (steps/s^2), integrated into a step rate.
@@ -492,8 +520,14 @@ void balance_control_core1_main(void)
                         wheel_rate_sps = -params.max_rate_sps;
                     }
                     wheel_pos_steps += wheel_rate_sps * dt;
-                    stepper_set_rate(STEPPER_LEFT, wheel_rate_sps, params.max_rate_sps, dt);
-                    stepper_set_rate(STEPPER_RIGHT, wheel_rate_sps, params.max_rate_sps, dt);
+                    // The turn goes on after the balance law, split evenly
+                    // between the wheels so their mean (all the law sees)
+                    // stays wheel_rate_sps; drive_mix() cuts the turn, never
+                    // the mean, at the rate clamp.
+                    drive_wheels_t w =
+                        drive_mix(wheel_rate_sps, drive.turn_ref_sps, params.max_rate_sps);
+                    stepper_set_rate(STEPPER_LEFT, w.left_sps, params.max_rate_sps, dt);
+                    stepper_set_rate(STEPPER_RIGHT, w.right_sps, params.max_rate_sps, dt);
                 }
                 break;
 

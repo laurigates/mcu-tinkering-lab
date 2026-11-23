@@ -53,6 +53,22 @@
 #define ANGLE_PID_OUT_MAX 40000.0f   // angle PID (and LQR) output clamp (steps/s^2)
 #define ANGLE_INTEGRAL_MAX 10000.0f  // anti-windup clamp
 
+// Driving (drive.c). At the default 0.09 m wheel and 1600 steps/rev there are
+// ~5660 steps per metre, so the 4000 steps/s rate clamp is ~0.71 m/s.
+// Speed and turn are fractions of max_rate_sps: cruising near the clamp would
+// leave the balance law no rate to speed up with and catch a forward fall.
+#define DRIVE_SPEED_MAX_FRAC 0.5f  // |speed| <= this x max_rate (~0.35 m/s)
+#define DRIVE_TURN_MAX_FRAC 0.25f  // |turn| per wheel <= this x max_rate (~0.18 m/s)
+// The speed ramp is what the balance law has to lean for: 1000 steps/s^2 is
+// ~0.18 m/s^2, about 1 deg of lean, well inside the velocity loop's
+// MAX_LEAN_OFFSET_DEG. The turn ramp adds to one wheel's acceleration and
+// takes from the other's, against the stepper slew limit MAX_ACCEL_SPS2.
+#define DRIVE_SPEED_ACCEL_SPS2 1000.0f
+#define DRIVE_TURN_ACCEL_SPS2 2000.0f
+#define DRIVE_DEFAULT_S 2.0f      // `drive` without a duration stops after this
+#define DRIVE_MAX_S 30.0f         // longest duration accepted
+#define DRIVE_X_LEAD_MAX_M 0.05f  // LQR position reference kept this close to the wheels
+
 // Safety
 #define TILT_CUTOFF_DEG 45.0f  // beyond this: motors off, FAULT
 // ±3 deg (was ±1 until 2026-11-23, too narrow to hold by hand). With the trim
