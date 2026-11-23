@@ -151,6 +151,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.arm_refused_up_g = arm_gate.refused_up_g;
     snapshot.gyro_cal = (uint8_t)gyro_cal;
     snapshot.gyro_cal_count = gyro_cal_count;
+    snapshot.imu_bus_recoveries = mpu6050_bus_recoveries();
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }

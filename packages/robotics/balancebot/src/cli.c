@@ -622,10 +622,19 @@ static void cmd_stat(void)
 {
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
+    if (s.seq == 0) {
+        // Core 1 publishes every tick; an untouched snapshot means it never
+        // reached its loop, and every field below is a zero, not a reading.
+        printf("core 1:   NOT RUNNING — no snapshot since boot; power-cycle the robot\n");
+    }
     printf("state:    %s\n", state_name(s.state));
     printf("ctrl:     %s\n", ctrl_name(s.ctrl_mode));
     printf("imu:      %s (mount %s)\n", s.imu_ok ? "ok" : "NOT RESPONDING",
            mount_name(s.imu_mount));
+    if (s.imu_bus_recoveries != 0) {
+        printf("imu bus:  %lu held-line recover%s since boot\n",
+               (unsigned long)s.imu_bus_recoveries, s.imu_bus_recoveries == 1 ? "y" : "ies");
+    }
     printf("gyro cal: %s (%lu run%s)\n", imu_cal_status_name(s.gyro_cal),
            (unsigned long)s.gyro_cal_count, s.gyro_cal_count == 1 ? "" : "s");
     printf("trim:     %g deg\n", (double)mirror->pitch_trim_deg);
