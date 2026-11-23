@@ -171,9 +171,11 @@ and USB power keeps it in that state across a reboot. Older firmware then
 hung core 1 before its loop, and `stat` showed `imu: NOT RESPONDING` with
 tick 0. Now every I2C transfer is bounded to 1 ms, and a held line is
 freed (up to nine SCL clocks, then a STOP) at init and after any timed-out
-transfer. `stat` counts these on an `imu bus:` line. If core 1 still never
-publishes, `stat` opens with `core 1: NOT RUNNING`; power-cycle the robot
-with USB and battery both disconnected.
+transfer. `stat` counts these on an `imu bus:` line. During the first few
+seconds after boot (IMU init and the gyro calibration) `stat` opens with
+`core 1: starting`, and its readings are not live yet. If core 1 is still in
+startup 10 s after boot, it says `core 1: STUCK in startup`; power-cycle the
+robot with USB and battery both disconnected.
 
 `arm` is refused while the robot rests with the mounted Z axis reading below
 -0.5 g (more than 120° from upright), because at rest that means the setting

@@ -134,6 +134,9 @@ typedef struct {
     uint32_t imu_bus_recoveries;
     // Ticks left of the auto-arm hold-off (0 when the gesture can arm).
     uint32_t arm_holdoff_ticks;
+    // True while core 1 is still in its startup (IMU init and the boot gyro
+    // calibration, up to IMU_CAL_BOOT_TRIES s), before its loop's first tick.
+    bool core1_starting;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H
