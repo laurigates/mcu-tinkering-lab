@@ -35,6 +35,13 @@ core 0 (soft):                    USB CDC CLI + CSV telemetry + LED + battery
   the check stamp CI verifies), `carrier-board`, `carrier-fab`. See the
   `carrier-pcb` skill and `hardware/carrier/README.md`.
 
+## Bring-up and tuning on the robot
+
+Use the `balancebot-tuning` skill (`.claude/skills/balancebot-tuning/`): sign
+checks, the capture, `analyze`, one-live-change loop, and the bench traps
+(wheels in the air run away by design, a held I2C bus shows as tick 0, USB
+before the battery). The procedure itself is in README "Tuning loop".
+
 ## Build / test
 
 ```bash
