@@ -45,7 +45,11 @@ bool imu_gravity_refuses_arm(const imu_gravity_check_t *g)
 
 float imu_filter_accel_pitch_deg(float accel_forward_g, float accel_up_g)
 {
-    return atan2f(accel_forward_g, accel_up_g) * RAD_TO_DEG;
+    // An accelerometer reads the reaction to gravity, +1 g upward at rest.
+    // Leaning forward by theta tips the forward axis down, so it reads
+    // -sin(theta): negate it to give the forward-positive angle the gyro
+    // integrates (rotation about Y, which points left, is positive nose-down).
+    return atan2f(-accel_forward_g, accel_up_g) * RAD_TO_DEG;
 }
 
 float imu_filter_update(imu_filter_t *f, float accel_forward_g, float accel_up_g,

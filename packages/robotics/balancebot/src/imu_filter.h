@@ -68,11 +68,14 @@ void imu_filter_init(imu_filter_t *f, float alpha);
 // Reset so the next update snaps to the accelerometer angle.
 void imu_filter_reset(imu_filter_t *f);
 
-// Accelerometer-only tilt angle in degrees: atan2(forward, up).
+// Accelerometer-only tilt angle in degrees, positive leaning forward:
+// atan2(-forward, up). The forward axis of a forward-leaning body points
+// partly down and reads negative, since the accelerometer reads +1 g upward.
 float imu_filter_accel_pitch_deg(float accel_forward_g, float accel_up_g);
 
-// One fusion step. gyro_rate_dps is the pitch rate (deg/s), dt in seconds.
-// Returns the new pitch estimate in degrees.
+// One fusion step. gyro_rate_dps is the rate about body Y (pointing left),
+// positive nose-down, so it shares the accel angle's forward-positive sign;
+// dt in seconds. Returns the new pitch estimate in degrees.
 float imu_filter_update(imu_filter_t *f, float accel_forward_g, float accel_up_g,
                         float gyro_rate_dps, float dt);
 
