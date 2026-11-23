@@ -116,6 +116,14 @@ wheel speed in the CSV is the commanded one; with R² under 0.3 it says not to
 trust the result. On simulated captures it is within about 11 % (1 sigma);
 `tools/fit_leff.py --self-test` runs in the host test suite.
 
+**On the rev1 robot it has not worked.** Three balancing captures on
+2026-11-23 gave R² 0.13, 0.06 and below 0.3, with `l_eff_m` estimates of
+0.41 and 0.97 m that the robot's geometry rules out. A well-tuned robot moves
+too little to fit, and a badly tuned one spends its time at the acceleration
+clamp. Its offset estimate did agree with the mean angle, which `analyze`
+reports directly. Estimate `l_eff_m` from the geometry instead ("Tuning
+loop"); the LQR tolerated a rough value there.
+
 ### IMU mounting
 
 The filter expects the GY-521 component side up, X arrow forward. On the
@@ -190,7 +198,12 @@ few control ticks at most. Core 1 checks again when it handles the arm; if it
 refuses, `arm` prints `ERR: core 1 refused arm: …` instead of `OK`, and `stat`
 counts the refusals.
 
-### Tuning procedure
+### Tuning procedure (PID)
+
+The default `kp` (28) is far below the roughly 970–1340 (steps/s²)/° it takes
+to catch a fall with 90–65 mm wheels (#742), and the rev1 robot was tuned on
+the LQR instead ("Tuning loop" below). The PID procedure, untested on the
+robot:
 
 1. Bench-check: `rate l 800` / `rate r 800` — both wheels spin smoothly,
    `rate l 0` stops. `stream on`, tilt the frame — angle tracks.
@@ -215,19 +228,69 @@ boot and whenever one of its parameters changes. Core 1 only applies them.
 | `q_theta` `q_dtheta` `q_x` `q_dx` | State weights | 400, 1, 25, 4 |
 | `r` | Input weight | 0.04 |
 
-1. Get the PID balancing first. LQR inherits `IMU_PITCH_SIGN` from it.
-2. Measure `l_eff_m` with the swing test. Hang the robot by its axle, time
-   10 small swings to get the period `T`, then
-   `L_eff = 9.81 * (T / 2π)^2`. Measure `wheel_diam_m` too.
-3. `set l_eff_m <value>`. Every model or weight change re-solves K and
-   prints K, the closed-loop spectral radius `rho` (it must be below 1) and
-   the residual. A change whose solve fails is rejected and leaves both the
-   parameter and K unchanged.
-4. While balancing on the PID, `ctrl lqr`. The robot holds the position it
-   switched at. `ctrl pid` switches back. The switch back is bumpless only
-   with `ki` ≠ 0.
-5. `save` stores the mode and the model. K is not stored: it is re-solved at
-   boot. If the solve fails at boot, the robot runs the PID and says so.
+Every model or weight change re-solves K and prints K, the closed-loop
+spectral radius `rho` (it must be below 1) and the residual. A change whose
+solve fails is rejected and leaves both the parameter and K unchanged. The
+LQR settings, `alpha` and `trim` can all change while armed: core 1 takes the
+new gains on the next tick, as a step (unlike the bumpless `ctrl` switch).
+Only `save` needs the robot disarmed. `ctrl pid` switches back to the PID;
+that switch is bumpless only with `ki` ≠ 0. `save` stores the mode and the
+model; K is re-solved at boot, and if that solve fails the robot runs the
+PID and says so.
+
+### Tuning loop
+
+How the rev1 robot went from falling over in 15 s to holding its spot within
+about 1 cm on 2026-11-23:
+
+1. **Signs** ([`BRINGUP.md`](BRINGUP.md) §4), then the model:
+   `set wheel_diam_m` to the measured wheel and `set l_eff_m` to an
+   estimate. For a body of even mass pivoting on the axle that is ⅔ of its
+   height; with the battery on top it is close to the axle-to-battery
+   distance (0.21 m for the rev1 robot's 24 cm with three 18650s on top).
+   The swing test (hang it by the axle and time small swings,
+   `L_eff = 9.81 · (T / 2π)²`) needs hands for both the robot and a stopwatch,
+   and the robot's swing damps out after one or two cycles.
+2. `ctrl lqr`, `save`, and arm it upright **on the floor**.
+3. Loop: `just balancebot::capture 20` while it balances on its own, then
+   `just balancebot::analyze <csv>`, then change one setting live, then
+   capture again. `analyze` names the next change:
+
+   | `analyze` shows | Cause | Change |
+   |---|---|---|
+   | a large share at the acceleration clamp, jitter | gains ask more than the motors may give | raise `r` ("Choosing r") |
+   | a rock near the pendulum frequency √(g/L) | the accelerometer reads the robot's own acceleration as tilt | raise `alpha` (0.996 at 500 Hz) |
+   | position held, mean angle away from 0 | trim | add the mean to `trim` |
+   | position wandering | position hold too weak | raise `q_x` / `q_dx`, or lower `r` |
+
+4. `just balancebot::cli disarm save` once it holds.
+
+The rev1 run, each line one 20 s capture:
+
+| Settings | angle RMS | at clamp | peak speed | position range |
+|---|---|---|---|---|
+| r 0.04, alpha 0.98 | 3.69° | 48 % | 4000 (limit) | 39 cm |
+| r 10, alpha 0.98 | 1.40° | 0 % | 1164 steps/s | 4.5 cm |
+| r 10, alpha 0.996 | 0.23° | 0 % | 470 steps/s | 2.0 cm |
+| + trim −5.47° | 0.25° | 0 % | — | 1.2 cm (10 s) |
+
+### Choosing r
+
+`just balancebot::lqr-sweep <l_eff_m> <wheel_diam_m> [r...]` prints K, the
+closed-loop poles and the lean at which K's angle gain alone reaches the
+acceleration clamp, for each r. For the rev1 model (0.21 m, 65 mm wheels):
+
+| r | K | clamp at | |
+|---|---|---|---|
+| 0.04 (default) | −134, −14.5, −23.9, −26.4 | 2.2° | jitters against the clamp |
+| 10 | −27.0, −3.9, −1.56, −2.42 | 10.8° | the rev1 setting |
+| 50 | −23.6, −3.4, −0.70, −1.43 | 12.4° | |
+
+Raising r makes the robot gentler until about 10–50. Past that the angle
+poles stop at the mirror of the robot's own falling pole −√(g/L), and only the
+position hold keeps weakening, so the robot drifts more after a push for no
+extra smoothness. The 0.04 default suits the placeholder model, not 65 mm
+wheels and the 40 000 steps/s² clamp.
 
 ## Safety model
 

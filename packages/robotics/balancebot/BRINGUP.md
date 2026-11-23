@@ -1,8 +1,9 @@
 # Balancebot Bring-Up: Before the First `arm`
 
-The three adjustments and checks to make once the harness or carrier is
-wired and before the firmware drives a motor: the buck output, the DRV8825
-straps, and each driver's current limit. Wiring itself is in
+The adjustments and checks to make once the harness or carrier is wired and
+before the firmware drives a motor: the buck output, the DRV8825 straps,
+each driver's current limit, and the signs of the angle and the wheels.
+Wiring itself is in
 [`WIRING.md`](WIRING.md); flashing, first boot and calibration follow in the
 [build guide](docs/build-guide.pdf) §7–8.
 
@@ -19,6 +20,12 @@ reads:
   the 5V pad ([`hardware/carrier/README.md`](hardware/carrier/README.md)).
 
 Only then connect the 5 V feed to the XIAO.
+
+**Plug USB in before connecting the pack.** The XIAO's 5V pin is its USB-C
+VBUS, so with the pack on, the buck's output is already on VBUS when the
+cable goes in, and a USB-C host (a MacBook on 2026-11-22) does not connect:
+no serial port appears. USB first, then the pack, works. The cause and fixes
+are in #1230.
 
 ## 2. Check the straps
 
@@ -69,3 +76,37 @@ With the motors connected, VMOT and logic powered, and the drivers disabled:
   points here before it points at the tuning; lower Vref or improve cooling.
 - **An enclosure runs hotter than the bench.** Repeat the heat check with the
   case on, and keep vents above the drivers.
+
+## 4. Check the signs
+
+The firmware's convention: **positive pitch means leaning forward**, toward
+the carrier's "FWD ^" arrow, which on rev1 points at the XIAO's USB-C end.
+Catching a forward lean takes a **negative** step rate (`src/lqr.h`). Both
+must hold, or the robot drives away from every fall. With `mount` set
+(README "IMU mounting"), motor power on, wheels off the ground, disarmed:
+
+1. Tilt the robot toward FWD: `just balancebot::stat` shows a positive angle
+   (about 0 upright).
+2. `just balancebot::cli "rate l -400" "rate r -400"`: both wheels turn the
+   same way, and that way rolls the robot toward FWD. Stop with
+   `just balancebot::cli "rate l 0" "rate r 0"`.
+
+If one wheel turns the other way, that side's `dir_invert` in
+`src/stepper.c` or its motor plug is reversed. If both roll backward, flip the
+A1/A2 coil pair on both motor connectors. If the angle reads negative leaning
+forward, the filter or mount is wrong; that was a firmware bug fixed in #1242.
+
+**Do not judge the controller with the wheels in the air.** Armed with the
+wheels off the ground, the LQR runs the wheels up to maxrate in one direction
+and holds them there: its position and speed terms are positive feedback,
+and only the body tipping back as the wheels move closes the loop. That is
+expected, and says nothing about the signs.
+
+## 5. If `stat` shows tick 0
+
+`loop: 0 us (tick 0)` with `imu: NOT RESPONDING` more than 10 s after boot
+means core 1 never reached its control loop. On 2026-11-23 this was the
+MPU6050 holding the I2C bus after a reset mid-read: USB keeps it powered
+across a reboot, so `picotool reboot` does not clear it. Disconnect USB and
+the pack for a few seconds. Firmware with #1236 frees a held bus itself and
+counts it on `stat`'s `imu bus:` line.
