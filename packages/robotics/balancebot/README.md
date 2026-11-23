@@ -152,7 +152,7 @@ uses the trimmed angle, the same one the gesture uses:
 |---|---|
 | dim blue | IDLE, more than 5° from upright |
 | yellow | within 5°: getting close |
-| green, brightening | inside the ±1° window; full brightness when the 3 s hold arms it |
+| green, brightening | inside the ±3° window; full brightness when the 3 s hold arms it |
 | solid green | RUN |
 | purple | auto-arm held off (after `disarm` or `trim capture`) |
 | red, blinking | FAULT |
@@ -165,7 +165,7 @@ Brightness is capped at about 16 % of full scale.
 
 A module that sits a degree or two off parallel to the carrier, or a robot
 whose centre of mass is not over the axle when the carrier is level, balances
-at a pitch other than 0. The controllers, the 3 s auto-arm window (±1°) and
+at a pitch other than 0. The controllers, the 3 s auto-arm window (±3°) and
 the tilt cutoff all work from 0, so the robot then drives to correct a lean
 that is not there, and may never auto-arm. `trim` moves 0 to the balance point:
 
@@ -176,7 +176,7 @@ that is not there, and may never auto-arm. `trim` moves 0 to the balance point:
 
 It refuses, leaving the trim unchanged, when the robot moved during the 2 s,
 when the result would pass ±10° (usually a wrong `mount`), or when the
-hold-upright gesture arms the robot first (the pose already read within ±1°
+hold-upright gesture arms the robot first (the pose already read within ±3°
 for 3 s). `set trim <deg>` sets it by hand. `trim` is subtracted from every
 pitch sample, so telemetry shows the trimmed angle. It is limited to ±10° and
 can be changed while armed. Records saved before PARAM_VERSION 4 load with

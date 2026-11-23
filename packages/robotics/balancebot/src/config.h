@@ -55,8 +55,11 @@
 
 // Safety
 #define TILT_CUTOFF_DEG 45.0f  // beyond this: motors off, FAULT
-#define ARM_GESTURE_DEG 1.0f   // hold within +/- this ...
-#define ARM_GESTURE_S 3.0f     // ... for this long to auto-arm from IDLE
+// ±3 deg (was ±1 until 2026-11-23, too narrow to hold by hand). With the trim
+// set, the LQR at r = 10 catches far more than this: its angle gain alone
+// reaches the acceleration clamp only at ~11 deg (README "Choosing r").
+#define ARM_GESTURE_DEG 3.0f  // hold within +/- this ...
+#define ARM_GESTURE_S 3.0f    // ... for this long to auto-arm from IDLE
 // After `disarm`, and after `trim capture`, the gesture is held off this long
 // (arm_holdoff_extend): a robot disarmed, or trimmed, while held upright
 // would otherwise re-arm itself 3 s later.

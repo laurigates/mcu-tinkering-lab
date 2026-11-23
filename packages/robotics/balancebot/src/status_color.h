@@ -18,7 +18,7 @@ typedef struct {
 #define STATUS_RGB_MAX 40u
 
 // Within this many degrees of the trimmed zero the LED turns yellow, so the
-// user can find the much narrower auto-arm window (ARM_GESTURE_DEG).
+// user can find the narrower auto-arm window (ARM_GESTURE_DEG).
 #define STATUS_NEAR_DEG 5.0f
 
 typedef struct {

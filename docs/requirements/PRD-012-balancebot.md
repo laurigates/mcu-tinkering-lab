@@ -159,7 +159,8 @@ to step rate (clamped ~4000 steps/s).
 
 **FR-4.03**: Safety: tilt cutoff (|pitch| > 45° → motors off + FAULT),
 hardware watchdog fed only by the control loop, arm gesture (hold
-upright ±1° for 3 s) or explicit `arm`.
+upright ±3° for 3 s; ±1° until 2026-11-23, too narrow to hold by hand) or
+explicit `arm`.
 
 **FR-4.04**: Lock-free core0↔core1 exchange: parameter queue in, seqlock
 telemetry snapshot out.
