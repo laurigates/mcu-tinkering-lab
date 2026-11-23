@@ -75,7 +75,7 @@ seqlock snapshot, so the control loop never blocks and never prints.
   - A 100 ms hardware watchdog, fed only by the control loop and enabled at
     first arm, reboots a wedged loop into motors-off.
   - The motors arm only on the `arm` command or a deliberate gesture: hold the
-    robot upright (within 1°) for 3 s.
+    robot upright (within 3°) for 3 s.
 ]
 
 = 2 · Bill of Materials
