@@ -176,6 +176,19 @@ names the test that failed. New suites call `fflush(stdout)` before the
 `grep FAIL` showed nothing for a mutant that had in fact failed
 `text_skips_thought_parts`.
 
+### A physics model in a test must come from the physics
+
+A host test that builds sensor readings from a model of the physics (what an
+accelerometer reads for a tilt, which way a gyro turns) checks the code only if
+the model is right, and the person writing both tends to make the same mistake
+in each. Derive the model from first principles in a comment, name the axis
+convention, and check the sign on the hardware once. The balancebot filter's
+accelerometer angle had the wrong sign until #1242: `test_imu_filter.c`
+modelled the forward axis as +sin θ for a forward lean, the same error as the
+code, so the suite passed while the robot drove away from every fall. An
+accelerometer at rest reads +1 g *upward*, so a forward-tipping axis reads
+−sin θ.
+
 ## CI Verification
 
 All PRs must pass:

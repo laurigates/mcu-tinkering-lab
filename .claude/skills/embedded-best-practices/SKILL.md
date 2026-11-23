@@ -208,6 +208,31 @@ ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &conf));
 ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, conf.mode, 0, 0, 0));
 ```
 
+Bound every transfer, and free a held bus at init. A reset in the middle of
+a read can leave a sensor holding SDA low, and USB power keeps it in that
+state across a firmware reboot. A blocking call with no deadline then hangs
+the task forever (Pico SDK `i2c_*_blocking` waits for TX_EMPTY / STOP_DET
+without one). Use the timeout variants, and before the first transfer clock
+SCL up to nine times until SDA rises, then send a STOP
+(balancebot `mpu6050.c`, #1236).
+
+## Sensor Fusion
+
+### Complementary filter alpha depends on the loop rate
+
+`angle = α·(angle + gyro·dt) + (1−α)·accel_angle` has the time constant
+τ = dt·α/(1−α). The same α means different filters at different rates:
+0.98 is 0.5 s at 100 Hz but 0.1 s at 500 Hz. Pick τ (0.3–1 s for a balancing
+robot) and derive α from the loop rate. Below τ the gyro should dominate,
+because the accelerometer also reads linear acceleration: a robot rocking at
+1 Hz with 0.5 m/s² of horizontal acceleration shows about 3° of false tilt.
+On the balancebot, α 0.98 at 500 Hz let that drive a ~1 Hz rock; 0.996 cut
+the angle RMS from 1.40° to 0.23° (#1244).
+
+Check the accel angle's sign against the gyro's: both must be positive for
+the same rotation, or the two halves of the filter fight and the angle reads
+inverted at rest (#1242).
+
 ## Interrupt Handlers
 
 ### Keep ISRs Minimal
