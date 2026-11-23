@@ -361,6 +361,46 @@ static void cmd_cal(void)
     }
 }
 
+// `save`: core 1 writes the flash only outside RUN and counts each save in the
+// snapshot; refuse in RUN, then wait for the count and report the result.
+static void cmd_save(void)
+{
+    balance_snapshot_t s;
+    const bool synced = wait_core1(&s);
+    const cli_gate_t gate = cli_gate_save(synced, s.state);
+    if (gate == CLI_GATE_BUSY) {
+        printf("ERR: core 1 busy — earlier commands not applied yet; nothing saved, save again\n");
+        return;
+    }
+    if (gate != CLI_GATE_SEND) {
+        printf("ERR: armed — 'disarm' first; nothing saved\n");
+        return;
+    }
+    const uint32_t before = s.save_count;
+    balance_cmd_t cmd = {.cmd = CMD_SAVE};
+    if (!balance_control_send_cmd(&cmd)) {
+        printf("ERR: command queue full — nothing saved\n");
+        return;
+    }
+    // A sector erase and program take ~45 ms on core 1.
+    const absolute_time_t deadline = make_timeout_time_ms(1000);
+    do {
+        sleep_ms(10);
+        balance_control_get_snapshot(&s);
+    } while (s.save_count == before && absolute_time_diff_us(get_absolute_time(), deadline) > 0);
+    switch (cli_save_outcome(before, s.save_count, s.save_ok)) {
+        case CLI_SAVE_OK:
+            printf("OK saved\n");
+            break;
+        case CLI_SAVE_FAILED:
+            printf("ERR: flash write failed — check 'stat'\n");
+            break;
+        default:
+            printf("ERR: core 1 did not save (armed meanwhile?) — check 'stat'\n");
+            break;
+    }
+}
+
 // `trim capture`: average the published pitch while the robot is held still
 // at its balance point, and set the trim that makes that pose read 0.
 static void cmd_trim(const char *arg)
@@ -380,6 +420,20 @@ static void cmd_trim(const char *arg)
     }
     if (s.state == BAL_STATE_RUN) {
         printf("ERR: armed — 'disarm' first; trim unchanged\n");
+        return;
+    }
+    // Holding the robot still at its balance point is the auto-arm gesture:
+    // hold it off for the capture and a few seconds after, for the `save`
+    // and for putting the robot down.
+    balance_cmd_t hold = {.cmd = CMD_HOLD_OFF_ARM,
+                          .value = (float)TRIM_CAPTURE_MS / 1000.0f + ARM_HOLDOFF_AFTER_TRIM_S};
+    if (!balance_control_send_cmd(&hold)) {
+        printf("ERR: command queue full — trim unchanged\n");
+        return;
+    }
+    note_sent();
+    if (!wait_core1(&s) || s.state == BAL_STATE_RUN) {
+        printf("ERR: armed before the hold-off arrived — 'disarm' and trim capture again\n");
         return;
     }
     printf("hold the robot still at its balance point for %d s\n", TRIM_CAPTURE_MS / 1000);
@@ -406,7 +460,8 @@ static void cmd_trim(const char *arg)
             char value[24];
             snprintf(value, sizeof value, "%.2f", (double)trim);
             cmd_set("trim", value);
-            printf("('save' to keep it)\n");
+            printf("('save' to keep it; auto-arm held off %g s)\n",
+                   (double)ARM_HOLDOFF_AFTER_TRIM_S);
             break;
         }
         case IMU_CAL_MOVED:
@@ -649,6 +704,10 @@ static void cmd_stat(void)
     printf("gyro cal: %s (%lu run%s)\n", imu_cal_status_name(s.gyro_cal),
            (unsigned long)s.gyro_cal_count, s.gyro_cal_count == 1 ? "" : "s");
     printf("trim:     %g deg\n", (double)mirror->pitch_trim_deg);
+    if (s.arm_holdoff_ticks != 0) {
+        printf("auto-arm: held off %.1f s more\n",
+               (double)s.arm_holdoff_ticks / (double)CONTROL_LOOP_HZ);
+    }
     printf("angle:    %.2f deg (setpoint %.2f)\n", (double)s.pitch_deg, (double)s.angle_setpoint);
     printf("rate:     %.0f steps/s\n", (double)s.rate_cmd_sps);
     printf("pos:      %.3f m since arm\n", (double)s.pos_m);
@@ -738,7 +797,7 @@ static void handle_line(char *l)
         balance_cmd_t cmd = {.cmd = CMD_DISARM};
         balance_control_send_cmd(&cmd);
         note_sent();  // a pasted 'arm' or 'load' after it checks the state it leaves
-        printf("OK\n");
+        printf("OK (auto-arm held off %g s)\n", (double)ARM_HOLDOFF_AFTER_DISARM_S);
     } else if (strcmp(tok, "rate") == 0) {
         const char *motor = strtok(NULL, " \t");
         const char *sps_str = strtok(NULL, " \t");
@@ -754,9 +813,7 @@ static void handle_line(char *l)
     } else if (strcmp(tok, "cal") == 0) {
         cmd_cal();
     } else if (strcmp(tok, "save") == 0) {
-        balance_cmd_t cmd = {.cmd = CMD_SAVE};
-        balance_control_send_cmd(&cmd);
-        printf("saving (check 'stat' for result; disarmed only)\n");
+        cmd_save();
     } else if (strcmp(tok, "load") == 0) {
         // Core 1 applies parameters, gains and controller in RUN but ignores
         // the mount there, so a load while armed would leave the mirror (and

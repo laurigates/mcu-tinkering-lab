@@ -35,6 +35,20 @@ cli_gate_t cli_gate_mount(bool synced, uint8_t state);
 // holding a mount core 1 is not applying.
 cli_gate_t cli_gate_load(bool synced, uint8_t state);
 
+// `save`. Refused in RUN: core 1 ignores CMD_SAVE there (a sector erase
+// stalls both cores), and the CLI used to print "saving" regardless.
+cli_gate_t cli_gate_save(bool synced, uint8_t state);
+
+typedef enum {
+    CLI_SAVE_OK = 0,   // core 1 ran the save and param_store_save() reported success
+    CLI_SAVE_FAILED,   // core 1 ran the save and it failed
+    CLI_SAVE_NOT_RUN,  // save_count did not move: core 1 skipped it (armed meanwhile) or is slow
+} cli_save_outcome_t;
+
+// What `save` reports from the snapshot's save_count before and after, and
+// save_ok after.
+cli_save_outcome_t cli_save_outcome(uint32_t count_before, uint32_t count_now, bool save_ok);
+
 typedef enum {
     CLI_ARM_OK = 0,          // core 1 is in RUN
     CLI_ARM_NO_ANSWER,       // core 1 did not drain the arm within the CLI's wait

@@ -35,6 +35,19 @@ cli_gate_t cli_gate_load(bool synced, uint8_t state)
     return cli_gate_mount(synced, state);
 }
 
+cli_gate_t cli_gate_save(bool synced, uint8_t state)
+{
+    return cli_gate_mount(synced, state);
+}
+
+cli_save_outcome_t cli_save_outcome(uint32_t count_before, uint32_t count_now, bool save_ok)
+{
+    if (count_now == count_before) {
+        return CLI_SAVE_NOT_RUN;
+    }
+    return save_ok ? CLI_SAVE_OK : CLI_SAVE_FAILED;
+}
+
 cli_arm_outcome_t cli_arm_outcome(bool synced, uint32_t refusals_before, uint32_t refusals_now,
                                   uint8_t state, bool imu_ok)
 {

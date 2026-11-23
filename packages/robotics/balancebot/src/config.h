@@ -52,8 +52,13 @@
 #define TILT_CUTOFF_DEG 45.0f  // beyond this: motors off, FAULT
 #define ARM_GESTURE_DEG 1.0f   // hold within +/- this ...
 #define ARM_GESTURE_S 3.0f     // ... for this long to auto-arm from IDLE
-#define FAULT_CLEAR_DEG 5.0f   // upright within this ...
-#define FAULT_CLEAR_S 2.0f     // ... for this long clears FAULT to IDLE
+// After `disarm`, and after `trim capture`, the gesture is held off this long
+// (arm_holdoff_extend): a robot disarmed, or trimmed, while held upright
+// would otherwise re-arm itself 3 s later.
+#define ARM_HOLDOFF_AFTER_DISARM_S 5.0f
+#define ARM_HOLDOFF_AFTER_TRIM_S 5.0f
+#define FAULT_CLEAR_DEG 5.0f  // upright within this ...
+#define FAULT_CLEAR_S 2.0f    // ... for this long clears FAULT to IDLE
 #define WATCHDOG_TIMEOUT_MS 100
 
 // core0 -> core1 command queue depth. `load` sends every parameter, the IMU

@@ -34,3 +34,25 @@ bool arm_gate_mount_accepted(uint32_t current, uint32_t requested, bool running)
     return !running && (requested == IMU_MOUNT_UP || requested == IMU_MOUNT_DOWN) &&
            requested != current;
 }
+
+bool arm_gesture_held_off(uint32_t now_tick, uint32_t until_tick)
+{
+    return (int32_t)(until_tick - now_tick) > 0;
+}
+
+uint32_t arm_holdoff_extend(uint32_t now_tick, uint32_t until_tick, float seconds,
+                            uint32_t ticks_per_s)
+{
+    if (!(seconds > 0.0f)) {  // also rejects NaN
+        return until_tick;
+    }
+    if (seconds > ARM_HOLDOFF_MAX_S) {
+        seconds = ARM_HOLDOFF_MAX_S;
+    }
+    const uint32_t wanted = now_tick + (uint32_t)(seconds * (float)ticks_per_s);
+    // Never shorten a hold-off already running past `wanted`.
+    if (arm_gesture_held_off(now_tick, until_tick) && (int32_t)(until_tick - wanted) > 0) {
+        return until_tick;
+    }
+    return wanted;
+}
