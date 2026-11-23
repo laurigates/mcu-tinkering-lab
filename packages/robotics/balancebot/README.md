@@ -71,10 +71,10 @@ set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual
 ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
 mount down           # GY-521 fitted component side down (disarmed only); `mount up` is the default
-set trim 1.8         # pitch trim, deg: makes the balance point read 0 (see "Pitch trim")
+trim capture         # hold still at the balance point 2 s: sets the pitch trim (see "Pitch trim")
 arm | disarm         # start/stop balancing (or hold upright 3 s to auto-arm)
 rate l 800           # open-loop motor bench test (disarmed only)
-cal                  # gyro bias calibration (keep the robot still)
+cal                  # gyro bias calibration (keep the robot still); reports ok or moved
 save                 # persist gains to flash (survives power cycle)
 load                 # reload the saved params, gains and mount from flash (disarmed only)
 ```
@@ -126,14 +126,27 @@ at a pitch other than 0. The controllers, the 3 s auto-arm window (±1°) and
 the tilt cutoff all work from 0, so the robot then drives to correct a lean
 that is not there, and may never auto-arm. `trim` moves 0 to the balance point:
 
-1. `set trim 0`, `stream on`, and hold the robot still where it balances.
-2. Read `angle_deg` there, say 1.8.
-3. `set trim 1.8`, check that the same pose now reads about 0, then `save`.
+1. Disarmed, hold the robot still where it balances and run `trim capture`
+   (`just balancebot::cli "trim capture" save`).
+2. For 2 s it averages the pitch; the trim becomes the current trim plus that
+   average, so running it again only corrects what is left.
 
-`trim` is subtracted from every pitch sample, so telemetry shows the trimmed
-angle; with a trim already set, add the residual reading to it. It is limited
-to ±10° and can be changed while armed. Records saved before PARAM_VERSION 4
-load with `trim 0`.
+It refuses, leaving the trim unchanged, when the robot moved during the 2 s,
+when the result would pass ±10° (usually a wrong `mount`), or when the
+hold-upright gesture arms the robot first (the pose already read within ±1°
+for 3 s). `set trim <deg>` sets it by hand. `trim` is subtracted from every
+pitch sample, so telemetry shows the trimmed angle. It is limited to ±10° and
+can be changed while armed. Records saved before PARAM_VERSION 4 load with
+`trim 0`.
+
+### Gyro calibration
+
+The gyro bias is measured at boot, over 1 s with the robot at rest. If the
+gyro or accel spreads more than a still robot would in that second (3 °/s
+or 0.1 g peak to peak), the window is discarded and repeated, up to five
+times; after that the robot runs with the last good bias, or none. `stat`
+shows the result on its `gyro cal:` line, and `cal` repeats it on demand,
+reporting `OK` or that the robot moved.
 
 `arm` is refused while the robot rests with the mounted Z axis reading below
 -0.5 g (more than 120° from upright), because at rest that means the setting

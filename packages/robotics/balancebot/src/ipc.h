@@ -125,6 +125,10 @@ typedef struct {
     // count across an `arm` to report a refusal its own check did not catch.
     uint32_t arm_refusals;
     float arm_refused_up_g;
+    // Last gyro calibration's result (imu_cal_status_t) and how many have
+    // run, boot retries included; core 0 compares the count across a `cal`.
+    uint8_t gyro_cal;
+    uint32_t gyro_cal_count;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H
