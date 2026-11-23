@@ -369,12 +369,13 @@ Secrets:
   for the tunnel connector, so no direct connection can set that header. The
   projection holds capability URLs and token hashes and is handled like a
   secret: owner-only file mode, never logged.
-- **GitHub.** Dispatch uses a dedicated GitHub App installed only on this
-  repo, with Actions: write, Pull requests: read and Metadata: read. The
-  concierge holds the App's private key and mints a one-hour installation token
-  per call. A fine-grained PAT is not an option: this repo belongs to a personal
-  account, and GitHub gives a collaborator write on such a repo only through a
-  classic PAT.
+- **GitHub.** Dispatch uses a dedicated GitHub App, `teuvo-concierge` (bot
+  login `teuvo-concierge[bot]`), installed only on this repo, with Actions:
+  write, Pull requests: read and Metadata: read. The concierge holds the
+  App's private key and mints a one-hour installation token per call. A
+  fine-grained PAT is not an option: this repo belongs to a personal account,
+  and GitHub gives a collaborator write on such a repo only through a classic
+  PAT.
 - **Guards on other workflows.** Actions: write reaches every dispatchable
   workflow, and lets the holder re-run past runs. So every workflow that runs
   Claude or spends gets a job-level `if:` that exits when
@@ -393,7 +394,10 @@ Secrets:
     `contents: write` token.
 
   A re-run uses the original run's workflow file and is allowed for 30 days,
-  so these guards land at least 30 days before the App is created.
+  so these guards land at least 30 days before the App is installed. The App
+  was registered on 2026-11-23, uninstalled and with no private key, to
+  reserve its name; an uninstalled App has no installation token, so it can
+  neither dispatch nor re-run anything.
 - **Mail.** An SMTP or mail-API credential, used only by the concierge.
 - **The robot** holds only its broker credentials.
 
@@ -646,7 +650,7 @@ not the overlay.
 
 1. **The workflow guards** in FR-026, with the `build-firmware.yml` input fix
    (#855, step 1). They depend on nothing else and must be at least 30 days
-   old before the dispatch App is created.
+   old before the dispatch App is installed.
 2. **The TTS model migration** (ADR-028 FR-043, #844).
    `gemini-3.1-flash-tts-preview` has a listed earliest shutdown of 2026-11-17
    (ai.google.dev deprecations, 2026-10-22).

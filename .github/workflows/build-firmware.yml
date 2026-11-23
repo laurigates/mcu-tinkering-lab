@@ -31,8 +31,13 @@ jobs:
   # A workflow_dispatch tag is free text from anyone holding Actions: write;
   # it reaches run: scripts only through env:, never through ${{ }} (#855,
   # tools/test_workflows.py).
+  #
+  # teuvo-concierge[bot] holds Actions: write (PRD-014 FR-026). A run it
+  # dispatches or re-runs stops here, and every other job needs this one, so
+  # nothing redeploys the flasher or the OTA manifest.
   resolve-tag:
     name: Check the release tag
+    if: github.triggering_actor != 'teuvo-concierge[bot]'
     runs-on: ubuntu-latest
     permissions: {}
     outputs:

@@ -18,6 +18,9 @@ permissions:
 
 jobs:
   resolve-conflicts:
+    # teuvo-concierge[bot] holds Actions: write (PRD-014 FR-026); a run it
+    # dispatches or re-runs does not start Claude.
+    if: github.triggering_actor != 'teuvo-concierge[bot]'
     # The scopes reusable-auto-resolve-conflicts.yml declares at its workflow
     # level. A called workflow gets no more than its caller job grants, so a
     # narrower block here fails the run at startup.
