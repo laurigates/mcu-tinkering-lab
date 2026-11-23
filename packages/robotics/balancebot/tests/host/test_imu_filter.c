@@ -10,17 +10,19 @@ static void test_accel_pitch(void)
 {
     // Level: gravity entirely on the up axis.
     assert(fabsf(imu_filter_accel_pitch_deg(0.0f, 1.0f)) < 1e-4f);
-    // 45 degrees: equal forward and up components.
-    assert(fabsf(imu_filter_accel_pitch_deg(1.0f, 1.0f) - 45.0f) < 1e-3f);
-    // Sign follows the forward axis.
-    assert(imu_filter_accel_pitch_deg(-0.5f, 1.0f) < 0.0f);
+    // Leaning forward 45 degrees: the forward axis points partly down, so it
+    // reads -sin(45) while up reads +cos(45).
+    assert(fabsf(imu_filter_accel_pitch_deg(-1.0f, 1.0f) - 45.0f) < 1e-3f);
+    // A positive forward reading is a backward lean.
+    assert(imu_filter_accel_pitch_deg(0.5f, 1.0f) < 0.0f);
 }
 
 static void test_first_sample_snaps(void)
 {
     imu_filter_t f;
     imu_filter_init(&f, 0.98f);
-    float pitch = imu_filter_update(&f, 1.0f, 1.0f, 0.0f, 0.002f);
+    // Leaning forward 45 degrees (forward axis reads -sin, up reads +cos).
+    float pitch = imu_filter_update(&f, -1.0f, 1.0f, 0.0f, 0.002f);
     assert(fabsf(pitch - 45.0f) < 1e-3f);
 }
 
@@ -63,8 +65,12 @@ static void test_reset(void)
 
 // What the accelerometer's X and Z read for a body tilt `theta_rad` (forward
 // positive), with the sensor turned `mount_rad` about Y relative to the body.
-// Built from the rotation, not from imu_mount_accel(), so the test cannot agree
-// with itself: the body reads (sin, cos) on (forward, up); a sensor turned by
+// Built from the physics, not from imu_mount_accel() or the filter, so the test
+// cannot agree with itself. An accelerometer at rest reads the reaction to
+// gravity, +1 g along world up; leaning forward tips the body's forward axis
+// down, so the body reads (-sin, cos) on (forward, up). A gyro about Y (which
+// points left: X forward, Z up, right-handed) reads +dtheta/dt for the same
+// lean, since positive rotation about Y carries Z toward X. A sensor turned by
 // phi about Y reads x' = x cos(phi) + z sin(phi), z' = -x sin(phi) + z cos(phi).
 typedef struct {
     float x;
@@ -73,7 +79,7 @@ typedef struct {
 
 static accel_xz_t sensor_accel(double theta_rad, double mount_rad)
 {
-    const double fwd = sin(theta_rad);
+    const double fwd = -sin(theta_rad);
     const double up = cos(theta_rad);
     return (accel_xz_t){
         .x = (float)(fwd * cos(mount_rad) + up * sin(mount_rad)),
@@ -105,6 +111,28 @@ static void test_flipped_unmapped_reads_180(void)
 // fitted component side down (turned 180 degrees about Y) gives the same
 // pitch once each is mapped with its own mounting, tick for tick. Gyro Y is
 // the rotation axis, so both boards read the same rate.
+// Falling forward, the accel angle and the gyro rate must agree in sign, or
+// the fusion fights itself: the gyro pushes one way, the accel pulls the
+// other, and the estimate settles near the accel's value with the sign
+// inverted against the rate. Driven by the physics model, a forward lean at
+// 20 deg/s from level is tracked within a fraction of a degree, positive.
+static void test_accel_and_gyro_agree_falling_forward(void)
+{
+    imu_filter_t f;
+    imu_filter_init(&f, 0.98f);
+    const float dt = 0.002f;
+    double theta_deg = 0.0;
+    float pitch = 0.0f;
+    for (int i = 0; i < 500; i++) {  // 1 s at 20 deg/s: level to 20 deg forward
+        theta_deg += 20.0 * dt;
+        accel_xz_t a = sensor_accel(theta_deg * DEG, 0.0);
+        imu_body_accel_t b = imu_mount_accel(IMU_MOUNT_UP, a.x, a.z);
+        pitch = imu_filter_update(&f, b.forward_g, b.up_g, 20.0f, dt);
+        assert(fabsf(pitch - (float)theta_deg) < 0.2f);
+    }
+    assert(pitch > 19.8f);
+}
+
 static void test_flipped_mount_matches_normal(void)
 {
     imu_filter_t up;
@@ -239,6 +267,7 @@ int main(void)
     test_reset();
     test_mount_up_is_identity();
     test_flipped_unmapped_reads_180();
+    test_accel_and_gyro_agree_falling_forward();
     test_flipped_mount_matches_normal();
     test_gravity_mount_up_upright_allowed();
     test_gravity_mount_up_face_down_refused();
