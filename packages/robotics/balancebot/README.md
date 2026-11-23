@@ -134,6 +134,25 @@ Change it only while disarmed; `stat` shows the mounting core 1 applies. With
 the right setting a level board reads about 0° and tilting forward reads
 positive. Records saved by older firmware load as `mount up`.
 
+### Status LEDs
+
+The yellow user LED blinks slowly in IDLE, stays on in RUN and blinks fast
+in FAULT. The XIAO's RGB LED helps you find the auto-arm window by eye. It
+uses the trimmed angle, the same one the gesture uses:
+
+| RGB | Meaning |
+|---|---|
+| dim blue | IDLE, more than 5° from upright |
+| yellow | within 5°: getting close |
+| green, brightening | inside the ±1° window; full brightness when the 3 s hold arms it |
+| solid green | RUN |
+| purple | auto-arm held off (after `disarm` or `trim capture`) |
+| red, blinking | FAULT |
+| red, solid | IMU not responding |
+| cyan, pulsing | core 1 starting (IMU init, gyro calibration) |
+
+Brightness is capped at about 16 % of full scale.
+
 ### Pitch trim
 
 A module that sits a degree or two off parallel to the carrier, or a robot

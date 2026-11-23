@@ -139,6 +139,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     __compiler_memory_barrier();
     snapshot.tick = tick;
     snapshot.state = (uint8_t)state;
+    snapshot.gesture_ticks = gesture_ticks;
     snapshot.imu_ok = imu_ok;
     snapshot.save_ok = save_ok;
     snapshot.save_count = save_count;

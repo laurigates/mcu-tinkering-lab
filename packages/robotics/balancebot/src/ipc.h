@@ -102,11 +102,12 @@ typedef struct {
 // (odd = write in progress). Core0 re-reads until it sees a stable even seq.
 typedef struct {
     uint32_t seq;
-    uint32_t tick;        // control-loop tick counter
-    uint8_t state;        // balance_state_t
-    bool imu_ok;          // last IMU read succeeded
-    bool save_ok;         // result of the last CMD_SAVE
-    uint32_t save_count;  // increments on every completed CMD_SAVE
+    uint32_t tick;           // control-loop tick counter
+    uint8_t state;           // balance_state_t
+    uint32_t gesture_ticks;  // consecutive ticks inside the auto-arm (or FAULT-clear) window
+    bool imu_ok;             // last IMU read succeeded
+    bool save_ok;            // result of the last CMD_SAVE
+    uint32_t save_count;     // increments on every completed CMD_SAVE
     float pitch_deg;
     float gyro_dps;        // pitch rate
     float rate_cmd_sps;    // commanded wheel rate (signed)

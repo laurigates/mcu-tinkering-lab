@@ -21,6 +21,8 @@
 #define PIN_STATUS_LED 25       // User LED, active low
 #define PIN_BATT_ADC 29         // ADC3, behind a /2 divider
 #define PIN_BATT_ADC_ENABLE 19  // Drive high to connect the divider
+#define PIN_RGB_DATA 22         // RGB LED data (WS2812-type, via a level shifter); PIO1
+#define PIN_RGB_POWER 23        // RGB LED 5 V load switch enable (NEO_PWR), active high
 
 // Carrier PCB only: pack voltage through a 100k/22k divider (ratio 0.1803:
 // 12.6 V, a full 3S pack, reads 2.27 V; 16.8 V, a full 4S pack, 3.03 V). The

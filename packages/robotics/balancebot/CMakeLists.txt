@@ -32,12 +32,14 @@ add_executable(balancebot
     src/param_record.c
     src/param_store.c
     src/pid.c
+    src/status_color.c
     src/status_led.c
     src/stepper.c
     src/telemetry.c
 )
 
 pico_generate_pio_header(balancebot ${CMAKE_CURRENT_LIST_DIR}/src/stepper.pio)
+pico_generate_pio_header(balancebot ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 
 target_include_directories(balancebot PRIVATE src)
 target_compile_definitions(balancebot PRIVATE
