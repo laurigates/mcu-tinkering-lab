@@ -186,6 +186,14 @@ why = "the XIAO's onboard battery-sense divider, not brought out to a header"
 role = "PIN_BATT_ADC_ENABLE"
 why = "switches the XIAO's onboard battery-sense divider, not brought out to a header"
 
+[[undrawn]]
+role = "PIN_RGB_DATA"
+why = "the XIAO's onboard RGB LED data line (GPIO22 through its level shifter), not brought out to a header"
+
+[[undrawn]]
+role = "PIN_RGB_POWER"
+why = "switches the XIAO's onboard RGB LED supply (NEO_PWR), not brought out to a header"
+
 # --- Power --------------------------------------------------------------------
 # The supply side of the join, emitted as WIRING.md's power diagram. Voltages
 # beyond the rail names, the 100 µF bulk capacitors and the common ground stay

@@ -57,7 +57,7 @@ int main(void)
 
         balance_snapshot_t s;
         balance_control_get_snapshot(&s);
-        status_led_poll((balance_state_t)s.state);
+        status_led_poll(&s);
 
         sleep_ms(1);
     }
