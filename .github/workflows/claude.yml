@@ -25,7 +25,11 @@ jobs:
       issues: write
       id-token: write
       actions: read
+    # teuvo-concierge[bot] holds Actions: write (PRD-014 FR-026), so it can
+    # re-run a past run of this workflow; a re-run it triggers does not start
+    # Claude.
     if: |
+      github.triggering_actor != 'teuvo-concierge[bot]' &&
       github.event.sender.type != 'Bot' &&
       (
         (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||

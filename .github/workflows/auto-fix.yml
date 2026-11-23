@@ -26,7 +26,9 @@ jobs:
   fan-out:
     name: Dispatch auto-fix for all failing PRs
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && inputs.pr_number == 'all'
+    if: >
+      github.event_name == 'workflow_dispatch' && inputs.pr_number == 'all' &&
+      github.triggering_actor != 'teuvo-concierge[bot]'
     permissions:
       actions: write
     steps:
@@ -64,11 +66,17 @@ jobs:
   # admitted, matching that list and the reusable's documented caller, so a
   # failure on a commit Claude pushed still gets auto-fix. A human push onto
   # a bot's branch makes the actor that human, so it still gets auto-fix too.
+  #
+  # teuvo-concierge[bot] holds Actions: write (PRD-014 FR-026), so it can
+  # dispatch or re-run workflows. Neither a run it triggers here nor a failed
+  # run it triggered elsewhere (workflow_run.triggering_actor) starts Claude.
   gather-context:
     name: Gather failure context
     runs-on: ubuntu-latest
     if: >
-      (github.event_name == 'workflow_dispatch' && inputs.pr_number != 'all') ||
+      github.triggering_actor != 'teuvo-concierge[bot]' &&
+      github.event.workflow_run.triggering_actor.login != 'teuvo-concierge[bot]' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.pr_number != 'all') ||
       (
         github.event_name == 'workflow_run' &&
         (github.event.workflow_run.actor.type != 'Bot' ||
@@ -76,7 +84,7 @@ jobs:
          github.event.workflow_run.actor.login == 'claude') &&
         github.event.workflow_run.conclusion == 'failure' &&
         !startsWith(github.event.workflow_run.head_commit.message, 'fix(auto):')
-      )
+      ))
     permissions:
       actions: read
       pull-requests: read

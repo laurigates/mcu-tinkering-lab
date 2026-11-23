@@ -751,6 +751,51 @@ class BluepadTagTest(unittest.TestCase):
                 self.assertFalse("bluepad32.git" in text, "clones Bluepad32 itself")
 
 
+CONCIERGE_BOT = "teuvo-concierge[bot]"
+CONCIERGE_GUARD = f"github.triggering_actor != '{CONCIERGE_BOT}'"
+# Workflows that run Claude or redeploy, which the concierge App's Actions:
+# write could dispatch or re-run (PRD-014 FR-026, #855).
+CONCIERGE_GUARDED = (
+    "auto-fix.yml",
+    "auto-resolve-conflicts.yml",
+    "claude.yml",
+    "build-firmware.yml",
+)
+
+
+class ConciergeGuardTest(unittest.TestCase):
+    def test_every_job_is_guarded_or_needs_a_guarded_job(self):
+        for name in CONCIERGE_GUARDED:
+            jobs = load(name)["jobs"]
+            guarded = {
+                j
+                for j, job in jobs.items()
+                if CONCIERGE_GUARD in str(job.get("if", ""))
+            }
+            self.assertTrue(guarded, f"{name}: no job carries {CONCIERGE_GUARD!r}")
+            for job_id, job in jobs.items():
+                if job_id in guarded:
+                    continue
+                self.assertNotIn("always()", str(job.get("if", "")), f"{name}:{job_id}")
+                seen, todo = set(), set(needs_of(job))
+                while todo:
+                    dep = todo.pop()
+                    if dep not in seen:
+                        seen.add(dep)
+                        todo |= needs_of(jobs[dep])
+                self.assertTrue(
+                    seen & guarded,
+                    f"{name}:{job_id} lacks the concierge guard and needs no job with it",
+                )
+
+    def test_auto_fix_also_skips_runs_the_app_triggered_elsewhere(self):
+        condition = str(load("auto-fix.yml")["jobs"]["gather-context"]["if"])
+        self.assertIn(
+            f"github.event.workflow_run.triggering_actor.login != '{CONCIERGE_BOT}'",
+            condition,
+        )
+
+
 class ClaudeCallersTest(unittest.TestCase):
     def test_auto_fix_pushes_with_the_release_please_app(self):
         jobs = load("auto-fix.yml")["jobs"]
