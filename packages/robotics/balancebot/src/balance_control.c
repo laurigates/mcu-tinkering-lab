@@ -50,6 +50,14 @@ static arm_gate_t arm_gate;     // last raw sample and CMD_ARM's gravity gate
 static bool save_ok;
 static uint32_t save_count;
 static bool watchdog_started;
+static imu_cal_status_t gyro_cal = IMU_CAL_PENDING;
+static uint32_t gyro_cal_count;
+
+static void calibrate_gyro(void)
+{
+    gyro_cal = mpu6050_calibrate_gyro(IMU_CAL_SAMPLES);
+    gyro_cal_count++;
+}
 
 static void apply_gains(void)
 {
@@ -141,6 +149,8 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.gravity = arm_gate.check;
     snapshot.arm_refusals = arm_gate.refusals;
     snapshot.arm_refused_up_g = arm_gate.refused_up_g;
+    snapshot.gyro_cal = (uint8_t)gyro_cal;
+    snapshot.gyro_cal_count = gyro_cal_count;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -259,7 +269,7 @@ static void handle_command(const balance_cmd_t *cmd)
             break;
         case CMD_CALIBRATE:
             if (state == BAL_STATE_IDLE) {
-                mpu6050_calibrate_gyro(IMU_CAL_SAMPLES);
+                calibrate_gyro();
                 imu_filter_reset(&filter);
             }
             break;
@@ -359,7 +369,15 @@ void balance_control_core1_main(void)
 
     bool imu_present = mpu6050_init();
     if (imu_present) {
-        mpu6050_calibrate_gyro(IMU_CAL_SAMPLES);
+        // Powered on while handled, one window would average the motion into
+        // the bias; retry a few seconds, then go on with what we have
+        // (`stat` shows it, `cal` repeats it).
+        for (int i = 0; i < IMU_CAL_BOOT_TRIES; i++) {
+            calibrate_gyro();
+            if (gyro_cal == IMU_CAL_OK) {
+                break;
+            }
+        }
     }
 
     uint32_t tick = 0;

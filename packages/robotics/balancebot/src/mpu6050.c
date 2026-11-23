@@ -103,12 +103,12 @@ bool mpu6050_read(mpu6050_sample_t *out)
     return true;
 }
 
-void mpu6050_calibrate_gyro(int samples)
+imu_cal_status_t mpu6050_calibrate_gyro(int samples)
 {
-    float sum[3] = {0.0f, 0.0f, 0.0f};
-    int got = 0;
-    const float saved[3] = {gyro_bias_dps[0], gyro_bias_dps[1], gyro_bias_dps[2]};
-    gyro_bias_dps[0] = gyro_bias_dps[1] = gyro_bias_dps[2] = 0.0f;
+    gyro_cal_t cal;
+    gyro_cal_init(&cal);
+    float bias[3] = {gyro_bias_dps[0], gyro_bias_dps[1], gyro_bias_dps[2]};
+    gyro_bias_dps[0] = gyro_bias_dps[1] = gyro_bias_dps[2] = 0.0f;  // read raw
 
     for (int i = 0; i < samples; i++) {
         mpu6050_sample_t s;
@@ -117,22 +117,15 @@ void mpu6050_calibrate_gyro(int samples)
         watchdog_update();
         sleep_ms(2);
         if (mpu6050_read(&s)) {
-            for (int j = 0; j < 3; j++) {
-                sum[j] += s.gyro_dps[j];
-            }
-            got++;
+            gyro_cal_add(&cal, s.accel_g, s.gyro_dps);
         }
     }
-    if (got > samples / 2) {
-        for (int j = 0; j < 3; j++) {
-            gyro_bias_dps[j] = sum[j] / (float)got;
-        }
-    } else {
-        // Too many read failures — keep the previous bias.
-        for (int j = 0; j < 3; j++) {
-            gyro_bias_dps[j] = saved[j];
-        }
+    // On anything but IMU_CAL_OK, bias still holds the previous one.
+    const imu_cal_status_t st = gyro_cal_finish(&cal, samples, bias);
+    for (int j = 0; j < 3; j++) {
+        gyro_bias_dps[j] = bias[j];
     }
+    return st;
 }
 
 bool mpu6050_data_ready(void)
