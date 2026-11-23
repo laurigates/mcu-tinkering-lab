@@ -160,5 +160,8 @@ straps.
 3. Motor power, wheels off the ground: `rate l 400`, `rate r 400` — both
    spin the same direction (as the robot would drive); reverse cleanly
    with `rate l -400`.
-4. `disarm`, robot upright on the ground, `arm` (or hold upright 3 s) —
-   tune per the README procedure.
+4. The signs: tilting toward FWD reads positive, and `rate -400` rolls
+   toward FWD ([`BRINGUP.md`](BRINGUP.md) §4).
+5. `disarm`, robot upright on the ground, `arm` (or hold upright 3 s) —
+   tune per the README "Tuning loop". Not with the wheels in the air: the
+   LQR runs away there by design (BRINGUP §4).
