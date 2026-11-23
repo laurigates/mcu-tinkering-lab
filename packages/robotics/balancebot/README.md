@@ -73,6 +73,9 @@ ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
 mount down           # GY-521 fitted component side down (disarmed only); `mount up` is the default
 trim capture         # hold still at the balance point 2 s: sets the pitch trim (see "Pitch trim")
 arm | disarm         # start/stop balancing (or hold upright 3 s to auto-arm)
+drive 0.2            # while balancing: 0.2 m/s forward for 2 s, then ramps to a stop
+drive 0.2 0.05 5     # ... plus 0.05 m/s turn (left wheel +, right -; > 0 = clockwise), 5 s
+drive 0 0.1          # spin in place; `drive stop` ramps speed and turn to 0
 rate l 800           # open-loop motor bench test (disarmed only)
 cal                  # gyro bias calibration (keep the robot still); reports ok or moved
 save                 # persist gains to flash (survives power cycle)

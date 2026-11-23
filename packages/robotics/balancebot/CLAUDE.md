@@ -46,11 +46,11 @@ before the battery). The procedure itself is in README "Tuning loop".
 
 ```bash
 just balancebot::build   # containerized, → build/balancebot.uf2
-just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal
+just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal, drive
 ```
 
 `pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c`, `param_record.c`, `arm_gate.c`,
-`cli_gate.c` and `imu_cal.c` are **pure C with no SDK includes** so the host tests can compile
+`cli_gate.c`, `imu_cal.c` and `drive.c` are **pure C with no SDK includes** so the host tests can compile
 them — keep them that way. The gyro calibration's stillness judgement and
 `trim capture`'s average live in `imu_cal.c`; keep `mpu6050_calibrate_gyro()`
 and `cmd_trim()` calling it. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live

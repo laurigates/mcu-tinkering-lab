@@ -663,6 +663,64 @@ static void cmd_arm(void)
     }
 }
 
+// A whole token as a finite float, or false.
+static bool parse_float(const char *s, float *out)
+{
+    char *end;
+    float v = strtof(s, &end);
+    if (end == s || *end != '\0' || !isfinite(v)) {
+        return false;
+    }
+    *out = v;
+    return true;
+}
+
+// `drive <speed m/s> [turn m/s] [seconds]` | `drive stop`. Core 1 ramps,
+// clamps and times out (drive.h); this converts to steps/s, refuses while not
+// balancing, and says when a value will be clamped.
+static void cmd_drive(const char *speed_str, const char *turn_str, const char *sec_str)
+{
+    float speed = 0.0f;
+    float turn = 0.0f;
+    float seconds = DRIVE_DEFAULT_S;
+    const bool stop = speed_str != NULL && strcmp(speed_str, "stop") == 0;
+    if (!stop && (speed_str == NULL || !parse_float(speed_str, &speed) ||
+                  (turn_str != NULL && !parse_float(turn_str, &turn)) ||
+                  (sec_str != NULL && !parse_float(sec_str, &seconds)))) {
+        printf("usage: drive <speed m/s> [turn m/s] [seconds] | drive stop\n");
+        return;
+    }
+    if (stop) {
+        seconds = 0.0f;
+    }
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    if (!stop && s.state != BAL_STATE_RUN) {
+        printf("ERR: state %s — drive needs the robot balancing; arm first\n", state_name(s.state));
+        return;
+    }
+    const float spm = lqr_steps_per_metre(mirror->steps_per_rev, mirror->wheel_diam_m);
+    const float speed_max = DRIVE_SPEED_MAX_FRAC * mirror->max_rate_sps / spm;
+    const float turn_max = DRIVE_TURN_MAX_FRAC * mirror->max_rate_sps / spm;
+    balance_cmd_t cmd = {
+        .cmd = CMD_DRIVE,
+        .drive = {.speed_sps = speed * spm, .turn_sps = turn * spm, .seconds = seconds}};
+    if (!balance_control_send_cmd(&cmd)) {
+        printf("ERR: command queue full — drive not sent\n");
+        return;
+    }
+    if (stop) {
+        printf("OK stopping (ramps down)\n");
+        return;
+    }
+    if (fabsf(speed) > speed_max || fabsf(turn) > turn_max || seconds > DRIVE_MAX_S ||
+        seconds < 0.0f) {
+        printf("note: clamped to speed <= %.2f m/s, turn <= %.2f m/s, 0..%.0f s\n",
+               (double)speed_max, (double)turn_max, (double)DRIVE_MAX_S);
+    }
+    printf("OK\n");
+}
+
 static float battery_volts(void)
 {
     gpio_put(PIN_BATT_ADC_ENABLE, 1);
@@ -721,6 +779,9 @@ static void cmd_stat(void)
     printf("angle:    %.2f deg (setpoint %.2f)\n", (double)s.pitch_deg, (double)s.angle_setpoint);
     printf("rate:     %.0f steps/s\n", (double)s.rate_cmd_sps);
     printf("pos:      %.3f m since arm\n", (double)s.pos_m);
+    printf("drive:    speed %.2f m/s, turn %.2f m/s, %.1f s left\n",
+           (double)(s.drive_speed_sps / spm), (double)(s.drive_turn_sps / spm),
+           (double)s.drive_remaining_s);
     if (s.lqr_k_valid) {
         printf("K core1:  [%.5g %.5g %.5g %.5g]\n", (double)s.lqr_K[0], (double)s.lqr_K[1],
                (double)s.lqr_K[2], (double)s.lqr_K[3]);
@@ -756,6 +817,10 @@ static void cmd_help(void)
     printf("                       the axle (8d18cd8d carrier); disarmed only\n");
     printf("  stream on|off [hz]   CSV telemetry (default %d Hz)\n", TELEMETRY_DEFAULT_HZ);
     printf("  arm | disarm         start/stop balancing\n");
+    printf("  drive <m/s> [turn m/s] [s]  drive while balancing; turn > 0 = clockwise,\n");
+    printf("                       left wheel +turn, right -turn (drive 0 0.1 spins);\n");
+    printf("                       stops after %.0f s by default\n", (double)DRIVE_DEFAULT_S);
+    printf("  drive stop           ramp speed and turn to 0\n");
     printf("  rate <l|r> <sps>     open-loop motor test (disarmed only)\n");
     printf("  cal                  gyro bias calibration (robot still!)\n");
     printf("  trim [capture]       show the pitch trim, or set it from 2 s held still\n");
@@ -803,6 +868,10 @@ static void handle_line(char *l)
         }
     } else if (strcmp(tok, "arm") == 0) {
         cmd_arm();
+    } else if (strcmp(tok, "drive") == 0) {
+        const char *speed = strtok(NULL, " \t");
+        const char *turn = strtok(NULL, " \t");
+        cmd_drive(speed, turn, strtok(NULL, " \t"));
     } else if (strcmp(tok, "disarm") == 0) {
         balance_cmd_t cmd = {.cmd = CMD_DISARM};
         balance_control_send_cmd(&cmd);
