@@ -131,6 +131,10 @@ control loop never blocks and never allocates.
 
 - `angle = α·(angle + gyro·dt) + (1−α)·atan2(ax, az)` with α ≈ 0.98 at
   500 Hz is standard, deterministic, and tunable with one parameter.
+  *Amended 2026-11-23:* the accel term is `atan2(−ax, az)`, which shares the
+  gyro's forward-positive sign (#1242). The default α is 0.996: 0.98 at 500 Hz
+  is a 0.1 s time constant, not the usual 0.5 s, and on the rev1 robot it let
+  the robot's own acceleration, read as tilt, drive a ~1 Hz rock.
 - Steppers give no torque feedback; the natural command is velocity.
   Balancing force is proportional to wheel *acceleration*, so the PID
   output is treated as acceleration and integrated to a step rate —

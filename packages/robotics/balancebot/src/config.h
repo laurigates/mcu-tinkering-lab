@@ -20,7 +20,12 @@
 #define IMU_PITCH_SIGN (+1.0f)  // flip if the robot drives into the fall
 
 // Default filter / PID parameters (runtime-tunable)
-#define DEFAULT_FILTER_ALPHA 0.98f
+// The complementary filter's time constant is tau = dt * alpha / (1 - alpha),
+// so alpha depends on CONTROL_LOOP_HZ: 0.996 at 500 Hz is tau ~0.5 s. The
+// earlier 0.98 (a 100 Hz figure) gave 0.1 s, which let the accelerometer,
+// reading the robot's own back-and-forth acceleration as tilt, drive a ~1 Hz
+// rock on the rev1 robot (2026-11-23 captures: angle RMS 1.40 -> 0.23 deg).
+#define DEFAULT_FILTER_ALPHA 0.996f
 #define DEFAULT_ANGLE_KP 28.0f  // (steps/s^2) per degree
 #define DEFAULT_ANGLE_KI 0.0f
 #define DEFAULT_ANGLE_KD 1.2f
