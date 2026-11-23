@@ -65,7 +65,7 @@ just balancebot::monitor        # watch output only; it sends nothing you type
 
 ```
 help                 # command list
-stat                 # state, angle, battery, loop time
+stat                 # firmware, state, gains, maxrate, model, calibration, angle, battery, loop time
 stream on 50         # CSV telemetry at 50 Hz (plot with any serial plotter)
 set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual

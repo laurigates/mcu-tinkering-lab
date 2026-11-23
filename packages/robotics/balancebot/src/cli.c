@@ -627,8 +627,19 @@ static void cmd_stat(void)
         // reached its loop, and every field below is a zero, not a reading.
         printf("core 1:   NOT RUNNING — no snapshot since boot; power-cycle the robot\n");
     }
+    printf("fw:       %s\n", BALANCEBOT_VERSION);
     printf("state:    %s\n", state_name(s.state));
     printf("ctrl:     %s\n", ctrl_name(s.ctrl_mode));
+    if (s.ctrl_mode == CTRL_PID) {
+        printf("pid:      kp %g ki %g kd %g  vkp %g vki %g\n", (double)mirror->angle_kp,
+               (double)mirror->angle_ki, (double)mirror->angle_kd, (double)mirror->vel_kp,
+               (double)mirror->vel_ki);
+    }
+    const float spm = lqr_steps_per_metre(mirror->steps_per_rev, mirror->wheel_diam_m);
+    printf("maxrate:  %g steps/s (%.2f m/s)\n", (double)mirror->max_rate_sps,
+           (double)(mirror->max_rate_sps / spm));
+    printf("model:    wheel %g m, %g steps/rev, l_eff %g m\n", (double)mirror->wheel_diam_m,
+           (double)mirror->steps_per_rev, (double)mirror->l_eff_m);
     printf("imu:      %s (mount %s)\n", s.imu_ok ? "ok" : "NOT RESPONDING",
            mount_name(s.imu_mount));
     if (s.imu_bus_recoveries != 0) {
