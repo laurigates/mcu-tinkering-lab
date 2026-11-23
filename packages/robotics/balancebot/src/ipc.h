@@ -129,6 +129,8 @@ typedef struct {
     // run, boot retries included; core 0 compares the count across a `cal`.
     uint8_t gyro_cal;
     uint32_t gyro_cal_count;
+    // Held-I2C-line recoveries since boot (mpu6050_bus_recoveries()).
+    uint32_t imu_bus_recoveries;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H
