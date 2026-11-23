@@ -105,7 +105,17 @@ capture seconds="20" out="": require-port
 # Fit l_eff_m (and the pitch offset) from a capture of the robot balancing on its own
 [group: "tune"]
 fit-leff csv wheel_diam_m steps_per_rev="1600":
-    python3 -I tools/fit_leff.py "{{csv}}" --wheel-diam {{wheel_diam_m}} --steps-per-rev {{steps_per_rev}}
+    python3 -I tools/fit_leff.py "{{ join(invocation_directory(), csv) }}" --wheel-diam {{wheel_diam_m}} --steps-per-rev {{steps_per_rev}}
+
+# Summarise a capture: angle mean/RMS, swing frequency, clamp shares, trim hint
+[group: "tune"]
+analyze csv l_eff_m="0.21" maxrate="4000":
+    python3 -I tools/analyze_capture.py "{{ join(invocation_directory(), csv) }}" --l-eff {{l_eff_m}} --maxrate {{maxrate}}
+
+# LQR gains, poles and clamp lean across r for a model (numpy and scipy through uv)
+[group: "tune"]
+lqr-sweep l_eff_m wheel_diam_m *r:
+    uv run --quiet --with scipy --with numpy python3 tools/lqr_sweep.py --l-eff {{l_eff_m}} --wheel-diam {{wheel_diam_m}} {{ if r != "" { "--r " + r } else { "" } }}
 
 ##########
 # Docs

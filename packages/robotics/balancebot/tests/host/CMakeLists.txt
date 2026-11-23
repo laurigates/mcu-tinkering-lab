@@ -37,3 +37,7 @@ set_source_files_properties(${SRC}/lqr.c PROPERTIES COMPILE_OPTIONS -Wdouble-pro
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME fit_leff
     COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/fit_leff.py --self-test)
+# tools/analyze_capture.py (just balancebot::analyze) finds a known swing and
+# offset in a synthetic capture.
+add_test(NAME analyze_capture
+    COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/analyze_capture.py --self-test)
