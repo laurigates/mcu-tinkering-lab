@@ -677,10 +677,20 @@ static void cmd_stat(void)
 {
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
-    if (s.seq == 0) {
-        // Core 1 publishes every tick; an untouched snapshot means it never
-        // reached its loop, and every field below is a zero, not a reading.
-        printf("core 1:   NOT RUNNING — no snapshot since boot; power-cycle the robot\n");
+    // Core 1 publishes once before its startup, after each boot calibration
+    // try, then every tick. Startup takes IMU init plus up to
+    // IMU_CAL_BOOT_TRIES calibration windows of ~1 s each.
+    const uint32_t uptime_ms = to_ms_since_boot(get_absolute_time());
+    const bool startup_overdue = uptime_ms > 1000u * (IMU_CAL_BOOT_TRIES + 5u);
+    if (s.seq == 0 || s.core1_starting) {
+        if (startup_overdue) {
+            printf("core 1:   STUCK in startup after %lu s — power-cycle the robot\n",
+                   (unsigned long)(uptime_ms / 1000u));
+        } else {
+            printf("core 1:   starting (IMU init, gyro calibration; up to %d s) — "
+                   "readings below are not live yet\n",
+                   IMU_CAL_BOOT_TRIES + 1);
+        }
     }
     printf("fw:       %s\n", BALANCEBOT_VERSION);
     printf("state:    %s\n", state_name(s.state));

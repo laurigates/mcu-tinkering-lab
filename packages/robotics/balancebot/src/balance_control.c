@@ -52,6 +52,7 @@ static uint32_t save_count;
 static bool watchdog_started;
 static imu_cal_status_t gyro_cal = IMU_CAL_PENDING;
 static uint32_t gyro_cal_count;
+static bool core1_starting = true;  // until the loop's first tick
 static uint32_t now_tick;           // the loop's tick, for commands drained in it
 static uint32_t arm_holdoff_until;  // auto-arm gesture ignored before this tick
 
@@ -162,6 +163,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.imu_bus_recoveries = mpu6050_bus_recoveries();
     snapshot.arm_holdoff_ticks =
         arm_gesture_held_off(tick, arm_holdoff_until) ? arm_holdoff_until - tick : 0u;
+    snapshot.core1_starting = core1_starting;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -383,6 +385,9 @@ void balance_control_core1_main(void)
     pid_init(&vel_pid, params.vel_kp, params.vel_ki, 0.0f, MAX_LEAN_OFFSET_DEG,
              MAX_LEAN_OFFSET_DEG);
 
+    // Publish before the slow startup, so `stat` shows core 1 starting rather
+    // than an untouched snapshot that reads like a hang.
+    publish(0, false, 0.0f, 0.0f, 0.0f);
     bool imu_present = mpu6050_init();
     if (imu_present) {
         // Powered on while handled, one window would average the motion into
@@ -390,11 +395,13 @@ void balance_control_core1_main(void)
         // (`stat` shows it, `cal` repeats it).
         for (int i = 0; i < IMU_CAL_BOOT_TRIES; i++) {
             calibrate_gyro();
+            publish(0, false, 0.0f, 0.0f, 0.0f);  // each try's result
             if (gyro_cal == IMU_CAL_OK) {
                 break;
             }
         }
     }
+    core1_starting = false;
 
     uint32_t tick = 0;
     const float dt = CONTROL_DT_S;
