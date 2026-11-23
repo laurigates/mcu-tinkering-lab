@@ -52,6 +52,14 @@ static uint32_t save_count;
 static bool watchdog_started;
 static imu_cal_status_t gyro_cal = IMU_CAL_PENDING;
 static uint32_t gyro_cal_count;
+static uint32_t now_tick;           // the loop's tick, for commands drained in it
+static uint32_t arm_holdoff_until;  // auto-arm gesture ignored before this tick
+
+static void hold_off_arm(float seconds)
+{
+    arm_holdoff_until =
+        arm_holdoff_extend(now_tick, arm_holdoff_until, seconds, (uint32_t)CONTROL_LOOP_HZ);
+}
 
 static void calibrate_gyro(void)
 {
@@ -152,6 +160,8 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.gyro_cal = (uint8_t)gyro_cal;
     snapshot.gyro_cal_count = gyro_cal_count;
     snapshot.imu_bus_recoveries = mpu6050_bus_recoveries();
+    snapshot.arm_holdoff_ticks =
+        arm_gesture_held_off(tick, arm_holdoff_until) ? arm_holdoff_until - tick : 0u;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -267,6 +277,11 @@ static void handle_command(const balance_cmd_t *cmd)
             break;
         case CMD_DISARM:
             enter_state(BAL_STATE_IDLE);
+            // Disarmed while held upright, the gesture would re-arm it 3 s on.
+            hold_off_arm(ARM_HOLDOFF_AFTER_DISARM_S);
+            break;
+        case CMD_HOLD_OFF_ARM:
+            hold_off_arm(cmd->value);
             break;
         case CMD_CALIBRATE:
             if (state == BAL_STATE_IDLE) {
@@ -388,6 +403,7 @@ void balance_control_core1_main(void)
         wait_for_sample();
         absolute_time_t t0 = get_absolute_time();
 
+        now_tick = tick;
         balance_cmd_t cmd;
         while (queue_try_remove(&cmd_queue, &cmd)) {
             handle_command(&cmd);
@@ -481,8 +497,10 @@ void balance_control_core1_main(void)
                     stepper_set_rate(STEPPER_RIGHT, open_loop_sps[STEPPER_RIGHT],
                                      params.max_rate_sps, dt);
                 }
-                // Arm gesture: held upright for ARM_GESTURE_S.
-                if (imu_ok && fabsf(pitch) < ARM_GESTURE_DEG && !stepper_is_enabled()) {
+                // Arm gesture: held upright for ARM_GESTURE_S, unless held
+                // off (after `disarm` or `trim capture`).
+                if (imu_ok && fabsf(pitch) < ARM_GESTURE_DEG && !stepper_is_enabled() &&
+                    !arm_gesture_held_off(tick, arm_holdoff_until)) {
                     gesture_ticks++;
                     if (gesture_ticks >= (uint32_t)(ARM_GESTURE_S * CONTROL_LOOP_HZ)) {
                         enter_state(BAL_STATE_RUN);

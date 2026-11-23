@@ -130,8 +130,21 @@ static void test_mount_outcome(void)
           "not drained, same mount: still no answer");
 }
 
+static void test_save(void)
+{
+    check(cli_gate_save(true, BAL_STATE_RUN) == CLI_GATE_ARMED, "save in run: refused");
+    check(cli_gate_save(true, BAL_STATE_IDLE) == CLI_GATE_SEND, "save idle: sent");
+    check(cli_gate_save(true, BAL_STATE_FAULT) == CLI_GATE_SEND, "save fault: sent");
+    check(cli_gate_save(false, BAL_STATE_IDLE) == CLI_GATE_BUSY, "save stale: busy");
+    check(cli_save_outcome(3, 4, true) == CLI_SAVE_OK, "count moved, ok");
+    check(cli_save_outcome(3, 4, false) == CLI_SAVE_FAILED, "count moved, failed");
+    check(cli_save_outcome(3, 3, true) == CLI_SAVE_NOT_RUN,
+          "count unchanged: not run, whatever save_ok says from an earlier save");
+}
+
 int main(void)
 {
+    test_save();
     test_arm_stale_snapshot_not_judged();
     test_arm_needs_idle();
     test_arm_fault_without_imu();

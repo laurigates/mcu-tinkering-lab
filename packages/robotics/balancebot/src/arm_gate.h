@@ -35,4 +35,19 @@ bool arm_gate_allows(arm_gate_t *g, uint32_t mount);
 // never while running (the pitch would swing 180 degrees mid-balance).
 bool arm_gate_mount_accepted(uint32_t current, uint32_t requested, bool running);
 
+// Auto-arm hold-off. The hold-upright gesture is ignored while
+// arm_gesture_held_off() is true; an explicit CMD_ARM is not affected. Ticks
+// wrap, so both compare by signed difference.
+#define ARM_HOLDOFF_MAX_S 60.0f
+
+// True while `now_tick` is before `until_tick`.
+bool arm_gesture_held_off(uint32_t now_tick, uint32_t until_tick);
+
+// The hold-off end after a request to hold off `seconds` from `now_tick`:
+// `seconds` is clamped to ARM_HOLDOFF_MAX_S, and a hold-off already running
+// past it is kept, never shortened. A non-positive or NaN `seconds` changes
+// nothing.
+uint32_t arm_holdoff_extend(uint32_t now_tick, uint32_t until_tick, float seconds,
+                            uint32_t ticks_per_s);
+
 #endif  // BALANCEBOT_ARM_GATE_H

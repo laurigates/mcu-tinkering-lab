@@ -64,6 +64,7 @@ typedef enum {
     CMD_SET_LQR_GAINS = 6,   // lqr_K = all four gains in one item (atomic handoff)
     CMD_SET_CONTROLLER = 7,  // ctrl_mode; LQR is refused while no valid K is held
     CMD_SET_IMU_MOUNT = 8,   // imu_mount (imu_mount_t); refused in RUN
+    CMD_HOLD_OFF_ARM = 9,    // value = seconds the auto-arm gesture is ignored
 } command_id_t;
 
 typedef enum {
@@ -131,6 +132,8 @@ typedef struct {
     uint32_t gyro_cal_count;
     // Held-I2C-line recoveries since boot (mpu6050_bus_recoveries()).
     uint32_t imu_bus_recoveries;
+    // Ticks left of the auto-arm hold-off (0 when the gesture can arm).
+    uint32_t arm_holdoff_ticks;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H

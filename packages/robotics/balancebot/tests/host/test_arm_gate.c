@@ -127,6 +127,53 @@ static void test_mount_acceptance(void)
     check(!arm_gate_mount_accepted(IMU_MOUNT_UP, 7u, false), "unknown mount refused");
 }
 
+static void test_holdoff_basic(void)
+{
+    const uint32_t hz = 500;
+    // Nothing held off at boot (until = 0, now = 0).
+    check(!arm_gesture_held_off(0, 0), "boot: not held off");
+    const uint32_t until = arm_holdoff_extend(1000, 0, 5.0f, hz);
+    check(until == 1000 + 2500, "5 s at 500 Hz");
+    check(arm_gesture_held_off(1000, until), "start: held off");
+    check(arm_gesture_held_off(3499, until), "last held-off tick");
+    check(!arm_gesture_held_off(3500, until), "ends on the deadline tick");
+}
+
+static void test_holdoff_never_shortened(void)
+{
+    const uint32_t hz = 500;
+    const uint32_t long_until = arm_holdoff_extend(0, 0, 7.0f, hz);  // a trim capture
+    // A disarm 1 s in asks for 5 s: the 7 s one runs past it and is kept.
+    check(arm_holdoff_extend(500, long_until, 5.0f, hz) == long_until, "kept");
+    // 3 s in, 5 s more ends later than 7 s: extended.
+    check(arm_holdoff_extend(1500, long_until, 5.0f, hz) == 1500 + 2500, "extended");
+    // An expired hold-off is replaced, not compared.
+    check(arm_holdoff_extend(10000, long_until, 1.0f, hz) == 10500, "expired: replaced");
+}
+
+static void test_holdoff_rejects_bad_requests(void)
+{
+    const uint32_t hz = 500;
+    check(arm_holdoff_extend(100, 42, 0.0f, hz) == 42, "zero: unchanged");
+    check(arm_holdoff_extend(100, 42, -3.0f, hz) == 42, "negative: unchanged");
+    check(arm_holdoff_extend(100, 42, NAN, hz) == 42, "NaN: unchanged");
+    check(arm_holdoff_extend(0, 0, 1e9f, hz) == (uint32_t)(ARM_HOLDOFF_MAX_S * 500.0f),
+          "clamped to the maximum");
+}
+
+// The tick counter wraps after ~99 days at 500 Hz; the signed compare must
+// keep working across it.
+static void test_holdoff_across_wrap(void)
+{
+    const uint32_t hz = 500;
+    const uint32_t now = 0xFFFFFF00u;
+    const uint32_t until = arm_holdoff_extend(now, 0, 5.0f, hz);
+    check(until < now, "wrapped deadline");
+    check(arm_gesture_held_off(now, until), "held off before the wrap");
+    check(arm_gesture_held_off(0x00000010u, until), "held off after the wrap");
+    check(!arm_gesture_held_off(until, until), "ends on the deadline");
+}
+
 int main(void)
 {
     test_same_tick_mount_change_refuses();
@@ -135,6 +182,10 @@ int main(void)
     test_failed_read_refuses_nothing();
     test_moving_sample_not_refused();
     test_mount_acceptance();
+    test_holdoff_basic();
+    test_holdoff_never_shortened();
+    test_holdoff_rejects_bad_requests();
+    test_holdoff_across_wrap();
     printf("test_arm_gate: all tests passed\n");
     return 0;
 }
