@@ -9,7 +9,9 @@ allowed-tools: Read, Bash
 
 In multimeter mode the ZT-703S can send its reading out of the signal-generator
 jack as TTL serial text, three times a second. `scripts/zt703s_read.py`
-reads it, prints one line per reading, and can append them to a CSV.
+reads it, prints one line per reading, and can append them to a CSV. The
+USB-C port carries no serial data; its uses (firmware, saved waveform images)
+are in the `zt703s-firmware` skill.
 
 ## Wiring
 
