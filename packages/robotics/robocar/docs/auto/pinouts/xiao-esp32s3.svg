@@ -14,7 +14,7 @@
 <text x="201.6" y="98.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO3 · TCA9548A_RST → TCA9548A RST</text>
 <circle cx="218.6" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D3" data-side="L" data-pos="4"/>
 <text x="230.1" y="120.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D3</text>
-<text x="201.6" y="120.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO4</text>
+<text x="201.6" y="120.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO4 · PACK_SENSE (not wired)</text>
 <circle cx="218.6" cy="142.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D4" data-side="L" data-pos="5"/>
 <text x="230.1" y="142.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D4</text>
 <text x="201.6" y="142.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO5 · I2C_SDA → TCA9548A SDA</text>
@@ -41,7 +41,7 @@
 <text x="345.7" y="164.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO7 · I2S_BCLK → MAX98357A BCLK</text>
 <circle cx="328.7" cy="186.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D7" data-side="R" data-pos="7"/>
 <text x="317.2" y="186.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">D7</text>
-<text x="345.7" y="186.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO44 · UART0_RX (not wired)</text>
+<text x="345.7" y="186.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO44 · POWER_HOLD (not wired)</text>
 <text x="12.0" y="220.8" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/xiao-esp32s3.md</text>
 <text x="12.0" y="232.0" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
 </svg>
