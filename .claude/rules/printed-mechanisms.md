@@ -1,5 +1,11 @@
 ---
 reviewed: 2026-10-25
+paths:
+  - 'tools/mechanism/**'
+  - 'tools/cadstd/**'
+  - 'tools/enclosure/**'
+  - '**/design.py'
+  - 'packages/**/hardware/pan-tilt/**'
 ---
 
 # Printed Mechanisms: Use the `printed-mechanism` Skill
