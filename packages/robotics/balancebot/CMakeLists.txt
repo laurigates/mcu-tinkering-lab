@@ -28,6 +28,9 @@ add_executable(balancebot
     src/drive.c
     src/imu_cal.c
     src/imu_filter.c
+    src/log.c
+    src/log_record.c
+    src/log_store.c
     src/lqr.c
     src/mpu6050.c
     src/param_record.c

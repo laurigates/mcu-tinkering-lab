@@ -2,8 +2,13 @@
 
 uint32_t crc32_calc(const void *data, size_t len)
 {
+    return crc32_update(0u, data, len);
+}
+
+uint32_t crc32_update(uint32_t crc, const void *data, size_t len)
+{
     const uint8_t *p = (const uint8_t *)data;
-    uint32_t crc = 0xFFFFFFFFu;
+    crc ^= 0xFFFFFFFFu;
     for (size_t i = 0; i < len; i++) {
         crc ^= p[i];
         for (int bit = 0; bit < 8; bit++) {

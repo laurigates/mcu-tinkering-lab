@@ -9,4 +9,8 @@
 
 uint32_t crc32_calc(const void *data, size_t len);
 
+// Continue a CRC over more data: crc32_update(crc32_calc(a), b) equals the
+// CRC of a followed by b, and crc32_update(0, ...) equals crc32_calc(...).
+uint32_t crc32_update(uint32_t crc, const void *data, size_t len);
+
 #endif  // BALANCEBOT_CRC32_H

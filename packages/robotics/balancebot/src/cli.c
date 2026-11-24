@@ -12,6 +12,9 @@
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 #include "imu_cal.h"
+#include "log.h"
+#include "log_record.h"
+#include "log_store.h"
 #include "lqr.h"
 #include "param_record.h"
 #include "param_store.h"
@@ -731,6 +734,141 @@ static float battery_volts(void)
     return (float)raw * 3.3f / 4096.0f * 2.0f;  // /2 divider on board
 }
 
+static const char *log_result_name(log_save_result_t r)
+{
+    switch (r) {
+        case LOG_SAVE_OK:
+            return "ok";
+        case LOG_SAVE_ABORTED:
+            return "ABORTED (armed before it finished)";
+        case LOG_SAVE_FLASH_ERROR:
+            return "FAILED (flash error)";
+        case LOG_SAVE_VERIFY_FAILED:
+            return "FAILED (read-back mismatch)";
+        case LOG_SAVE_NO_ROOM:
+            return "FAILED (firmware reaches the log region)";
+        default:
+            return "?";
+    }
+}
+
+static const char *log_phase_name(uint8_t p)
+{
+    switch ((log_phase_t)p) {
+        case LOG_PHASE_RECORDING:
+            return "recording";
+        case LOG_PHASE_TAIL:
+            return "recording the tail";
+        case LOG_PHASE_IDLE:
+        default:
+            return "waiting for a run";
+    }
+}
+
+// Seconds from the first to the last row of a log in flash.
+static float log_span_s(const log_header_t *h)
+{
+    const log_row_t *rows = log_store_rows();
+    return (float)(rows[h->row_count - 1u].t_ms - rows[0].t_ms) / 1000.0f;
+}
+
+// One line on the log in flash. check_rows reads every row for the CRC.
+static void print_log_flash(bool check_rows)
+{
+    log_header_t h;
+    if (!log_store_header(&h)) {
+        printf("log flash: none\n");
+        return;
+    }
+    if (check_rows && !log_store_rows_ok(&h)) {
+        printf("log flash: log %lu fails its rows CRC\n", (unsigned long)h.save_seq);
+        return;
+    }
+    printf("log flash: log %lu, %lu rows (%.1f s at %lu Hz), ended %s", (unsigned long)h.save_seq,
+           (unsigned long)h.row_count, (double)log_span_s(&h), (unsigned long)h.rate_hz,
+           state_name(h.end_state));
+    if (h.overwritten != 0) {
+        printf(", first %lu rows overwritten", (unsigned long)h.overwritten);
+    }
+    printf("\n");
+}
+
+static void print_log_status(bool check_rows)
+{
+    const log_status_t st = log_get_status();
+    if (st.enabled) {
+        printf("log:      on, %lu Hz (RAM holds %.0f s), %s", (unsigned long)st.rate_hz,
+               (double)LOG_CAPACITY_ROWS / (double)st.rate_hz, log_phase_name(st.phase));
+        if (st.phase != LOG_PHASE_IDLE) {
+            printf(", %.1f s", (double)st.rows / (double)st.rate_hz);
+        }
+        printf("\n");
+    } else {
+        printf("log:      off\n");
+    }
+    if (st.saves != 0) {
+        printf("log save: %lu since boot, last %s\n", (unsigned long)st.saves,
+               log_result_name(st.last));
+    }
+    if (st.lost_runs != 0) {
+        printf("log lost: %lu run%s re-armed before the save\n", (unsigned long)st.lost_runs,
+               st.lost_runs == 1 ? "" : "s");
+    }
+    if (!st.fits) {
+        printf("log:      WARNING firmware image reaches the log region; saves are refused\n");
+    }
+    print_log_flash(check_rows);
+}
+
+static void cmd_log_dump(void)
+{
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    if (s.state == BAL_STATE_RUN) {
+        // A dump holds this core for seconds; `disarm` could not get through.
+        printf("ERR: disarm first\n");
+        return;
+    }
+    log_header_t h;
+    if (!log_store_header(&h)) {
+        printf("ERR: no log in flash\n");
+        return;
+    }
+    if (!log_store_rows_ok(&h)) {
+        printf("ERR: log %lu fails its rows CRC; nothing dumped\n", (unsigned long)h.save_seq);
+        return;
+    }
+    printf("# log %lu: %lu rows at %lu Hz, %.1f s, ended %s, %lu earlier rows overwritten\n",
+           (unsigned long)h.save_seq, (unsigned long)h.row_count, (unsigned long)h.rate_hz,
+           (double)log_span_s(&h), state_name(h.end_state), (unsigned long)h.overwritten);
+    printf("%s\n", LOG_CSV_HEADER);
+    const log_row_t *rows = log_store_rows();
+    char buf[LOG_CSV_LINE_MAX];
+    for (uint32_t i = 0; i < h.row_count; i++) {
+        if (log_row_format_csv(&rows[i], buf, sizeof buf) != 0) {
+            fputs(buf, stdout);
+        }
+    }
+    printf("log end\n");
+}
+
+static void cmd_log(const char *arg, const char *hz_str)
+{
+    if (arg == NULL) {
+        print_log_status(true);
+    } else if (strcmp(arg, "on") == 0) {
+        log_set_enabled(true, hz_str != NULL ? atoi(hz_str) : 0);
+        print_log_status(false);
+    } else if (strcmp(arg, "off") == 0) {
+        log_set_enabled(false, 0);
+        printf("OK log off\n");
+    } else if (strcmp(arg, "dump") == 0) {
+        cmd_log_dump();
+    } else {
+        printf("usage: log [on [hz] | off | dump]\n");
+    }
+}
+
 static void cmd_stat(void)
 {
     balance_snapshot_t s;
@@ -798,6 +936,7 @@ static void cmd_stat(void)
                (unsigned long)s.arm_refusals, (double)s.arm_refused_up_g);
     }
     printf("stream:   %s\n", telemetry_is_enabled() ? "on" : "off");
+    print_log_status(false);
     if (boot_note[0] != '\0') {
         printf("note:     %s\n", boot_note);
     }
@@ -816,6 +955,11 @@ static void cmd_help(void)
     printf("  mount [up|down]      show / set GY-521 side: up, or down = flipped about\n");
     printf("                       the axle (8d18cd8d carrier); disarmed only\n");
     printf("  stream on|off [hz]   CSV telemetry (default %d Hz)\n", TELEMETRY_DEFAULT_HZ);
+    printf("  log [on [hz]|off]    show / set the run log (default on, %d Hz): each run\n",
+           LOG_DEFAULT_HZ);
+    printf("                       and %.0f s after it are saved to flash when it ends\n",
+           (double)LOG_TAIL_S);
+    printf("  log dump             print the saved run as CSV (disarmed)\n");
     printf("  arm | disarm         start/stop balancing\n");
     printf("  drive <m/s> [turn m/s] [s]  drive while balancing; turn > 0 = clockwise,\n");
     printf("                       left wheel +turn, right -turn (drive 0 0.1 spins);\n");
@@ -866,6 +1010,9 @@ static void handle_line(char *l)
         } else {
             printf("usage: stream on|off [hz]\n");
         }
+    } else if (strcmp(tok, "log") == 0) {
+        const char *arg = strtok(NULL, " \t");
+        cmd_log(arg, strtok(NULL, " \t"));
     } else if (strcmp(tok, "arm") == 0) {
         cmd_arm();
     } else if (strcmp(tok, "drive") == 0) {

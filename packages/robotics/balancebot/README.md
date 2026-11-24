@@ -82,6 +82,8 @@ just balancebot::monitor        # watch output only; it sends nothing you type
 help                 # command list
 stat                 # firmware, state, gains, maxrate, model, calibration, angle, battery, loop time
 stream on 50         # CSV telemetry at 50 Hz (plot with any serial plotter)
+log                  # run log: on/off, rate, last save, the run stored in flash (see "Untethered run log")
+log dump             # print the stored run as CSV (disarmed only)
 set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual
 ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
@@ -310,6 +312,33 @@ The rev1 run, each line one 20 s capture:
 | r 10, alpha 0.98 | 1.40° | 0 % | 1164 steps/s | 4.5 cm |
 | r 10, alpha 0.996 | 0.23° | 0 % | 470 steps/s | 2.0 cm |
 | + trim −5.47° | 0.25° | 0 % | — | 1.2 cm (10 s) |
+
+### Untethered run log
+
+The robot records every run without the cable (ADR-037,
+[`docs/decisions/ADR-037-balancebot-untethered-run-log.md`](../../../docs/decisions/ADR-037-balancebot-untethered-run-log.md)).
+From the moment it arms until 1 s after it falls or is disarmed, core 0 samples
+the same columns as `stream` into RAM, at 100 Hz by default (`log on 200` for
+200 Hz, `log off` to stop). When the run ends it copies it to flash, which takes
+about 0.06 s per 1.3 s of run. The CLI and LED pause meanwhile, and the auto-arm
+gesture is held off until it is done. RAM holds the last 82 s at 100 Hz (41 s at
+200 Hz). A longer run keeps its end, including the fall. Flash keeps only the
+newest run.
+
+1. With USB and the pack connected (USB first, #1230), check `log` says `on`,
+   then unplug USB.
+2. Arm it on the floor and push, drive or let it fall.
+3. Leave it lying for a second, then disconnect the pack.
+4. Plug in USB (the XIAO runs from USB alone) and read the run:
+
+   ```bash
+   just balancebot::log-dump                     # -> tmp/balancebot/log-<time>.csv
+   just balancebot::analyze tmp/balancebot/log-<time>.csv
+   ```
+
+`log` shows whether the last save worked. A run is not saved if the robot is
+re-armed within the 1 s tail, or if power drops before a FAULT or disarm is
+seen (a brownout or the pack's BMS cutting out).
 
 ### Choosing r
 

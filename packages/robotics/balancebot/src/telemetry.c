@@ -4,6 +4,7 @@
 
 #include "balance_control.h"
 #include "config.h"
+#include "log_record.h"
 #include "pico/stdlib.h"
 
 static bool enabled;
@@ -43,15 +44,17 @@ void telemetry_poll(void)
     next_due = make_timeout_time_ms(interval_ms);
 
     if (header_pending) {
-        printf("t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m\n");
+        printf("%s\n", LOG_CSV_HEADER);
         header_pending = false;
     }
 
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
-    // Columns are append-only: existing plots index by position.
-    printf("%lu,%u,%.3f,%.2f,%.3f,%.1f,%.1f,%u,%.4f\n",
-           (unsigned long)to_ms_since_boot(get_absolute_time()), s.state, (double)s.pitch_deg,
-           (double)s.gyro_dps, (double)s.angle_setpoint, (double)s.rate_cmd_sps, (double)s.loop_us,
-           s.ctrl_mode, (double)s.pos_m);
+    // Columns are append-only: existing plots index by position. The format is
+    // log_record.c's, so `log dump` prints the same rows.
+    log_row_t row = log_row_from_snapshot(&s, to_ms_since_boot(get_absolute_time()));
+    char buf[LOG_CSV_LINE_MAX];
+    if (log_row_format_csv(&row, buf, sizeof buf) != 0) {
+        fputs(buf, stdout);
+    }
 }

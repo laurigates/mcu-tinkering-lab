@@ -33,9 +33,20 @@ static void test_detects_corruption(void)
     assert(crc32_calc(rec, sizeof rec) == good);
 }
 
+static void test_update_continues(void)
+{
+    // The log store checksums its rows a sector at a time.
+    const char *msg = "123456789";
+    uint32_t crc = crc32_update(0u, msg, 4);
+    crc = crc32_update(crc, msg + 4, 5);
+    assert(crc == 0xCBF43926u);
+    assert(crc32_update(0u, msg, 9) == crc32_calc(msg, 9));
+}
+
 int main(void)
 {
     test_known_vector();
+    test_update_continues();
     test_empty();
     test_detects_corruption();
     printf("test_crc32: all tests passed\n");

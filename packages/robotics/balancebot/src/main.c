@@ -1,11 +1,12 @@
 // Balancebot — self-balancing robot on a Seeed XIAO RP2350.
-// Core 0 (this file): USB CDC CLI, telemetry, status LED.
+// Core 0 (this file): USB CDC CLI, telemetry, the run log, status LED.
 // Core 1: hard-real-time balancing loop (see balance_control.c).
 #include <stdio.h>
 
 #include "balance_control.h"
 #include "config.h"
 #include "hardware/gpio.h"
+#include "log.h"
 #include "param_store.h"
 #include "pico/flash.h"
 #include "pico/multicore.h"
@@ -40,6 +41,7 @@ int main(void)
     balance_control_init(&params);
     cli_init(&params);
     telemetry_init();
+    log_init();
 
     // Core 1 saves params to flash (CMD_SAVE); this core must cooperate with
     // flash_safe_execute so XIP is quiesced during erase/program.
@@ -54,6 +56,7 @@ int main(void)
     while (true) {
         cli_poll();
         telemetry_poll();
+        log_poll();
 
         balance_snapshot_t s;
         balance_control_get_snapshot(&s);
