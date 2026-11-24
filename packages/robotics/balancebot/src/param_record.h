@@ -1,5 +1,5 @@
 // Flash record framing for balance_params_t: magic + version + params +
-// CRC32, plus the migrations from v1, v2 and v3 to v4. Pure C (no SDK dependencies) so the
+// CRC32, plus the migrations from v1, v2, v3 and v4 to v5. Pure C (no SDK dependencies) so the
 // layout and the migration are host-tested (tests/host/test_param_record.c);
 // param_store.c only moves the bytes to and from flash.
 #ifndef BALANCEBOT_PARAM_RECORD_H
@@ -12,7 +12,7 @@
 #include "ipc.h"
 
 #define PARAM_MAGIC 0x42414C42u  // "BALB"
-#define PARAM_VERSION 4u
+#define PARAM_VERSION 5u
 
 // v1 (PID only): magic, version, 7 floats, CRC over magic..floats = 40 bytes.
 #define PARAM_V1_FLOATS 7u
@@ -23,9 +23,13 @@
 // v3 (adds imu_mount): magic, version, 17 four-byte fields, CRC = 80 bytes.
 #define PARAM_V3_FIELDS 17u
 #define PARAM_V3_SIZE (4u + 4u + PARAM_V3_FIELDS * 4u + 4u)
-// v4 (adds pitch_trim_deg): magic, version, balance_params_t, CRC over magic..params.
-#define PARAM_V4_SIZE (4u + 4u + sizeof(balance_params_t) + 4u)
-#define PARAM_RECORD_MAX_SIZE PARAM_V4_SIZE
+// v4 (adds pitch_trim_deg): magic, version, 18 four-byte fields, CRC = 84 bytes.
+#define PARAM_V4_FIELDS 18u
+#define PARAM_V4_SIZE (4u + 4u + PARAM_V4_FIELDS * 4u + 4u)
+// v5 (adds pack_r_low_kohm, pack_cells): magic, version, balance_params_t, CRC over
+// magic..params.
+#define PARAM_V5_SIZE (4u + 4u + sizeof(balance_params_t) + 4u)
+#define PARAM_RECORD_MAX_SIZE PARAM_V5_SIZE
 
 // Compile-time defaults (config.h), no flash access.
 void param_defaults(balance_params_t *out);

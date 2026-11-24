@@ -5,8 +5,11 @@
 
 #include "config.h"
 #include "crc32.h"
+#include "pack_sense.h"
 
-_Static_assert(sizeof(balance_params_t) == 18u * 4u, "balance_params_t v4 layout changed");
+_Static_assert(sizeof(balance_params_t) == 20u * 4u, "balance_params_t v5 layout changed");
+_Static_assert(offsetof(balance_params_t, pack_r_low_kohm) == PARAM_V4_FIELDS * 4u,
+               "the v4 fields must stay a prefix of balance_params_t");
 _Static_assert(offsetof(balance_params_t, pitch_trim_deg) == PARAM_V3_FIELDS * 4u,
                "the v3 fields must stay a prefix of balance_params_t");
 _Static_assert(offsetof(balance_params_t, ctrl_mode) == PARAM_V1_FLOATS * 4u,
@@ -41,11 +44,13 @@ void param_defaults(balance_params_t *out)
     out->r = DEFAULT_R;
     out->imu_mount = IMU_MOUNT_UP;
     out->pitch_trim_deg = DEFAULT_PITCH_TRIM_DEG;
+    out->pack_r_low_kohm = DEFAULT_PACK_R_LOW_KOHM;
+    out->pack_cells = DEFAULT_PACK_CELLS;
 }
 
 size_t param_record_encode(const balance_params_t *p, uint8_t *buf, size_t cap)
 {
-    if (cap < PARAM_V4_SIZE) {
+    if (cap < PARAM_V5_SIZE) {
         return 0;
     }
     const uint32_t magic = PARAM_MAGIC;
@@ -53,9 +58,9 @@ size_t param_record_encode(const balance_params_t *p, uint8_t *buf, size_t cap)
     memcpy(buf, &magic, 4);
     memcpy(buf + 4, &version, 4);
     memcpy(buf + 8, p, sizeof *p);
-    const uint32_t crc = crc32_calc(buf, PARAM_V4_SIZE - 4u);
-    memcpy(buf + PARAM_V4_SIZE - 4u, &crc, 4);
-    return PARAM_V4_SIZE;
+    const uint32_t crc = crc32_calc(buf, PARAM_V5_SIZE - 4u);
+    memcpy(buf + PARAM_V5_SIZE - 4u, &crc, 4);
+    return PARAM_V5_SIZE;
 }
 
 static bool positive(float v)
@@ -97,6 +102,12 @@ static void sanitize_fields(balance_params_t *p)
     }
     if (!pitch_trim_valid(p->pitch_trim_deg)) {
         p->pitch_trim_deg = d.pitch_trim_deg;
+    }
+    if (!pack_r_low_valid(p->pack_r_low_kohm)) {
+        p->pack_r_low_kohm = d.pack_r_low_kohm;
+    }
+    if (!pack_cells_valid(p->pack_cells)) {
+        p->pack_cells = d.pack_cells;
     }
 }
 
@@ -144,6 +155,15 @@ bool param_record_decode(const uint8_t *buf, size_t len, balance_params_t *out, 
         sanitize_fields(&p);
     } else if (ver == 4u) {
         if (len < PARAM_V4_SIZE || !crc_ok(buf, PARAM_V4_SIZE)) {
+            return false;
+        }
+        // v4 -> v5: keep every saved field; the delivered boards' divider and
+        // 3S, which is what v4 firmware (not reading the pack) left to assume.
+        param_defaults(&p);
+        memcpy(&p, buf + 8, PARAM_V4_FIELDS * 4u);
+        sanitize_fields(&p);
+    } else if (ver == 5u) {
+        if (len < PARAM_V5_SIZE || !crc_ok(buf, PARAM_V5_SIZE)) {
             return false;
         }
         memcpy(&p, buf + 8, sizeof p);

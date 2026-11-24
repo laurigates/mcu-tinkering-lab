@@ -5,6 +5,7 @@
 #include "balance_control.h"
 #include "config.h"
 #include "log_record.h"
+#include "pack.h"
 #include "pico/stdlib.h"
 
 static bool enabled;
@@ -52,7 +53,8 @@ void telemetry_poll(void)
     balance_control_get_snapshot(&s);
     // Columns are append-only: existing plots index by position. The format is
     // log_record.c's, so `log dump` prints the same rows.
-    log_row_t row = log_row_from_snapshot(&s, to_ms_since_boot(get_absolute_time()));
+    log_row_t row =
+        log_row_from_snapshot(&s, to_ms_since_boot(get_absolute_time()), pack_get_centivolts());
     char buf[LOG_CSV_LINE_MAX];
     if (log_row_format_csv(&row, buf, sizeof buf) != 0) {
         fputs(buf, stdout);

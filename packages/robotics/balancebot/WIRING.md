@@ -97,8 +97,8 @@ The power pads are not in the table: **3V3** feeds the MPU6050 VCC, the
 DRV8825 nSLEEP/nRESET/M0/M1 straps (see below) and the nENABLE pull-up; **5V**
 takes the buck converter's output; **GND** is the common ground. D0
 (GPIO26, `PIN_PACK_SENSE`) carries the carrier PCB's pack-voltage divider
-(R2/R3/C3); the hand-wired harness leaves it free, and the firmware does not
-read it yet (#747). D1–D2 (GPIO27–28) are ADC-capable; the carrier PCB (rev3)
+(R2/R3/C3); the hand-wired harness leaves it free, and `stat` then says
+`pack: absent`. Set `pack_r_kohm` to the board's R3 (27 delivered, 22 rev3). D1–D2 (GPIO27–28) are ADC-capable; the carrier PCB (rev3)
 brings them out on its expansion header J6, each through a 1 kΩ resistor
 ([`hardware/carrier/README.md`](hardware/carrier/README.md#headers)), and the
 hand-wired harness leaves them free.

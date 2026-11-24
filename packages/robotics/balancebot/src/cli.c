@@ -16,6 +16,8 @@
 #include "log_record.h"
 #include "log_store.h"
 #include "lqr.h"
+#include "pack.h"
+#include "pack_sense.h"
 #include "param_record.h"
 #include "param_store.h"
 #include "pico/stdlib.h"
@@ -87,10 +89,12 @@ static const char *lqr_status_name(int st)
 }
 
 typedef enum {
-    RANGE_ANY,       // PID-side: forwarded as typed (existing behaviour)
-    RANGE_POSITIVE,  // > 0, finite
-    RANGE_NONNEG,    // >= 0, finite
-    RANGE_TRIM,      // finite, within +/- PITCH_TRIM_MAX_DEG (pitch_trim_valid)
+    RANGE_ANY,         // PID-side: forwarded as typed (existing behaviour)
+    RANGE_POSITIVE,    // > 0, finite
+    RANGE_NONNEG,      // >= 0, finite
+    RANGE_TRIM,        // finite, within +/- PITCH_TRIM_MAX_DEG (pitch_trim_valid)
+    RANGE_PACK_R,      // pack_r_low_valid
+    RANGE_PACK_CELLS,  // pack_cells_valid
 } range_t;
 
 typedef struct {
@@ -120,6 +124,8 @@ static const param_entry_t param_table[PARAM_COUNT] = {
     PENTRY("q_dx", PARAM_Q_DX, q_dx, RANGE_NONNEG, true),
     PENTRY("r", PARAM_R, r, RANGE_POSITIVE, true),
     PENTRY("trim", PARAM_PITCH_TRIM, pitch_trim_deg, RANGE_TRIM, false),
+    PENTRY("pack_r_kohm", PARAM_PACK_R_LOW, pack_r_low_kohm, RANGE_PACK_R, false),
+    PENTRY("pack_cells", PARAM_PACK_CELLS, pack_cells, RANGE_PACK_CELLS, false),
 };
 
 static float *field_of(balance_params_t *p, const param_entry_t *e)
@@ -138,6 +144,10 @@ static bool in_range(const param_entry_t *e, float v)
             return isfinite(v) && v >= 0.0f;
         case RANGE_TRIM:
             return pitch_trim_valid(v);
+        case RANGE_PACK_R:
+            return pack_r_low_valid(v);
+        case RANGE_PACK_CELLS:
+            return pack_cells_valid(v);
         case RANGE_ANY:
         default:
             return true;
@@ -289,6 +299,12 @@ static void cmd_set(const char *name, const char *value_str)
     if (!in_range(e, value)) {
         if (e->range == RANGE_TRIM) {
             printf("ERR: %s must be within +/-%g deg\n", name, (double)PITCH_TRIM_MAX_DEG);
+        } else if (e->range == RANGE_PACK_R) {
+            printf("ERR: %s is R3 of the pack divider in kOhm, 1 to 1000 (27 delivered boards, "
+                   "22 rev3)\n",
+                   name);
+        } else if (e->range == RANGE_PACK_CELLS) {
+            printf("ERR: %s must be a whole number of cells, 2 to 6\n", name);
         } else {
             printf("ERR: %s must be %s\n", name, e->range == RANGE_NONNEG ? ">= 0" : "> 0");
         }
@@ -604,6 +620,13 @@ static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
 // snapshot after the arm; that is reported instead of OK.
 static void cmd_arm(void)
 {
+    if (pack_get_level() == PACK_LOW) {
+        printf("ERR: pack low (%.2f V, cutoff %.1f V for %g cells) — charge or swap the pack; "
+               "'stat' shows it\n",
+               (double)pack_get_reading().volts, (double)pack_fault_volts(mirror->pack_cells),
+               (double)mirror->pack_cells);
+        return;
+    }
     balance_snapshot_t s;
     const bool synced = wait_core1(&s);
     switch (cli_gate_arm(synced, s.state, s.imu_ok, &s.gravity)) {
@@ -869,6 +892,40 @@ static void cmd_log(const char *arg, const char *hz_str)
     }
 }
 
+// The carrier's pack divider on D0. Absent is not 0 V: the hand-wired harness
+// leaves D0 floating, and a flat pack would read as a low number, not nothing.
+static void print_pack(void)
+{
+    const pack_reading_t r = pack_get_reading();
+    if (!r.present) {
+        printf("pack:     absent (D0 reads no pack: hand-wired harness, or no pack on the "
+               "carrier)\n");
+        return;
+    }
+    const char *state;
+    switch (pack_get_level()) {
+        case PACK_LOW:
+            state = "LOW, cutoff latched: motors stopped, arming refused";
+            break;
+        case PACK_WARN:
+            state = "WARN, low";
+            break;
+        case PACK_ABSENT:
+        case PACK_OK:
+        default:
+            state = "ok";
+            break;
+    }
+    printf("pack:     %s%.2f V (%g cells, R3 %g kOhm) %s; warn < %.1f V, cutoff < %.1f V\n",
+           r.clipped ? ">" : "", (double)r.volts, (double)mirror->pack_cells,
+           (double)mirror->pack_r_low_kohm, state, (double)pack_warn_volts(mirror->pack_cells),
+           (double)pack_fault_volts(mirror->pack_cells));
+    if (r.clipped) {
+        printf("          ADC clipped: wrong pack_r_kohm for this board, or a pack above 3S on a "
+               "27 kOhm board\n");
+    }
+}
+
 static void cmd_stat(void)
 {
     balance_snapshot_t s;
@@ -929,6 +986,7 @@ static void cmd_stat(void)
     print_lqr();
     printf("loop:     %.0f us (tick %lu)\n", (double)s.loop_us, (unsigned long)s.tick);
     printf("battery:  %.2f V\n", (double)battery_volts());
+    print_pack();
     printf("saves:    %lu (last %s)\n", (unsigned long)s.save_count,
            s.save_count == 0 ? "n/a" : (s.save_ok ? "ok" : "FAILED"));
     if (s.arm_refusals != 0) {
@@ -949,6 +1007,9 @@ static void cmd_help(void)
     printf("  get                  list tunable params\n");
     printf("  set <name> <value>   set param: kp ki kd vkp vki alpha maxrate\n");
     printf("                       trim: angle read at the balance point (deg)\n");
+    printf(
+        "                       pack_r_kohm: R3 of the D0 pack divider (27 delivered, 22 rev3)\n");
+    printf("                       pack_cells: 3 or 4; scales the warning and the motor cutoff\n");
     printf("                       LQR (re-solves K): l_eff_m wheel_diam_m steps_per_rev\n");
     printf("                       q_theta q_dtheta q_x q_dx r\n");
     printf("  ctrl [pid|lqr]       show / switch the balance law (live, bumpless)\n");
@@ -1087,6 +1148,7 @@ void cli_init(balance_params_t *params)
 
     adc_init();
     adc_gpio_init(PIN_BATT_ADC);
+    pack_init(mirror);
     gpio_init(PIN_BATT_ADC_ENABLE);
     gpio_put(PIN_BATT_ADC_ENABLE, 0);
     gpio_set_dir(PIN_BATT_ADC_ENABLE, GPIO_OUT);

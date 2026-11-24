@@ -114,7 +114,7 @@ role = "PIN_MOTOR_NENABLE"
 to = "pullup.B"
 note = "the pull-up holds the drivers disabled while the XIAO boots, resets or sits in BOOTSEL"
 
-# The carrier's pack-voltage divider into D0. Firmware does not read it yet (#747).
+# The carrier's pack-voltage divider into D0, read by pack.c on core 0 (#747).
 [[nets]]
 role = "PIN_PACK_SENSE"
 to = "sense_top.B"

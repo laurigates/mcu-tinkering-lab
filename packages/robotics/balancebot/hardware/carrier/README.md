@@ -93,8 +93,9 @@ settles the hardware half of #738.
 
 The divider is 100 kΩ over 22 kΩ, a ratio of 0.1803: a full 3S pack (12.6 V)
 reads 2.27 V and a full 4S pack (16.8 V) 3.03 V, under the RP2350 ADC's 3.3 V
-reference. It draws about 0.1 mA from a 3S pack. Firmware does not read it yet
-(#747). The supported pack is 3S: "4S max" on the silkscreen by J1 is the
+reference. It draws about 0.1 mA from a 3S pack. Firmware reads it with
+`pack_r_kohm` set to R3 (27 on the delivered boards, 22 here) and stops the motors
+below 3.0 V per cell (#747). The supported pack is 3S: "4S max" on the silkscreen by J1 is the
 highest pack the divider can read, not a supported pack. The board's other
 parts are chosen for 3S; on 4S, D2 conducts through R4 (below), F1's 24 V
 rating leaves 7.2 V over a full pack instead of 11.4 V, and an undamped

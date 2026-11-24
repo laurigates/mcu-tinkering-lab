@@ -4,6 +4,7 @@
 #include "config.h"
 #include "hardware/flash.h"
 #include "log_record.h"
+#include "pack.h"
 #include "pico/stdlib.h"
 
 // Longest wait for core 1 to apply the auto-arm hold-off before a save: a few
@@ -140,7 +141,7 @@ void log_poll(void)
 
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
-    log_row_t row = log_row_from_snapshot(&s, to_ms_since_boot(now));
+    log_row_t row = log_row_from_snapshot(&s, to_ms_since_boot(now), pack_get_centivolts());
     switch (log_session_sample(&session, &row)) {
         case LOG_ACTION_SAVE:
             save_run();

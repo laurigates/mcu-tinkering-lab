@@ -5,13 +5,13 @@
 
 #include "crc32.h"
 
-log_row_t log_row_from_snapshot(const balance_snapshot_t *s, uint32_t t_ms)
+log_row_t log_row_from_snapshot(const balance_snapshot_t *s, uint32_t t_ms, uint16_t pack_cv)
 {
     log_row_t row = {
         .t_ms = t_ms,
         .state = s->state,
         .ctrl = s->ctrl_mode,
-        .reserved = 0,
+        .pack_cv = pack_cv,
         .angle_deg = s->pitch_deg,
         .gyro_dps = s->gyro_dps,
         .setpoint_deg = s->angle_setpoint,
@@ -26,10 +26,17 @@ size_t log_row_format_csv(const log_row_t *row, char *buf, size_t len)
 {
     // The format `stream` printed before this module existed; keep it so a
     // dumped log and a USB capture read the same in analyze_capture.py.
-    int n = snprintf(buf, len, "%lu,%u,%.3f,%.2f,%.3f,%.1f,%.1f,%u,%.4f\n",
+    char pack[12];
+    if (row->pack_cv == 0u) {
+        strcpy(pack, "nan");
+    } else {
+        snprintf(pack, sizeof pack, "%u.%02u", (unsigned)(row->pack_cv / 100u),
+                 (unsigned)(row->pack_cv % 100u));
+    }
+    int n = snprintf(buf, len, "%lu,%u,%.3f,%.2f,%.3f,%.1f,%.1f,%u,%.4f,%s\n",
                      (unsigned long)row->t_ms, (unsigned)row->state, (double)row->angle_deg,
                      (double)row->gyro_dps, (double)row->setpoint_deg, (double)row->rate_sps,
-                     (double)row->loop_us, (unsigned)row->ctrl, (double)row->pos_m);
+                     (double)row->loop_us, (unsigned)row->ctrl, (double)row->pos_m, pack);
     if (n < 0 || (size_t)n >= len) {
         return 0;
     }

@@ -13,7 +13,8 @@
 
 // The CSV columns of `stream` and `log dump`, append-only: plots and
 // tools/analyze_capture.py index them by name or position.
-#define LOG_CSV_HEADER "t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m"
+#define LOG_CSV_HEADER \
+    "t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m,pack_v"
 
 // Longest CSV line log_row_format_csv() writes, newline and NUL included.
 #define LOG_CSV_LINE_MAX 128
@@ -21,10 +22,11 @@
 // One sample: the telemetry row in binary. 32 bytes, all fields naturally
 // aligned, so 128 rows fill a 4 KB flash sector exactly.
 typedef struct {
-    uint32_t t_ms;  // ms since boot
-    uint8_t state;  // balance_state_t
-    uint8_t ctrl;   // ctrl_mode_t
-    uint16_t reserved;
+    uint32_t t_ms;     // ms since boot
+    uint8_t state;     // balance_state_t
+    uint8_t ctrl;      // ctrl_mode_t
+    uint16_t pack_cv;  // pack voltage in 10 mV steps; 0 = no pack on D0 (pack_sense.h).
+                       // Rows saved before this field read 0 here, so they read as absent.
     float angle_deg;
     float gyro_dps;
     float setpoint_deg;
@@ -36,8 +38,9 @@ typedef struct {
 #define LOG_ROW_SIZE 32u
 _Static_assert(sizeof(log_row_t) == LOG_ROW_SIZE, "log_row_t must stay 32 bytes");
 
-// The row a snapshot read at t_ms gives.
-log_row_t log_row_from_snapshot(const balance_snapshot_t *s, uint32_t t_ms);
+// The row a snapshot read at t_ms gives. The pack voltage is core 0's reading,
+// not part of core 1's snapshot.
+log_row_t log_row_from_snapshot(const balance_snapshot_t *s, uint32_t t_ms, uint16_t pack_cv);
 
 // One CSV line (with '\n') in the telemetry format. Returns the length
 // written, or 0 if `len` is too short.
