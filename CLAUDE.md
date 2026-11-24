@@ -145,12 +145,10 @@ just setup-all               # Docker images + dev tools
 ## Project Conventions
 
 ### Commit Messages
-Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
-
-Examples:
-- `feat: Add WiFi reconnection logic to robocar`
-- `fix: Correct UART baud rate for camera communication`
-- `docs: Update hardware connection pinout`
+Conventional commits scoped by the project's `just` module, e.g.
+`feat(robocar): add WiFi reconnection logic`. Types, release-please and PR
+title rules: `.claude/rules/commit-and-release.md`; types and examples for
+humans: [CONTRIBUTING.md § Commit messages](CONTRIBUTING.md#commit-messages).
 
 ### Code Style
 - **C/C++**: Google style with 4-space indent, 100-char line limit. Config in `.clang-format`.

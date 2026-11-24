@@ -11,14 +11,6 @@ Follow RED -> GREEN -> REFACTOR:
 2. Implement minimal code to make the test pass
 3. Refactor while keeping tests green
 
-## Commit Conventions
-
-Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
-
-Include scope for ESP32 projects:
-- `feat(robocar): add WiFi reconnection logic`
-- `fix(telegram): correct UART baud rate`
-
 ## Code Quality Gates
 
 Before committing:
