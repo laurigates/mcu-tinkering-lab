@@ -9,7 +9,7 @@ enable_testing()
 
 set(SRC ${CMAKE_CURRENT_LIST_DIR}/../../src)
 
-foreach(name pid imu_filter crc32 lqr param_record arm_gate cli_gate imu_cal status_color drive)
+foreach(name pid imu_filter crc32 lqr param_record arm_gate cli_gate imu_cal status_color drive log_record)
     add_executable(test_${name} test_${name}.c ${SRC}/${name}.c)
     target_include_directories(test_${name} PRIVATE ${SRC})
     target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)
@@ -19,6 +19,8 @@ endforeach()
 
 # The param record carries a CRC32.
 target_sources(test_param_record PRIVATE ${SRC}/crc32.c)
+# The log header carries CRC32s.
+target_sources(test_log_record PRIVATE ${SRC}/crc32.c)
 # The arm gate classifies samples with imu_filter.c's gravity check.
 target_sources(test_arm_gate PRIVATE ${SRC}/imu_filter.c)
 # So do the CLI's arm and load checks.

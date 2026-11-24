@@ -473,6 +473,12 @@
         "status": "accepted",
         "created": "2026-11-13"
       },
+      "ADR-037": {
+        "path": "docs/decisions/ADR-037-balancebot-untethered-run-log.md",
+        "title": "Balancebot Untethered Run Log in RAM, Saved to Flash After the Run",
+        "status": "accepted",
+        "created": "2026-11-24"
+      },
       "PRP-hardware-in-the-loop-testing": {
         "path": "docs/prompts/hardware-in-the-loop-testing.md",
         "title": "Hardware-in-the-Loop (HIL) Testing",

@@ -33,6 +33,10 @@ are in `BRINGUP.md`. This skill is the decision table and the traps.
 3. Change **one** setting live (`just balancebot::cli "set <name> <v>"`):
    LQR settings, `alpha` and `trim` all apply while armed.
 4. Capture again and compare the same numbers.
+   For a push, a fall or anything the cable would spoil, use the run log
+   instead: unplug USB, run, then `just balancebot::log-dump` and `analyze`
+   the CSV it writes (README "Untethered run log", ADR-037). `log` says
+   whether the last run saved.
 5. `just balancebot::cli disarm save` when it holds; `save` reports `OK saved`.
 
 | `analyze` shows | Cause | Change |
@@ -76,7 +80,8 @@ speed and position do not, and they show whether the robot really moved less.
 
 ## Where the numbers live
 
-- Captures: `tmp/balancebot/capture-<time>.csv` at the repo root (git-ignored).
+- Captures: `tmp/balancebot/capture-<time>.csv`, run-log dumps
+  `tmp/balancebot/log-<time>.csv`, both at the repo root (git-ignored).
 - Compile-time limits: `src/config.h` (`MAX_ACCEL_SPS2`, `DEFAULT_*`,
   `ARM_GESTURE_*`). Runtime settings: `get` / `set` / `save`.
 - Follow-ups: #742 (PID defaults), #1235 and #1237 (hardware checks).

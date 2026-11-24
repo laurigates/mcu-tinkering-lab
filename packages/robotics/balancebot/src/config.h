@@ -102,4 +102,18 @@
 // claims 4 MB).
 #define PARAM_FLASH_OFFSET ((2u * 1024u * 1024u) - 2u * 4096u)
 
+// Untethered run log (ADR-037). Core 0 samples the snapshot into a RAM ring
+// while the robot balances and copies the run to flash once it has ended.
+#define LOG_DEFAULT_HZ 100
+#define LOG_MAX_HZ 200           // the core-0 loop sleeps 1 ms; telemetry's cap too
+#define LOG_CAPACITY_ROWS 8192u  // 32 B each = 256 KB of RAM: 82 s at 100 Hz, 41 s at 200 Hz
+#define LOG_TAIL_S 1.0f          // recorded after RUN ends, so the fall is in the log
+// Seconds of auto-arm hold-off asked for per flash sector written, over a
+// 1 s floor: a 4 KB erase is ~45 ms typical, the program a few ms more.
+#define LOG_SAVE_HOLDOFF_S_PER_SECTOR 0.1f
+// The log's flash region: one header sector, then the rows, ending where the
+// param sector begins. 65 sectors (260 KB) below PARAM_FLASH_OFFSET.
+#define LOG_FLASH_SIZE (4096u + LOG_CAPACITY_ROWS * 32u)
+#define LOG_FLASH_OFFSET (PARAM_FLASH_OFFSET - LOG_FLASH_SIZE)
+
 #endif  // BALANCEBOT_CONFIG_H
