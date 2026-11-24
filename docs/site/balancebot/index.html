@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Balancebot: Teaching a Robot to Stand</title>
+<meta name="description" content="A two-wheel self-balancing robot on a XIAO RP2350: control on two cores and a PIO, a generated circuit board, a sign bug, and a day of tuning, built with Claude Code.">
+<meta property="og:title" content="Balancebot: Teaching a Robot to Stand">
+<meta property="og:description" content="From first firmware to standing in place: the balancebot story, at five levels of technical depth.">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://laurigates.github.io/mcu-tinkering-lab/balancebot/img/rev3-iso.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* Layout: one reading column on a pale board-green ground; a solder-mask control bar holds the depth slider, drawn as a copper trace with five pads. */
+:root {
+  --bg: #EEF2EE;
+  --surface: #F9FBF9;
+  --ink: #14201A;
+  --muted: #4B5A52;
+  --line: #C9D5CD;
+  --accent: #8A5A12;
+  --mask: #123528;
+  --mask-ink: #E9F0EB;
+  --mask-muted: #A9C0B3;
+  --gold: #D9A441;
+  --code-bg: #10261F;
+  --code-ink: #E3ECE6;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1813; --surface: #14221B; --ink: #E5EEE8; --muted: #A2B4A9; --line: #263A30;
+    --accent: #E2B04F; --mask: #0A1611; --mask-ink: #E5EEE8; --mask-muted: #93AA9D; --gold: #E2B04F;
+    --code-bg: #08120E; --code-ink: #DCE7E0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1813; --surface: #14221B; --ink: #E5EEE8; --muted: #A2B4A9; --line: #263A30;
+  --accent: #E2B04F; --mask: #0A1611; --mask-ink: #E5EEE8; --mask-muted: #93AA9D; --gold: #E2B04F;
+  --code-bg: #08120E; --code-ink: #DCE7E0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--mask); }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wide { max-width: 1000px; }
+
+/* hero */
+.hero { background: var(--mask); color: var(--mask-ink); }
+.hero .wrap { padding-block: 56px 40px; display: flex; flex-direction: column; gap: 14px; }
+.kicker { font-family: var(--mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 6vw, 56px); line-height: 1.04; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.hero p { margin: 0; color: var(--mask-muted); max-width: 60ch; }
+
+/* depth control */
+.depthbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--mask); color: var(--mask-ink); border-top: 1px solid rgba(255,255,255,.08); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.depthbar .wrap { padding-block: 14px 16px; display: grid; gap: 8px; max-width: 1000px; }
+.depthhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.depthhead label { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mask-muted); }
+#depth-name { font-family: var(--display); font-weight: 700; font-size: 20px; color: var(--gold); }
+#depth-desc { font-size: 14px; color: var(--mask-muted); }
+.track { position: relative; padding: 6px 0 0; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--gold); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 4px; background: var(--gold); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -11px; border-radius: 50%; background: var(--mask); border: 6px solid var(--gold); }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--mask); border: 6px solid var(--gold); }
+input[type=range]:focus-visible { outline: 2px solid var(--mask-ink); outline-offset: 4px; border-radius: 4px; }
+.pads { display: grid; grid-template-columns: repeat(5, 1fr); font-family: var(--mono); font-size: 12px; color: var(--mask-muted); }
+.pads button { background: none; border: 0; color: inherit; font: inherit; padding: 4px 0; cursor: pointer; text-align: center; }
+.pads button:first-child { text-align: left; }
+.pads button:last-child { text-align: right; }
+.pads button[aria-pressed="true"] { color: var(--gold); font-weight: 600; }
+.pads button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* depth visibility: complete at rest at level 2 via the body attribute */
+.t { display: none; }
+.doc[data-depth="1"] .t[data-l="1"], .doc[data-depth="2"] .t[data-l="2"], .doc[data-depth="3"] .t[data-l="3"],
+.doc[data-depth="4"] .t[data-l="4"], .doc[data-depth="5"] .t[data-l="5"] { display: block; }
+.doc[data-depth="1"] .min3, .doc[data-depth="2"] .min3 { display: none; }
+.doc[data-depth="1"] .min4, .doc[data-depth="2"] .min4, .doc[data-depth="3"] .min4 { display: none; }
+.doc[data-depth="1"] .max2-hide, .doc[data-depth="2"] .max2-hide { display: none; }
+
+/* chapters */
+main { padding-block: 24px 64px; }
+.chapter { padding-block: 40px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.chapter:last-child { border-bottom: 0; }
+.ref { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: .04em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 4vw, 34px); line-height: 1.12; margin: 0; text-wrap: balance; }
+.t p { margin: 0 0 12px; }
+.t p:last-child { margin-bottom: 0; }
+.t ul { margin: 0 0 12px; padding-left: 20px; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+.t code { background: color-mix(in srgb, var(--line) 55%, transparent); padding: 1px 5px; border-radius: 4px; }
+pre { margin: 0; background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 10px; font-family: var(--mono); font-size: 14px; line-height: 1.55; overflow-x: auto; }
+pre .k { color: var(--gold); }
+pre .c { color: #8FA89C; }
+figure { margin: 6px 0 0; display: flex; flex-direction: column; gap: 8px; }
+figure img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--surface); }
+figcaption { font-size: 14px; color: var(--muted); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.history-pair { align-items: start; }
+.five { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.five figure img { aspect-ratio: 1; object-fit: contain; background: #F4F4F2; }
+.five figcaption { font-size: 13px; }
+.five .win img { border: 2px solid var(--gold); }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--gold); }
+.timeline li { padding: 6px 0 14px 18px; position: relative; display: grid; gap: 2px; }
+.timeline li::before { content: ""; position: absolute; left: -9px; top: 12px; width: 15px; height: 15px; border-radius: 50%; background: var(--bg); border: 3px solid var(--gold); }
+.timeline .when { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.timeline .what { font-weight: 600; }
+.timeline .tech { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ref-link { color: inherit; text-decoration: underline; text-decoration-color: var(--gold); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.ref-link:hover, .ref-link:focus-visible { color: var(--accent); }
+.ref-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
+#ref-tip { position: fixed; z-index: 30; max-width: min(380px, calc(100vw - 32px)); background: var(--mask); color: var(--mask-ink); font-size: 13px; line-height: 1.45; padding: 8px 11px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.28); pointer-events: none; overflow-wrap: anywhere; }
+#ref-tip .tip-kind { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); margin-bottom: 2px; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.suspects { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.suspects li { padding: 8px 12px; border-left: 3px solid var(--gold); background: var(--bg); font-size: 15px; line-height: 1.4; }
+footer { color: var(--muted); font-size: 14px; }
+footer .wrap { padding-block: 24px 48px; }
+@media (max-width: 640px) {
+  .pair { grid-template-columns: 1fr; }
+  .five { grid-template-columns: repeat(2, 1fr); }
+  .pads { font-size: 11px; }
+  .pads .long { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .t { animation: fade .25s ease-out; }
+  @keyframes fade { from { opacity: .35; } to { opacity: 1; } }
+}
+
+/* balancebot additions: a bar chart for the tuning captures */
+.bars { display: grid; gap: 8px; }
+.bar { display: grid; grid-template-columns: 9.5rem 1fr 4.5rem; align-items: center; gap: 10px; }
+.bar .lab { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.bar .track-bar { height: 14px; background: color-mix(in srgb, var(--line) 60%, transparent); border-radius: 3px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; min-width: 3px; background: var(--gold); border-radius: 3px; }
+.bar .val { font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.callout .note { margin: 0; font-size: 13px; color: var(--muted); }
+/* long identifiers (order numbers, test names, file names) wrap on phones */
+.t p, .t li { overflow-wrap: break-word; }
+.t code { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .bar { grid-template-columns: 7.5rem 1fr 3.8rem; } }
+</style>
+</head>
+<body>
+
+<div class="doc" id="doc" data-depth="2">
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">mcu-tinkering-lab · balancebot · 2026</p>
+    <h1>Teaching a robot to stand on two wheels</h1>
+    <p>A self-balancing robot on a thumb-sized RP2350 board, from its first firmware in July to standing in place in November, built with Claude Code. Pick how technical you want the explanation with the slider below; every chapter rewrites itself.</p>
+  </div>
+</header>
+
+<div class="depthbar" role="region" aria-label="Technical depth">
+  <div class="wrap">
+    <div class="depthhead">
+      <label for="depth">Technical depth</label>
+      <span><span id="depth-name">Curious</span> · <span id="depth-desc">Plain language, key terms explained</span></span>
+    </div>
+    <div class="track">
+      <input id="depth" type="range" min="1" max="5" step="1" value="2" aria-valuetext="Curious: plain language, key terms explained">
+    </div>
+    <div class="pads" role="group" aria-label="Choose a level">
+      <button type="button" data-v="1" aria-pressed="false">1 <span class="long">Not technical</span></button>
+      <button type="button" data-v="2" aria-pressed="true">2 <span class="long">Curious</span></button>
+      <button type="button" data-v="3" aria-pressed="false">3 <span class="long">Software</span></button>
+      <button type="button" data-v="4" aria-pressed="false">4 <span class="long">Engineering</span></button>
+      <button type="button" data-v="5" aria-pressed="false">5 <span class="long">Hardware</span></button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<!-- 1 -->
+<section class="chapter" id="why">
+  <p class="ref">01 · Why build it</p>
+  <h2>A robot that is always falling</h2>
+  <div class="t" data-l="1"><p>A balancebot has only two wheels, side by side on one axle. Left alone it simply falls over. It stays up the way you keep a broom standing on your palm: it notices which way it starts to tip and moves underneath it, quickly and all the time.</p><p>This one was built to learn exactly that trick, with a small computer, a chip that feels tilt, and two very precise motors.</p></div>
+  <div class="t" data-l="2"><p>Two wheels, a tall body and the battery on top. The robot is always falling a little; a sensor measures the lean hundreds of times a second and the wheels roll under the fall to catch it.</p><p>It is also the first project in this repo that does not run on an ESP32 chip. It uses a Raspberry Pi RP2350 on a thumb-sized Seeed XIAO board, and stepper motors, the kind 3D printers use, which turn in exact small steps.</p></div>
+  <div class="t" data-l="3"><p>An inverted pendulum on wheels is the textbook hard real-time control problem. Every 2 ms, without exception, the firmware reads a sensor, estimates an angle, computes a correction and moves the motors, while a USB console stays responsive for live tuning.</p><p>Nothing else in the repo did closed-loop motion control (the robocar drives DC motors open loop) or ran on non-Espressif silicon, and the parts for a balancer were on hand and idle.</p></div>
+  <div class="t" data-l="4"><p>From <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/requirements/PRD-012-balancebot.md" target="_blank" rel="noopener" data-tip="PRD-012: Balancebot · draft, 2026-07-02">PRD-012</a>: a XIAO RP2350, an MPU6050 IMU, two DRV8825 stepper drivers and two NEMA17 steppers. Goal: balance untethered for minutes and recover from small pushes, with live tuning over USB CDC and gains kept in flash. Out of scope for v1: driving around, wireless (the XIAO RP2350 has no radio), wheel encoders and OTA.</p><p>It also brought the Pico SDK into the monorepo (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-018-pico-sdk-balancebot.md" target="_blank" rel="noopener" data-tip="ADR-018: Pico SDK Toolchain and Balancebot Control Architecture · proposed, 2026-07-02">ADR-018</a>): a build container, shared recipes in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/pico.just" target="_blank" rel="noopener" data-tip="tools/pico.just · Shared Pico SDK recipes (build, flash, test) every RP2040/RP2350 project imports"><code>tools/pico.just</code></a> and a reusable CI build for later RP2040/RP2350 projects.</p></div>
+  <div class="t" data-l="5"><p>Seeed XIAO RP2350 (dual Cortex-M33, single-precision FPU, PIO), a GY-521 (MPU6050) on I²C, two Pololu-format DRV8825 carriers at 1/8 microstep, NEMA17s, a 3S 18650 pack behind a BMS (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/744" target="_blank" rel="noopener" data-tip="Pull request #744 · merged 12 Oct 2026 · docs(balancebot): lock motor power to a 3S 18650 pack with a BMS">#744</a>) and an LM2596 buck to 5 V. Pico SDK 2.2.0, pinned in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/Dockerfile.pico" target="_blank" rel="noopener" data-tip="Dockerfile.pico · The Pico SDK build container; the SDK version is pinned here"><code>Dockerfile.pico</code></a> and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.github/workflows/_ci-build-pico.yml" target="_blank" rel="noopener" data-tip=".github/workflows/_ci-build-pico.yml · GitHub Actions workflow: reusable Pico SDK build"><code>_ci-build-pico.yml</code></a>.</p><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-018-pico-sdk-balancebot.md" target="_blank" rel="noopener" data-tip="ADR-018: Pico SDK Toolchain and Balancebot Control Architecture · proposed, 2026-07-02">ADR-018</a> rejected arduino-pico (it hides PIO and multicore), MicroPython (GC pauses at 500 Hz), Zephyr (a third build system for a two-task firmware) and the MPU6050’s DMP (an opaque blob capped at 200 Hz); a complementary filter is ten inspectable lines.</p></div>
+</section>
+
+<!-- 2 -->
+<section class="chapter" id="timeline">
+  <p class="ref">02 · Timeline</p>
+  <h2>From first firmware to standing still</h2>
+  <div class="t" data-l="1"><p>The program came first, in July. The robot first stood up on its own on 23 November, at the end of a long day of small adjustments.</p></div>
+  <div class="t" data-l="2"><p>July: the program and the wiring plan. October: a smarter way of balancing, a factory-made circuit board and a case. November: a corrected board design, the first tests on the real robot, and the day it balanced.</p></div>
+  <div class="t" data-l="3"><p>From <code>git log</code> over the project: the firmware and the Pico SDK infrastructure land in one PR in July; October adds the LQR and the generated carrier board; November is bring-up, most of it on 22–23 November.</p></div>
+  <div class="t" data-l="4"><p>Dates are merge dates; references are pull requests and issues in <code>laurigates/mcu-tinkering-lab</code>. The hardware pipeline (hardware list, generated carrier, perfboard, cases) is shared with the robocar; the balancebot carrier was the first board it generated.</p></div>
+  <div class="t" data-l="5"><p>The 23 November bench run alone merged <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1236" target="_blank" rel="noopener" data-tip="Pull request #1236 · merged 23 Nov 2026 · fix(balancebot): bound IMU I2C transfers, free a held bus, and widen stat">#1236</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1242" target="_blank" rel="noopener" data-tip="Pull request #1242 · merged 23 Nov 2026 · fix(balancebot): give the accel pitch the gyro&#x27;s forward-positive sign">#1242</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1243" target="_blank" rel="noopener" data-tip="Pull request #1243 · merged 23 Nov 2026 · fix(balancebot): hold off auto-arm after disarm and trim capture; report save">#1243</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1244" target="_blank" rel="noopener" data-tip="Pull request #1244 · merged 23 Nov 2026 · fix(balancebot): alpha default for 500 Hz, and core 1 &#x27;starting&#x27; during boot">#1244</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1245" target="_blank" rel="noopener" data-tip="Pull request #1245 · merged 23 Nov 2026 · chore(balancebot): analyze and lqr-sweep tuning recipes">#1245</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1246" target="_blank" rel="noopener" data-tip="Pull request #1246 · merged 23 Nov 2026 · docs(balancebot): the tuning loop, choosing r, and bring-up signs">#1246</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1247" target="_blank" rel="noopener" data-tip="Pull request #1247 · merged 23 Nov 2026 · docs(skills): balancebot-tuning skill, and the filter and test-model lessons">#1247</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1248" target="_blank" rel="noopener" data-tip="Pull request #1248 · merged 23 Nov 2026 · feat(balancebot): RGB LED guides the hand to the auto-arm window">#1248</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1255" target="_blank" rel="noopener" data-tip="Pull request #1255 · merged 23 Nov 2026 · feat(balancebot): widen the auto-arm window to ±3°">#1255</a> and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1257" target="_blank" rel="noopener" data-tip="Pull request #1257 · merged 23 Nov 2026 · feat(balancebot): drive and turn while balancing">#1257</a>.</p></div>
+  <ol class="timeline">
+    <li><span class="when">Jul 2</span><span class="what">Firmware, Pico SDK container and CI</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/355" target="_blank" rel="noopener" data-tip="Pull request #355 · merged 2 Jul 2026 · feat(balancebot): XIAO RP2350 self-balancing robot + Pico SDK infrastructure">#355</a> · PRD-012 · ADR-018</span></li>
+    <li><span class="when">Jul 3</span><span class="what">A wiring schematic</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/364" target="_blank" rel="noopener" data-tip="Pull request #364 · merged 3 Jul 2026 · docs(balancebot): add wiring schematic">#364</a></span></li>
+    <li><span class="when">Oct 12</span><span class="what">A second controller, switchable while balancing; a printable build guide</span><span class="tech min3">LQR <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/743" target="_blank" rel="noopener" data-tip="Pull request #743 · merged 12 Oct 2026 · feat(balancebot): LQR controller with live, bumpless PID/LQR switch">#743</a> · build guide <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/740" target="_blank" rel="noopener" data-tip="Pull request #740 · merged 12 Oct 2026 · docs(balancebot): printable build guide generated from the hardware join">#740</a></span></li>
+    <li><span class="when">Oct 13–14</span><span class="what">A circuit board, then the same board generated from the hardware list</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/749" target="_blank" rel="noopener" data-tip="Pull request #749 · merged 13 Oct 2026 · feat(balancebot): carrier PCB (KiCad 10), generated and checked against the firmware pin map">#749</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/753" target="_blank" rel="noopener" data-tip="Pull request #753 · merged 13 Oct 2026 · feat(balancebot): SMD passives on the carrier, with JLCPCB assembly files">#753</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/759" target="_blank" rel="noopener" data-tip="Pull request #759 · merged 14 Oct 2026 · feat(kicad): generate the balancebot carrier schematic from the hardware join">#759</a></span></li>
+    <li><span class="when">Oct 13–24</span><span class="what">A perfboard layout with step-by-step build sheets</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/754" target="_blank" rel="noopener" data-tip="Pull request #754 · merged 13 Oct 2026 · feat(balancebot): perfboard prototype layout of the carrier">#754</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/760" target="_blank" rel="noopener" data-tip="Pull request #760 · merged 14 Oct 2026 · refactor(kicad): shared perfboard generator with a per-project perfboard.toml">#760</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/828" target="_blank" rel="noopener" data-tip="Pull request #828 · merged 22 Oct 2026 · feat(kicad): perfboard 1:1 print and continuity checklist">#828</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/858" target="_blank" rel="noopener" data-tip="Pull request #858 · merged 24 Oct 2026 · feat(kicad): printable per-step perfboard build guide">#858</a></span></li>
+    <li><span class="when">Oct 23</span><span class="what">Printed cases; boards ordered</span><span class="tech min3">tools/enclosure <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/839" target="_blank" rel="noopener" data-tip="Pull request #839 · merged 23 Oct 2026 · feat(enclosure): build123d cases for the KiCad carriers">#839</a></span></li>
+    <li><span class="when">Nov 6</span><span class="what">The delivered boards need the sensor upside down: a firmware setting, and a corrected rev3 design</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/971" target="_blank" rel="noopener" data-tip="Pull request #971 · merged 6 Nov 2026 · feat(balancebot): IMU mounting setting for a GY-521 fitted component side down">#971</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/972" target="_blank" rel="noopener" data-tip="Pull request #972 · merged 6 Nov 2026 · feat(balancebot): carrier rev3 with expansion, I2C and test headers">#972</a></span></li>
+    <li><span class="when">Nov 9–12</span><span class="what">Refuse to start when the setup looks wrong</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1014" target="_blank" rel="noopener" data-tip="Pull request #1014 · merged 9 Nov 2026 · feat(balancebot): refuse arm when a still IMU reads upside down">#1014</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1041" target="_blank" rel="noopener" data-tip="Pull request #1041 · merged 9 Nov 2026 · fix(balancebot): refuse arm and load the CLI cannot vouch for">#1041</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1118" target="_blank" rel="noopener" data-tip="Pull request #1118 · merged 12 Nov 2026 · fix(balancebot): close the CLI arm/mount/load gaps left after #1041">#1118</a></span></li>
+    <li><span class="when">Nov 20</span><span class="what">A bring-up checklist</span><span class="tech min3">BRINGUP.md <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1225" target="_blank" rel="noopener" data-tip="Pull request #1225 · merged 20 Nov 2026 · docs(balancebot): add BRINGUP.md for the buck, straps and Vref">#1225</a></span></li>
+    <li><span class="when">Nov 22–23</span><span class="what">Bench session: a sign bug, then tuning; it stands within about a centimetre</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1242" target="_blank" rel="noopener" data-tip="Pull request #1242 · merged 23 Nov 2026 · fix(balancebot): give the accel pitch the gyro&#x27;s forward-positive sign">#1242</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1244" target="_blank" rel="noopener" data-tip="Pull request #1244 · merged 23 Nov 2026 · fix(balancebot): alpha default for 500 Hz, and core 1 &#x27;starting&#x27; during boot">#1244</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1246" target="_blank" rel="noopener" data-tip="Pull request #1246 · merged 23 Nov 2026 · docs(balancebot): the tuning loop, choosing r, and bring-up signs">#1246</a></span></li>
+    <li><span class="when">Nov 23</span><span class="what">Drive and turn while balancing, not yet tried on the robot</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1257" target="_blank" rel="noopener" data-tip="Pull request #1257 · merged 23 Nov 2026 · feat(balancebot): drive and turn while balancing">#1257</a> · bench test <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1256" target="_blank" rel="noopener" data-tip="Issue #1256 · open · [Test] balancebot: bench-check drive, turn sign and spin">#1256</a></span></li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section class="chapter" id="pendulum">
+  <p class="ref">03 · The physics</p>
+  <h2>Falling, caught 500 times a second</h2>
+  <div class="t" data-l="1"><p>Try balancing a pencil on your fingertip: almost impossible. A broom is easy. The taller the thing, the slower it falls, and the more time you have to move under it. The robot works the same way, with the heavy battery up high to slow its fall.</p><p>It never really stands still. It tips a tiny bit and corrects a tiny bit, too small and too fast to see.</p></div>
+  <div class="t" data-l="2"><p>The robot is an upside-down pendulum. When it leans forward, the wheels roll forward to get back under the weight; when it leans back, they roll back. A motion-sensor chip, like the one that turns a phone’s screen, measures the lean 500 times a second.</p><p>Two things make it hard. The correction has to come quickly and on a steady beat. And the sensor is noisy, and gets confused when the robot itself speeds up or slows down.</p></div>
+  <div class="t" data-l="3"><p>The state is four numbers: lean angle, lean rate, wheel position and wheel speed. The controller outputs wheel acceleration, not speed; the firmware integrates it into a step rate. A sign wrong anywhere and the robot drives away from every fall.</p><p>The angle fuses two sensors. The gyroscope is smooth but drifts; the accelerometer is absolute but noisy and fooled by motion. A complementary filter trusts the gyro over short times and the accelerometer over long ones.</p></div>
+  <div class="t" data-l="4"><p>Linearised, θ̈ = (g·θ − u) / L<sub>eff</sub>, with u the wheel acceleration and L<sub>eff</sub> the equivalent pendulum length (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-026-balancebot-lqr-live-switch.md" target="_blank" rel="noopener" data-tip="ADR-026: Balancebot LQR With a Live, Bumpless PID/LQR Switch · accepted, 2026-10-12">ADR-026</a>). The open-loop falling pole is at √(g/L<sub>eff</sub>): about 6.8 rad/s for the robot’s 0.21 m.</p><p>Complementary filter: angle = α·(angle + gyro·dt) + (1 − α)·accel_angle. α is a time constant in disguise, so the right value depends on the loop rate (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1244" target="_blank" rel="noopener" data-tip="Pull request #1244 · merged 23 Nov 2026 · fix(balancebot): alpha default for 500 Hz, and core 1 &#x27;starting&#x27; during boot">#1244</a>).</p></div>
+  <div class="t" data-l="5"><p>Accelerometer pitch is atan2(−a<sub>fwd</sub>, a<sub>up</sub>): it reads the reaction to gravity, so leaning forward tips the forward axis down (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1242" target="_blank" rel="noopener" data-tip="Pull request #1242 · merged 23 Nov 2026 · fix(balancebot): give the accel pitch the gyro&#x27;s forward-positive sign">#1242</a>). The gyro term integrates ω<sub>y</sub>. With τ = α·dt / (1 − α) at dt = 2 ms, α 0.98 gives τ ≈ 0.1 s and α 0.996 τ ≈ 0.5 s (computed from the formula). Below τ the accelerometer’s share reads the robot’s own acceleration as tilt.</p><p>The mount mapping and the pitch trim are applied to every sample before the filter: <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/imu_filter.c" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/imu_filter.c · Complementary filter, accelerometer pitch, mount mapping and trim (pure C)"><code>imu_filter.c</code></a>, with the at-rest thresholds (<code>IMU_STILL_*</code>) in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/imu_filter.h" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/imu_filter.h · Filter interface and the at-rest thresholds IMU_STILL_*"><code>imu_filter.h</code></a>.</p></div>
+</section>
+
+<!-- 4 -->
+<section class="chapter" id="cores">
+  <p class="ref">04 · Inside the chip</p>
+  <h2>Two cores and a pulse machine</h2>
+  <div class="t" data-l="1"><p>The little computer has two brains. One does nothing but balance, on a strict beat, and never gets distracted. The other talks to the laptop, blinks the lights and does the slow sums. A third, tiny helper inside the chip makes the motor pulses by itself, exactly on time.</p></div>
+  <div class="t" data-l="2"><p>The RP2350 chip has two processor cores. Core 1 runs the balance loop 500 times a second and nothing else. Core 0 handles the USB link to a laptop, where you type commands and watch live numbers.</p><p>Stepper motors need a stream of precisely timed pulses, thousands per second. The chip’s PIO, a tiny programmable pulse generator, makes them in hardware, so a busy USB connection never makes a wheel stutter.</p></div>
+  <div class="t" data-l="3"><p>Two cores, two jobs, one rule: the control loop never blocks and never prints. Core 0 sends commands through a lock-free queue; core 1 publishes its state through a snapshot that core 0 reads for telemetry.</p><p>The logic that can be pure is pure C with no SDK includes (PID, filter, LQR solver, flash record, CLI gates, drive mixing), so ten host test suites run on a laptop and in CI without the board.</p></div>
+  <div class="t" data-l="4"><div class="table-scroll"><table><tr><th>Where</th><th>What</th></tr><tr><td>Core 1</td><td>500 Hz: IMU burst read → filter → PID or LQR (output: wheel acceleration) → integrate to step rate → PIO periods. Tilt cutoff, watchdog, flash saves.</td></tr><tr><td>Core 0</td><td>USB CDC CLI, CSV telemetry, LEDs, battery ADC, LQR gain solve.</td></tr><tr><td>PIO0 SM0/SM1</td><td>Step pulse trains, 30–20 000 steps/s, cycle-accurate, holding the last rate between updates.</td></tr></table></div><p>Core 0 → core 1 is a <code>pico_util</code> queue of commands; core 1 → core 0 a seqlock’d snapshot (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/ipc.h" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/ipc.h · Core 0 ↔ core 1: the command queue items and the seqlock&#x27;d snapshot"><code>ipc.h</code></a>).</p></div>
+  <div class="t" data-l="5"><p>Step pulses come from <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/stepper.pio" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/stepper.pio · PIO program generating the STEP pulse trains"><code>stepper.pio</code></a>; rate changes go only through <code>stepper_set_rate()</code>, which owns the acceleration slew and the direction-reversal rule. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-018-pico-sdk-balancebot.md" target="_blank" rel="noopener" data-tip="ADR-018: Pico SDK Toolchain and Balancebot Control Architecture · proposed, 2026-07-02">ADR-018</a> rejected PWM-slice and timer-IRQ stepping because both jitter under USB load.</p><p>A flash erase stalls XIP on both cores, so <code>CMD_SAVE</code> is gated to IDLE and FAULT, and the parameter store stays off the last sector, which UF2 downloads erase (RP2350-E10). Core-1 sources build with <code>-Wdouble-promotion</code>; double-precision maths lives on core 0.</p></div>
+</section>
+
+<!-- 5 -->
+<section class="chapter" id="lqr">
+  <p class="ref">05 · Control</p>
+  <h2>Two controllers, swapped mid-balance</h2>
+  <div class="t" data-l="1"><p>There are two different recipes for deciding how hard to push the wheels, and the robot can switch between them while balancing, without a wobble. The robot ended up using the second, more mathematical one.</p></div>
+  <div class="t" data-l="2"><p>The first controller (PID) reacts to how far the robot leans, how fast, and for how long. It is simple, but finding good settings takes a lot of trial and error. The second (LQR) starts from a model of the robot, its height and wheel size, and works out the best response mathematically.</p><p>Change a setting over USB and the robot recalculates; the new behaviour starts on the next beat.</p></div>
+  <div class="t" data-l="3"><p>A PID cascade and an LQR, switchable live and bumplessly (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-026-balancebot-lqr-live-switch.md" target="_blank" rel="noopener" data-tip="ADR-026: Balancebot LQR With a Live, Bumpless PID/LQR Switch · accepted, 2026-10-12">ADR-026</a>). Both output wheel acceleration, so the motor path is shared. PID → LQR resets the position reference to where the robot stands; LQR → PID pre-loads the PID’s integral so its first output equals the LQR’s last.</p><p>Core 0 solves the LQR gains at boot and on every model change; core 1 receives all four gains in one queue item, so it never runs a tick on half-updated gains.</p></div>
+  <div class="t" data-l="4"><p>Exact zero-order-hold discretisation at dt = 1/500 s; the Riccati equation is solved by the structure-preserving doubling algorithm in double precision. Every <code>set</code> re-solves K and prints K, the closed-loop spectral radius ρ (must be below 1) and the residual. A failed solve rejects the change and leaves the parameter and K as they were. K is never stored, only the model and weights it comes from.</p><p>The default PID gain turned out far too weak to catch a fall with these wheels (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/742" target="_blank" rel="noopener" data-tip="Issue #742 · open · balancebot: default PID kp looks too weak to balance, and ki=0 breaks the LQR→PID bumpless switch">#742</a>), so the robot was tuned on the LQR.</p></div>
+  <div class="t" data-l="5"><p>u = −K·[θ, θ̇, x − x<sub>ref</sub>, ẋ], scaled to steps/s² by steps_per_rev / (π·d) and clamped to <code>ANGLE_PID_OUT_MAX</code> (40 000 steps/s², <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/config.h" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/config.h · Loop rate, clamps and defaults (ANGLE_PID_OUT_MAX, DEFAULT_MAX_RATE_SPS)"><code>config.h</code></a>). The solve needs about 2.1 KB of stack, so core 0 gets the whole 4 KB SCRATCH_Y bank. It is host-tested against a scipy reference (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/tests/host/lqr_reference.py" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/tests/host/lqr_reference.py · scipy reference the C LQR solver is tested against"><code>lqr_reference.py</code></a>).</p><p>Fail closed: core 1 always boots on the PID and refuses <code>ctrl lqr</code> without a K; a saved LQR mode whose boot solve fails falls back to the PID, and both the boot banner and <code>stat</code> say so.</p></div>
+</section>
+
+<!-- 6 -->
+<section class="chapter" id="safety">
+  <p class="ref">06 · Safety</p>
+  <h2>Motors off unless asked</h2>
+  <div class="t" data-l="1"><p>Two strong motors on a robot that falls over need rules. The motors stay off until someone asks for them. If the robot tips too far, it gives up and switches them off. If the program ever freezes, the chip restarts with the motors off.</p></div>
+  <div class="t" data-l="2"><p>The motors start only when you type <code>arm</code>, or hold the robot upright for three seconds. Past 45° of lean it cuts the power. If the setup looks wrong, for example the sensor reads upside down, it refuses to start and says why.</p><p>A coloured light guides your hand to upright: yellow when close, green and brightening inside the window, solid green while balancing, purple while auto-start is paused.</p></div>
+  <div class="t" data-l="3"><p>Safe by construction rather than by good behaviour: a resistor holds the motor drivers’ enable line at “off”, so boot, reset and the bootloader all leave the motors disabled. A hardware watchdog fed only by the control loop reboots a wedged loop into motors-off.</p><p>The console refuses instead of printing OK. <code>arm</code>, <code>mount</code> and <code>load</code> are judged after the commands typed before them have reached core 1, and each refusal says what to do next (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1041" target="_blank" rel="noopener" data-tip="Pull request #1041 · merged 9 Nov 2026 · fix(balancebot): refuse arm and load the CLI cannot vouch for">#1041</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1118" target="_blank" rel="noopener" data-tip="Pull request #1118 · merged 12 Nov 2026 · fix(balancebot): close the CLI arm/mount/load gaps left after #1041">#1118</a>).</p></div>
+  <div class="t" data-l="4"><ul><li>nENABLE has an external 10 kΩ pull-up to 3V3.</li><li>Tilt cutoff: |pitch| > 45° → FAULT, cleared after 2 s upright.</li><li>100 ms hardware watchdog, enabled at the first arm.</li><li><code>arm</code> is refused when the IMU at rest reads body Z below −0.5 g, more than 120° from upright: the mount setting does not match the board (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1014" target="_blank" rel="noopener" data-tip="Pull request #1014 · merged 9 Nov 2026 · feat(balancebot): refuse arm when a still IMU reads upside down">#1014</a>).</li><li>Auto-arm: inside ±3° for 3 s, held off after <code>disarm</code> or <code>trim capture</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1243" target="_blank" rel="noopener" data-tip="Pull request #1243 · merged 23 Nov 2026 · fix(balancebot): hold off auto-arm after disarm and trim capture; report save">#1243</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1255" target="_blank" rel="noopener" data-tip="Pull request #1255 · merged 23 Nov 2026 · feat(balancebot): widen the auto-arm window to ±3°">#1255</a>); the RGB LED shows the window (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1248" target="_blank" rel="noopener" data-tip="Pull request #1248 · merged 23 Nov 2026 · feat(balancebot): RGB LED guides the hand to the auto-arm window">#1248</a>).</li></ul></div>
+  <div class="t" data-l="5"><p>The arm and mount decisions live in pure C (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/arm_gate.c" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/arm_gate.c · Core 1&#x27;s arm and mount decisions, pure C for the host tests"><code>arm_gate.c</code></a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/cli_gate.c" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/cli_gate.c · The CLI&#x27;s arm, mount and load refusals, pure C for the host tests"><code>cli_gate.c</code></a>) so the host suites cover them. “At rest” means |a| = 1 g ± 0.15 g and gyro under 10 °/s. <code>main.c</code> drives nENABLE high before anything else initialises.</p><p>I²C transfers are bounded to 1 ms, and a held SDA is freed with up to nine SCL clocks and a STOP (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1236" target="_blank" rel="noopener" data-tip="Pull request #1236 · merged 23 Nov 2026 · fix(balancebot): bound IMU I2C transfers, free a held bus, and widen stat">#1236</a>). Before that, a reset mid-read could leave the MPU6050 holding the bus across a USB-powered reboot, and core 1 hung before its loop with <code>stat</code> showing tick 0.</p></div>
+</section>
+
+<!-- 7 -->
+<section class="chapter" id="join">
+  <p class="ref">07 · One list, every drawing</p>
+  <h2>The circuit board comes from the same list as the docs</h2>
+  <div class="t" data-l="1"><p>The robot’s wiring is written down in one list. A program reads it and draws the wiring diagram, prints the build guide, lays out a board you can solder by hand, and designs the factory circuit board. Change the list and everything changes together.</p></div>
+  <div class="t" data-l="2"><p>The same idea as on the robocar: one file, <code>hardware.toml</code>, says which part each wire goes to. From it come the wiring tables, a schematic drawing, a printable build guide, a layout for hand-soldering on perfboard, and the factory circuit board.</p><p>The balancebot was the first project whose circuit board came out of that list.</p></div>
+  <div class="t" data-l="3"><p><code>hardware.toml</code> joins the firmware’s pin header with a parts registry (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a>). The first carrier (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/749" target="_blank" rel="noopener" data-tip="Pull request #749 · merged 13 Oct 2026 · feat(balancebot): carrier PCB (KiCad 10), generated and checked against the firmware pin map">#749</a>) was a hand-built netlist that restated the join, and nothing in CI read it. It drifted: a battery divider was wired to a pin the header called spare, and the check still passed.</p><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/759" target="_blank" rel="noopener" data-tip="Pull request #759 · merged 14 Oct 2026 · feat(kicad): generate the balancebot carrier schematic from the hardware join">#759</a> replaced it with a generator, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (ADR-027)"><code>tools/kicad</code></a> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-027-kicad-carrier-generation.md" target="_blank" rel="noopener" data-tip="ADR-027: KiCad Carrier Boards Generated From the Hardware Join · accepted, 2026-10-13">ADR-027</a>), and a CI check that needs no KiCad.</p></div>
+  <div class="t" data-l="4"><p>The project’s <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/hardware.toml · Parts and nets around src/pin_config.h: the third layer of ADR-021&#x27;s join"><code>hardware.toml</code></a> is 675 lines. Generated from it: the WIRING.md tables, the schematic drawing, the Typst build guide (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/740" target="_blank" rel="noopener" data-tip="Pull request #740 · merged 12 Oct 2026 · docs(balancebot): printable build guide generated from the hardware join">#740</a>), the carrier schematic and netlist, and a perfboard layout with one panel per build step and wires routed over free holes (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/754" target="_blank" rel="noopener" data-tip="Pull request #754 · merged 13 Oct 2026 · feat(balancebot): perfboard prototype layout of the carrier">#754</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/857" target="_blank" rel="noopener" data-tip="Pull request #857 · merged 24 Oct 2026 · feat(kicad): route perfboard wires over free holes with splices and buses">#857</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/858" target="_blank" rel="noopener" data-tip="Pull request #858 · merged 24 Oct 2026 · feat(kicad): printable per-step perfboard build guide">#858</a>), plus a 1:1 print and continuity checklist (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/828" target="_blank" rel="noopener" data-tip="Pull request #828 · merged 22 Oct 2026 · feat(kicad): perfboard 1:1 print and continuity checklist">#828</a>). A carrier part without a purchase source fails CI (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/885" target="_blank" rel="noopener" data-tip="Pull request #885 · merged 31 Oct 2026 · feat(kicad): fail CI on a carrier part with no source">#885</a>).</p></div>
+  <div class="t" data-l="5"><p><code>just balancebot::carrier-check</code> writes <code>balancebot-carrier.check.json</code> only when ERC, DRC with a guarded schematic-parity step, netlist parity and the board check all pass. The guard exists because <code>kicad-cli pcb drc --schematic-parity</code> exits 0 when it cannot find the schematic. CI re-derives the stamp’s hashes without KiCad.</p><p>The schematic writer is stdlib-only with uuid5 UUIDs, and its output is byte-identical on Python 3.11, 3.13 and 3.14 (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/759" target="_blank" rel="noopener" data-tip="Pull request #759 · merged 14 Oct 2026 · feat(kicad): generate the balancebot carrier schematic from the hardware join">#759</a>).</p></div>
+  <figure>
+    <img src="img/perfboard.jpg" alt="Generated perfboard layout: the component side with the XIAO, two DRV8825 carriers and the GY-521 outlined on a hole grid, then five panels, one per build step, each showing coloured wires routed between numbered holes" width="1400" height="1291" loading="lazy">
+    <figcaption>The perfboard layout generated from the same list: the component side, then one panel per build step.</figcaption>
+  </figure>
+</section>
+
+<!-- 8 -->
+<section class="chapter" id="delivered">
+  <p class="ref">08 · The boards arrive</p>
+  <h2>The board that came back was not the one in the repo</h2>
+  <div class="t" data-l="1"><p>The circuit boards came back from the factory, and they were the wrong version: an early draft that had been sitting in the online shopping cart for ten days. On that draft the tilt sensor only fits upside down.</p><p>Instead of ordering again, the program learned one new setting: “the sensor is fitted upside down”.</p></div>
+  <div class="t" data-l="2"><p>The boards from the 23 October order turned out to be a draft from 13 October, not the finished design. It has no fuse and no protection against plugging the battery in backwards, and its sensor socket is reversed: fitted the right way up, the sensor’s pins land on the wrong signals.</p><p>The fix was in software. Fit the sensor upside down, so the wiring is right, and tell the firmware with one command, <code>mount down</code>.</p></div>
+  <div class="t" data-l="3"><p>A provenance bug, not a design bug: the factory built an upload that had been left in the cart since 13–14 October, while the hand-off notes recorded the zip on disk.</p><p>The fix had two sides. The firmware gained a mount setting stored in flash (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/971" target="_blank" rel="noopener" data-tip="Pull request #971 · merged 6 Nov 2026 · feat(balancebot): IMU mounting setting for a GY-521 fitted component side down">#971</a>) and refuses to arm when the mount does not match (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1014" target="_blank" rel="noopener" data-tip="Pull request #1014 · merged 9 Nov 2026 · feat(balancebot): refuse arm when a still IMU reads upside down">#1014</a>). The pipeline now prints the git commit on the board’s silkscreen and in every fab file name (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1016" target="_blank" rel="noopener" data-tip="Pull request #1016 · merged 9 Nov 2026 · feat(kicad): put the commit on the fab silkscreen and in the file names">#1016</a>), and the ordering skill checks each cart line’s commit against the hand-off CSV.</p></div>
+  <div class="t" data-l="4"><p>The delivered layout is commit <code>8d18cd8d</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/753" target="_blank" rel="noopener" data-tip="Pull request #753 · merged 13 Oct 2026 · feat(balancebot): SMD passives on the carrier, with JLCPCB assembly files">#753</a>, 13 Oct): an XT30 input with no polarity printed, 7 SMD parts, no F1, Q1, D2 or R4 (so no fuse and no reverse-polarity protection), R3 27 kΩ, and J3 on the front edge of the GY-521 outline. Fitted component side up, the module’s VCC lands on INT.</p><p>Fitted component side down and hanging rearward the wiring is right, but that is a 180° turn about the axle: accel X and Z invert while gyro Y does not. A sign constant cannot fix that (a level board reads about 180°), so it became a setting.</p></div>
+  <div class="t" data-l="5"><p>JLCPCB order W2026102320533303, PCB line Y5-13829495A, file <code>balancebot-carrier-fab_Y5</code>. Identified from the order history’s thumbnail against renders, then confirmed by hand: the F1, Q1, D2 and R4 footprints are absent (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/hardware/carrier/README.md" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/hardware/carrier/README.md · Balancebot carrier PCB: revision history, parts, checks and ordering"><code>README.md</code></a>, “Revision”).</p><p><code>mount down</code> negates accel X and Z before the filter and is stored from <code>PARAM_VERSION</code> 3. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1020" target="_blank" rel="noopener" data-tip="Pull request #1020 · merged 9 Nov 2026 · feat(kicad): gate the balancebot IMU mount against its layout">#1020</a> gates the IMU mount against the layout, and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1022" target="_blank" rel="noopener" data-tip="Pull request #1022 · merged 9 Nov 2026 · feat(kicad): gate module sockets on silkscreen orientation marks">#1022</a> requires silkscreen orientation marks on every module socket: J3 fits its socket three wrong ways.</p></div>
+  <div class="pair">
+    <figure><img src="img/delivered-top.jpg" alt="Top render of the delivered board layout: XT30 pads at the bottom, no fuse or MOSFET, the GY-521 header across the middle of the board" width="1400" height="1050" loading="lazy"><figcaption>Delivered: commit 8d18cd8d, the draft that was in the cart</figcaption></figure>
+    <figure><img src="img/rev3-top.jpg" alt="Top render of rev3: JST-XH pack input with fuse and MOSFET at the bottom left, the GY-521 header lower down with its outline in front, and new expansion and test headers" width="1400" height="1050" loading="lazy"><figcaption>rev3: the design on main now</figcaption></figure>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="chapter" id="rev3">
+  <p class="ref">09 · rev3 and a case</p>
+  <h2>The corrected board, and a box built around it</h2>
+  <div class="t" data-l="1"><p>The corrected design, version 3, has the sensor the right way up and adds a fuse, protection against a backwards battery, and spare plugs for future add-ons. A 3D-printed box is made to fit the board exactly.</p></div>
+  <div class="t" data-l="2"><p>rev3 is 90 × 62 mm. Every module plugs into a socket, so a broken one swaps out without soldering. Besides the fixes it adds an expansion plug, a connector for more sensors, and test points for checking voltages with a meter.</p><p>The case is generated from the finished board, so it knows where every socket and connector sits. The robot itself still balances on the delivered boards.</p></div>
+  <div class="t" data-l="3"><p>rev3 is the design on <code>main</code>; the robot runs on the delivered boards. Cases come from <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/enclosure" target="_blank" rel="noopener" data-tip="tools/enclosure · Printed cases for the KiCad carriers, generated in build123d"><code>tools/enclosure</code></a>, which builds them in build123d from the routed board (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/839" target="_blank" rel="noopener" data-tip="Pull request #839 · merged 23 Oct 2026 · feat(enclosure): build123d cases for the KiCad carriers">#839</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/842" target="_blank" rel="noopener" data-tip="Pull request #842 · merged 23 Oct 2026 · feat(enclosure): captioned product renders with breakout look-alikes, and Fibo 2.0 photos">#842</a>).</p></div>
+  <div class="t" data-l="4"><p>rev3 (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/972" target="_blank" rel="noopener" data-tip="Pull request #972 · merged 6 Nov 2026 · feat(balancebot): carrier rev3 with expansion, I2C and test headers">#972</a>) adds expansion header J6 (5 V through D3, GND, D2, D1, with series resistors R5 and R6), an I²C tap J7 in Qwiic order, supply test header J8, ground post J9 and the drivers’ VIO links R7 and R8, and changes R3 to 22 kΩ so D0 can read a 4S pack. From <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/822" target="_blank" rel="noopener" data-tip="Pull request #822 · merged 21 Oct 2026 · fix(balancebot): pre-order carrier fixes, reverse-polarity input, stitching vias">#822</a>: a 3 A PTC (F1), reverse-polarity P-MOSFET Q1 with D2 and R4, a JST-XH pack input and stitching vias.</p></div>
+  <div class="t" data-l="5"><p>Two layers, SMD passives on top (hand-solderable 0805 and SOD-123), sockets and connectors through-hole. rev3 copper: 247 track segments, 95 vias, 2 zones, 32 footprints. Q1 ZXMP4A16G, D2 BZT52C15, F1 BSMD1812-300-24V. D1 (B5819W) keeps USB from back-feeding the buck, so the buck is set to 5.0–5.3 V. The pack divider R2/R3 (100 k / 22 k) feeds GPIO26 (ADC0) with C3 100 nF at the pin.</p></div>
+  <figure>
+    <img src="img/rev3-iso.jpg" alt="Angled 3D render of the rev3 carrier with its sockets, JST connectors and electrolytic capacitors" width="1400" height="950" loading="lazy">
+    <figcaption>rev3, 90 × 62 mm, rendered from the committed KiCad board.</figcaption>
+  </figure>
+  <div class="pair">
+    <figure><img src="img/case-box.jpg" alt="Render of the carrier in a printed box with the lid lifted, driver look-alike blocks in their sockets and connector cut-outs in the walls" width="1400" height="1000" loading="lazy"><figcaption>Box with lid, modules fitted</figcaption></figure>
+    <figure><img src="img/case-tray.jpg" alt="Render of the carrier in an open printed tray with the XIAO, driver and IMU look-alike blocks in their sockets" width="1400" height="1000" loading="lazy"><figcaption>Open tray</figcaption></figure>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="bringup">
+  <p class="ref">10 · Bring-up</p>
+  <h2>Forward meant backward</h2>
+  <div class="t" data-l="1"><p>Before the motors could move, a checklist: set the power supply to the right voltage, limit how much power each motor can draw, and check that “forward” means the same thing to the sensor and to the wheels.</p><p>That last check found a real mistake. Tilting the robot forward read as leaning backward, so it would have driven away from every fall.</p></div>
+  <div class="t" data-l="2"><p>The steps: set the voltage regulator to 5 V before connecting the computer, set each motor driver’s current limit with a small screwdriver, then tilt the robot and read the numbers.</p><p>Tilting forward read as leaning back. The cause was a sign error in how the accelerometer’s reading became an angle. The automated test had the same mistake built in, so it agreed with the code and passed.</p></div>
+  <div class="t" data-l="3"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/BRINGUP.md" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/BRINGUP.md · Before the first arm: buck, straps, Vref and signs"><code>BRINGUP.md</code></a> covers the buck, the driver straps, Vref and the signs. The sign check failed: tilting toward FWD read negative. The accelerometer half of the filter used atan2(forward, up) while the gyro half was right, so the two halves disagreed (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1242" target="_blank" rel="noopener" data-tip="Pull request #1242 · merged 23 Nov 2026 · fix(balancebot): give the accel pitch the gyro&#x27;s forward-positive sign">#1242</a>).</p><p>The host test’s physics helper had made the same mistake. The repo’s testing rule now says a physics model in a test must come from the physics and be checked on hardware once (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1247" target="_blank" rel="noopener" data-tip="Pull request #1247 · merged 23 Nov 2026 · docs(skills): balancebot-tuning skill, and the filter and test-model lessons">#1247</a>).</p></div>
+  <div class="t" data-l="4"><p>Other findings from the same bench: plug in USB before the pack, because the XIAO’s 5V pin is VBUS and a powered VBUS kept a MacBook from enumerating (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1230" target="_blank" rel="noopener" data-tip="Issue #1230 · open · [Bug] balancebot: USB does not enumerate when the pack is connected before the cable">#1230</a>); an unsaved <code>set</code> is lost on reboot; and wheels in the air run away by design, since the controller keeps trying to catch a fall it cannot stop.</p></div>
+  <div class="t" data-l="5"><p>Vref starts at 0.4 V (0.8 A per phase at 2 × Vref) and never exceeds rated current / 2. Straps: M0 and M1 high, M2 low for 1/8 step; nENABLE high while disarmed. Never plug a motor in with VMOT live.</p><p>The fix flipped one sign, to atan2(−a<sub>fwd</sub>, a<sub>up</sub>); <code>IMU_PITCH_SIGN</code> stayed +1. As a control, the old expression aborts the new test, <code>test_accel_and_gyro_agree_falling_forward</code>. On the robot the same resting pose went from +96.74° to −96.68°.</p></div>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="tuning">
+  <p class="ref">11 · Tuning day</p>
+  <h2>From falling in 15 seconds to holding its spot</h2>
+  <div class="t" data-l="1"><p>Then tuning: round after round of “record 20 seconds, look at the numbers, change one setting”. In one day the robot went from falling over within 15 seconds to standing in place, wandering about a centimetre.</p></div>
+  <div class="t" data-l="2"><p>Each round recorded 20 seconds of data while the robot balanced on its own, and a script read it and named the next change. Two settings did most of the work: telling the controller to be gentler with the motors, and trusting the gyroscope for longer. One more corrected for the robot’s balance point sitting 5.5° off vertical.</p></div>
+  <div class="t" data-l="3"><p>The loop is capture, <code>analyze</code>, one live change, repeat (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1245" target="_blank" rel="noopener" data-tip="Pull request #1245 · merged 23 Nov 2026 · chore(balancebot): analyze and lqr-sweep tuning recipes">#1245</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1246" target="_blank" rel="noopener" data-tip="Pull request #1246 · merged 23 Nov 2026 · docs(balancebot): the tuning loop, choosing r, and bring-up signs">#1246</a>). <code>analyze</code> maps symptoms to settings: time at the acceleration clamp → raise <code>r</code>; a rock near the pendulum frequency → raise <code>alpha</code>; position held but mean angle off zero → add it to <code>trim</code>. The procedure is also a project skill, <code>balancebot-tuning</code>, so the next session starts from it (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1247" target="_blank" rel="noopener" data-tip="Pull request #1247 · merged 23 Nov 2026 · docs(skills): balancebot-tuning skill, and the filter and test-model lessons">#1247</a>).</p></div>
+  <div class="t" data-l="4"><p>With the default r 0.04, K’s angle gain alone reaches the 40 000 steps/s² clamp at 2.2° of lean, so the robot spent half its time against the clamp. r 10 moves that point to 10.8°. Past r ≈ 10–50 only the position hold keeps weakening (<code>just balancebot::lqr-sweep</code>). The old α 0.98 let the accelerometer read the robot’s acceleration as tilt, which showed as a rock near √(g/L) (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1244" target="_blank" rel="noopener" data-tip="Pull request #1244 · merged 23 Nov 2026 · fix(balancebot): alpha default for 500 Hz, and core 1 &#x27;starting&#x27; during boot">#1244</a>).</p></div>
+  <div class="t" data-l="5"><p>K at r 0.04: −134, −14.5, −23.9, −26.4; at r 10: −27.0, −3.9, −1.56, −2.42. Beyond r ≈ 10–50 the angle poles stop at the mirror of the falling pole, −√(g/L). The least-squares <code>fit-leff</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1234" target="_blank" rel="noopener" data-tip="Pull request #1234 · merged 23 Nov 2026 · feat(balancebot): capture and fit-leff recipes">#1234</a>) did not work on real captures (R² 0.13 and 0.06): a well-tuned robot moves too little to fit and a badly tuned one sits at the clamp. l<sub>eff</sub> came from geometry instead: 24 cm tall with three 18650s on top puts it near the axle-to-battery distance, 0.21 m; the wheels are 65 mm. The −5.47° trim came from <code>trim capture</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1233" target="_blank" rel="noopener" data-tip="Pull request #1233 · merged 23 Nov 2026 · feat(balancebot): trim capture and a stillness check on the gyro calibration">#1233</a>).</p></div>
+  <div class="callout">
+    <p class="ref">How far it wandered, one 20 s capture each</p>
+    <div class="bars" role="list">
+      <div class="bar" role="listitem"><span class="lab">r 0.04 · α 0.98</span><span class="track-bar"><span class="fill" style="width:100%"></span></span><span class="val">39 cm</span></div>
+      <div class="bar" role="listitem"><span class="lab">r 10 · α 0.98</span><span class="track-bar"><span class="fill" style="width:11.5%"></span></span><span class="val">4.5 cm</span></div>
+      <div class="bar" role="listitem"><span class="lab">r 10 · α 0.996</span><span class="track-bar"><span class="fill" style="width:5.1%"></span></span><span class="val">2.0 cm</span></div>
+      <div class="bar" role="listitem"><span class="lab">+ trim −5.47°</span><span class="track-bar"><span class="fill" style="width:3.1%"></span></span><span class="val">1.2 cm*</span></div>
+    </div>
+    <p class="note">Position range during the capture. *A 10 s capture.</p>
+  </div>
+  <div class="table-scroll min3"><table><tr><th>Settings</th><th class="num">Angle RMS</th><th class="num">At clamp</th><th class="num">Peak speed</th><th class="num">Position range</th></tr><tr><td>r 0.04, α 0.98</td><td class="num">3.69°</td><td class="num">48 %</td><td class="num">4000 steps/s (limit)</td><td class="num">39 cm</td></tr><tr><td>r 10, α 0.98</td><td class="num">1.40°</td><td class="num">0 %</td><td class="num">1164 steps/s</td><td class="num">4.5 cm</td></tr><tr><td>r 10, α 0.996</td><td class="num">0.23°</td><td class="num">0 %</td><td class="num">470 steps/s</td><td class="num">2.0 cm</td></tr><tr><td>+ trim −5.47°</td><td class="num">0.25°</td><td class="num">0 %</td><td class="num">—</td><td class="num">1.2 cm (10 s)</td></tr></table></div>
+  <pre class="min4" aria-label="Commands from the tuning loop"><span class="c"># one round of the loop</span>
+<span class="k">just</span> balancebot::capture 20          <span class="c"># 20 s at 100 Hz → tmp/balancebot/capture-&lt;time&gt;.csv</span>
+<span class="k">just</span> balancebot::analyze &lt;csv&gt;       <span class="c"># names the next change</span>
+<span class="k">just</span> balancebot::cli "set r 10"      <span class="c"># live; re-solves K, prints K and rho</span>
+<span class="k">just</span> balancebot::cli disarm save     <span class="c"># once it holds</span></pre>
+</section>
+
+<!-- 12 -->
+<section class="chapter" id="drive">
+  <p class="ref">12 · What’s next</p>
+  <h2>Driving by leaning</h2>
+  <div class="t" data-l="1"><p>Standing still was the first goal. The newest program also lets the robot drive forward and back and turn while it balances. That has not been tried on the real robot yet.</p></div>
+  <div class="t" data-l="2"><p>To move forward, the robot doesn’t just push its wheels forward: it leans forward first, and the wheels follow to catch it. The new drive command moves the point the robot is trying to stay over, and the balancing does the rest. A turn is the same trick with one wheel a little faster than the other.</p></div>
+  <div class="t" data-l="3"><p><code>drive &lt;m/s&gt; [turn] [seconds]</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1257" target="_blank" rel="noopener" data-tip="Pull request #1257 · merged 23 Nov 2026 · feat(balancebot): drive and turn while balancing">#1257</a>) moves the reference the balance law tracks instead of adding a motor command, so the lean comes from the law itself. Turn is added to one wheel and subtracted from the other after the law, so the mean wheel rate the law sees is unchanged. The bench test is <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1256" target="_blank" rel="noopener" data-tip="Issue #1256 · open · [Test] balancebot: bench-check drive, turn sign and spin">#1256</a>.</p></div>
+  <div class="t" data-l="4"><p>Limits: speed at most ½ <code>max_rate</code> (about 0.35 m/s), turn at most ¼ (about 0.18 m/s per wheel), speed ramp 1000 steps/s² (about 1° of lean). A drive stops after 2 s by default and 30 s at most, is cleared on every state change, and core 1 accepts it only in RUN. The LQR regulates x − x<sub>ref</sub> and ẋ − v<sub>ref</sub>, with x<sub>ref</sub> held within 5 cm of the wheels.</p></div>
+  <div class="t" data-l="5"><p><code>drive_mix()</code> cuts the turn, never the mean, at the rate clamp; the ramp, timeout, reference clamp and mix are pure C in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/src/drive.c" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/src/drive.c · Drive ramp, timeout, reference clamp and wheel mix (pure C)"><code>drive.c</code></a> with <code>test_drive.c</code>. Open on the robot: the turn sign and the IMU’s centripetal error while spinning (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1256" target="_blank" rel="noopener" data-tip="Issue #1256 · open · [Test] balancebot: bench-check drive, turn sign and spin">#1256</a>). The PID’s default gain is still too weak to balance (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/742" target="_blank" rel="noopener" data-tip="Issue #742 · open · balancebot: default PID kp looks too weak to balance, and ki=0 breaks the LQR→PID bumpless switch">#742</a>).</p></div>
+</section>
+
+<!-- 13 -->
+<section class="chapter" id="claude">
+  <p class="ref">13 · Who did what</p>
+  <h2>Claude writes and checks; Lauri measures and decides</h2>
+  <div class="t" data-l="1"><p>Claude Code, an AI coding assistant, wrote the program, the tests and the circuit-board generator. Lauri built the robot, measured things with a multimeter, held it upright, and decided what to try next. Each bench session ended with its lessons written down, so the next one starts further ahead.</p></div>
+  <div class="t" data-l="2"><p>Claude did the parts a computer can check: code, tests, generated drawings and the automatic checks. Lauri did the parts that need hands and eyes: soldering, measuring, holding the robot, judging whether it looked right.</p><p>What was learned at the bench became written instructions: a bring-up checklist, a tuning procedure, and short commands for every step.</p></div>
+  <div class="t" data-l="3"><div class="table-scroll"><table><tr><th>Layer</th><th>Here</th><th>Job</th></tr><tr><td>Skills</td><td>balancebot-tuning, carrier-pcb, enclosure-cad, jlcpcb-order</td><td>A whole workflow and its traps</td></tr><tr><td>Recipes</td><td><code>just balancebot::</code> cli, stat, capture, analyze, lqr-sweep</td><td>The bench interface, the same for Lauri and Claude</td></tr><tr><td>Gates</td><td>host tests, carrier-check, build-guide-check</td><td>CI that fails on drift</td></tr><tr><td>Docs</td><td>BRINGUP.md, the README’s tuning loop</td><td>The procedure; the skill links to it</td></tr></table></div></div>
+  <div class="t" data-l="4"><p>The bench interface is the CLI over USB CDC. The recipes (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1229" target="_blank" rel="noopener" data-tip="Pull request #1229 · merged 22 Nov 2026 · chore(balancebot): add cli, arm, disarm and stat recipes">#1229</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1234" target="_blank" rel="noopener" data-tip="Pull request #1234 · merged 23 Nov 2026 · feat(balancebot): capture and fit-leff recipes">#1234</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1245" target="_blank" rel="noopener" data-tip="Pull request #1245 · merged 23 Nov 2026 · chore(balancebot): analyze and lqr-sweep tuning recipes">#1245</a>) made it scriptable: Claude sends commands and reads captures, Lauri holds the robot and says what it does. Every number in the tuning table comes from a capture in that session.</p></div>
+  <div class="t" data-l="5"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/skills/balancebot-tuning/SKILL.md" target="_blank" rel="noopener" data-tip=".claude/skills/balancebot-tuning/SKILL.md · Bring up and tune the balancebot from telemetry: capture, analyze, one live change"><code>SKILL.md</code></a> carries the loop and the bench traps; <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robotics/balancebot/CLAUDE.md" target="_blank" rel="noopener" data-tip="packages/robotics/balancebot/CLAUDE.md · Project guidance for Claude Code: architecture and the core-1 rules"><code>CLAUDE.md</code></a> the core-1 rules (no printf, no flash in RUN, no double maths); <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/rules/testing.md" target="_blank" rel="noopener" data-tip=".claude/rules/testing.md · Repo testing rules, including physics models in host tests"><code>testing.md</code></a> the physics-model rule from <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/1242" target="_blank" rel="noopener" data-tip="Pull request #1242 · merged 23 Nov 2026 · fix(balancebot): give the accel pitch the gyro&#x27;s forward-positive sign">#1242</a>.</p></div>
+</section>
+
+</main>
+
+<section class="wrap" aria-label="Why this matters">
+  <div class="callout">
+    <p class="ref">Where it stands</p>
+    <p>The hard part works: a 500 Hz loop on its own core, a board whose quirks are known and handled, and a bench procedure written down. Driving, remote control and a radio, the things version 1 left out, now build on a robot that already stands.</p>
+  </div>
+</section>
+
+<footer><div class="wrap">Status as of 24 November 2026. Built from the <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab">laurigates/mcu-tinkering-lab</a> repository; the page source is <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/docs/site/balancebot"><code>docs/site/balancebot</code></a>. Board images are rendered from the committed KiCad files (rev3 from <code>main</code>, the delivered layout from commit <code>8d18cd8d</code>); case renders come from <code>tools/enclosure</code>. Also see the <a class="ref-link" href="../robocar/">robocar board story</a>.</div></footer>
+
+
+<script>
+(function () {
+  var names = {1: ["Not technical", "Everyday words, no jargon"], 2: ["Curious", "Plain language, key terms explained"], 3: ["Software", "For developers: the ideas, light on electronics"], 4: ["Engineering", "The full story as presented"], 5: ["Hardware", "Part numbers, datasheet values, file paths"]};
+  var range = document.getElementById("depth");
+  var nameEl = document.getElementById("depth-name");
+  var descEl = document.getElementById("depth-desc");
+  var pads = document.querySelectorAll(".pads button");
+  function set(v, persist) {
+    v = Math.min(5, Math.max(1, parseInt(v, 10) || 2));
+    document.getElementById("doc").setAttribute("data-depth", String(v));
+    range.value = String(v);
+    range.setAttribute("aria-valuetext", names[v][0] + ": " + names[v][1]);
+    nameEl.textContent = names[v][0];
+    descEl.textContent = names[v][1];
+    pads.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); });
+    if (persist) { try { localStorage.setItem("balancebot-depth", String(v)); } catch (e) {} }
+  }
+  var start = 2;
+  var m = /^#depth-([1-5])$/.exec(location.hash);
+  if (m) start = m[1]; else { try { var s = localStorage.getItem("balancebot-depth"); if (s) start = s; } catch (e) {} }
+  set(start, false);
+  range.addEventListener("input", function () { set(range.value, true); });
+  pads.forEach(function (b) { b.addEventListener("click", function () { set(b.dataset.v, true); }); });
+  // Hover and focus previews for repo links: the text is baked into data-tip at build time.
+  var tip = document.createElement("div");
+  tip.id = "ref-tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
+  document.getElementById("doc").appendChild(tip);
+  var current = null;
+  function showTip(el) {
+    var text = el.getAttribute("data-tip"); if (!text) return;
+    var sep = text.indexOf(" · ");
+    tip.textContent = "";
+    var k = document.createElement("span"); k.className = "tip-kind";
+    k.textContent = sep > 0 ? text.slice(0, sep) : "Repository";
+    tip.appendChild(k);
+    tip.appendChild(document.createTextNode(sep > 0 ? text.slice(sep + 3) : text));
+    tip.hidden = false; current = el; el.setAttribute("aria-describedby", "ref-tip");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), pad = 12;
+    var left = Math.min(Math.max(pad, r.left), window.innerWidth - t.width - pad);
+    var top = r.top - t.height - 8;
+    if (top < 90) top = r.bottom + 8;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function hideTip() { if (current) current.removeAttribute("aria-describedby"); tip.hidden = true; current = null; }
+  document.addEventListener("pointerover", function (e) { var el = e.target.closest && e.target.closest(".ref-link"); if (el && el !== current) showTip(el); else if (!el && current) hideTip(); });
+  document.addEventListener("focusin", function (e) { var el = e.target.closest && e.target.closest(".ref-link"); if (el) showTip(el); });
+  document.addEventListener("focusout", hideTip);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideTip(); });
+  window.addEventListener("scroll", hideTip, { passive: true });
+  window.addEventListener("hashchange", function () { var mm = /^#depth-([1-5])$/.exec(location.hash); if (mm) set(mm[1], true); });
+})();
+</script>
+</div>
+
+</body>
+</html>

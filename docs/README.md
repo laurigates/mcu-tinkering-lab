@@ -51,8 +51,9 @@ detector.
 
 Each folder under `site/` is published at
 `https://laurigates.github.io/mcu-tinkering-lab/<folder>/`, next to the
-flasher. `site/robocar/` is the robocar hardware story: one self-contained
-`index.html` with its images in `img/`. Never add a top-level
+flasher. `site/robocar/` is the robocar hardware story and `site/balancebot/`
+the balancebot story: each one self-contained `index.html` with its images in
+`img/`. Never add a top-level
 `site/index.html`; it would replace the flasher page.
 
 Pages are published by the `assemble-and-deploy` job of
@@ -61,7 +62,7 @@ publish an edit without waiting for one, run that workflow from `main` with
 `workflow_dispatch` and the latest release tag; it rebuilds that tag's
 firmware and takes the pages from `main`.
 
-To continue the robocar story, add a chapter `<section>` with five
+To continue a story, add a chapter `<section>` with five
 `<div class="t" data-l="1..5">` depth variants, keep photos under 500 KB (the
 `check-added-large-files` hook), strip EXIF location data before committing a
 photo, and update the "Status as of" date in the footer.
