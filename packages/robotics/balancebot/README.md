@@ -16,6 +16,10 @@ Design docs: [PRD-012](../../../docs/requirements/PRD-012-balancebot.md) ·
 [WIRING.md](WIRING.md) ·
 [BRINGUP.md](BRINGUP.md) (buck, straps and Vref before the first `arm`)
 
+The project's story, at five levels of technical depth, is on
+[GitHub Pages](https://laurigates.github.io/mcu-tinkering-lab/balancebot/)
+([source](../../../docs/site/balancebot/index.html)).
+
 A carrier PCB replaces the hand-wired harness: see
 [`hardware/carrier/README.md`](hardware/carrier/README.md) for what is on it,
 how it is generated from `hardware.toml`, and how to order it.

@@ -17,7 +17,10 @@ page itself ([source](docs/flasher/index.html)).
 
 The [robocar board story](https://laurigates.github.io/mcu-tinkering-lab/robocar/)
 follows the robot car from a 2018 kit to a generated, factory-made carrier
-board ([source](docs/site/robocar/index.html)).
+board ([source](docs/site/robocar/index.html)). The
+[balancebot story](https://laurigates.github.io/mcu-tinkering-lab/balancebot/)
+follows the self-balancing robot from its first firmware to standing in place
+([source](docs/site/balancebot/index.html)).
 
 ## Build from source
 
