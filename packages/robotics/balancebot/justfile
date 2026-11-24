@@ -52,8 +52,7 @@ flash:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v picotool >/dev/null 2>&1 || { echo "Error: picotool not found — brew install picotool"; exit 1; }
-    picotool load -f build/balancebot.uf2
-    picotool reboot
+    picotool load -f -x build/balancebot.uf2
     echo "Flashed OK"
 
 # Flash without picotool: drag-and-drop instructions
