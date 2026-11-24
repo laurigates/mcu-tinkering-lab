@@ -70,6 +70,8 @@
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_task.h"
+#include "power_latch.h"
+#include "power_manager.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
 #include "self_report.h"
@@ -2672,6 +2674,12 @@ static void log_boot_banner(void)
 // ========================================
 void app_main(void)
 {
+    /* First of all: the button that switched the robot on stays down until HOLD
+     * is high (ADR-038). A constructor in power_latch.c has usually done this
+     * already; this call is the backstop and keeps that object linked. Makes
+     * no logging calls. */
+    const esp_err_t latch_ret = power_latch_init();
+
     /* Before anything logs: the previous boot's last log lines are still in
      * RTC memory, and the first ESP_LOG line from here on overwrites them
      * (ADR-033). Makes no logging calls itself. */
@@ -2689,6 +2697,12 @@ void app_main(void)
                  esp_err_to_name(mirror_ret));
     }
     log_boot_banner();
+    if (latch_ret == ESP_OK) {
+        ESP_LOGI(TAG, "Power latch: HOLD high %s",
+                 power_latch_asserted_early() ? "before app_main" : "from app_main");
+    } else if (latch_ret != ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGE(TAG, "Power latch: HOLD not driven (%s)", esp_err_to_name(latch_ret));
+    }
 
     /* One GlitchTip event for a reset that was not deliberate (ADR-033). It
      * waits in the queue until MQTT connects; nothing here blocks the boot. */
@@ -2744,6 +2758,13 @@ void app_main(void)
     if (tasks_ret != ESP_OK) {
         ESP_LOGE(TAG, "Task creation failed (%s) — console and manual control unavailable",
                  esp_err_to_name(tasks_ret));
+    }
+
+    /* Pack monitor and power button (ADR-038). After the expander and the
+     * executor, which the button read and the shutdown use. Non-fatal. */
+    const esp_err_t power_ret = power_manager_start();
+    if (power_ret != ESP_OK && power_ret != ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGW(TAG, "power manager not started (%s)", esp_err_to_name(power_ret));
     }
 
     /* Boot diagnostic: prove the drivetrain turns over before any later phase

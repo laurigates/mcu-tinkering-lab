@@ -235,8 +235,10 @@ to end the discharge before the BMS does (ADR-038, #1270): a back-to-back
 P-MOSFET switch in the pack input, a push-button soft latch (the firmware holds
 `HOLD`, D7, high; releasing it switches the robot off), and a 100 kΩ / 22 kΩ
 divider from the switched rail into D3, which reads 1.51 V at a full 8.4 V pack.
-The firmware for the latch and the cutoff is #1271; until it lands, a carrier
-with this switch does not stay on after the button is released.
+The firmware for the latch and the cutoff is `power_manager` (#1271,
+[docs/firmware/power.md](docs/firmware/power.md)). It is compiled in and off by
+default: a carrier with this switch does not stay on after the button is
+released until `FEATURE_POWER_LATCH_ENABLED` is set to 1 in `main/config.h`.
 
 ### The 5 V current budget
 
