@@ -59,6 +59,17 @@ just balancebot::flash          # picotool (reboots the board itself)
 just balancebot::flash-uf2      # or: BOOTSEL drag-and-drop instructions
 ```
 
+A running firmware reboots into BOOTSEL over USB, so the board's buttons are
+needed only when it has crashed or its USB never enumerates. Disarm first:
+
+```bash
+picotool reboot -u -f                    # BOOTSEL; the RP2350 drive mounts
+stty -f /dev/cu.usbmodem<N> 1200         # same, by the 1200-baud request
+picotool reboot                          # back to the firmware
+```
+
+Both were checked on the robot on 2026-11-24 (fw 0.1.16).
+
 ## Tune
 
 ```bash
