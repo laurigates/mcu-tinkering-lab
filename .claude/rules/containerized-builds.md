@@ -323,6 +323,23 @@ clears within the hour. Observed 2026-11-08 building robocar-unified for
 PR #999: the link step caught two sources missing from `main/CMakeLists.txt`
 that the host suite, which lists its own sources, could not.
 
+### Building from a worktree
+
+`docker compose` names its project after the directory holding the compose
+file, so a build from `.claude/worktrees/<name>/` creates a new
+`<name>_default` network. Each worktree takes an address pool, and once
+Docker's predefined pools run out the build fails before the container starts:
+`all predefined address pools have been fully subnetted`. Reuse the main
+checkout's network instead; the `/workspace` mount still resolves to the
+worktree:
+
+```sh
+COMPOSE_PROJECT_NAME=mcu-tinkering-lab just <project>::build
+```
+
+Observed 2026-11-23 building balancebot for PR #1257: the plain build failed,
+and the same build with the variable set compiled cleanly.
+
 ## Adding New ESP-IDF Projects
 
 1. Create justfile with `import '../../../tools/esp32-idf.just'`
