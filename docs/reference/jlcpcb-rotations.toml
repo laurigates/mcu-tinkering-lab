@@ -374,3 +374,11 @@ lcsc_footprint = "R0805"
 rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
+
+[C165948] # TYPE-C-31-M-12
+footprint = "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+lcsc_footprint = "USB-C_SMD-TYPE-C-31-M-12_1"
+rotation = 0
+pads = ["A5", "B5", "A6", "B6", "A7", "B7", "A8", "B8", "SH=4"]
+max_err_mm = 0.13
+checked = "2026-11-24"

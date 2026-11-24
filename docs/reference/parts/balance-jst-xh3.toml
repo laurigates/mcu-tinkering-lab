@@ -1,0 +1,35 @@
+# The pack's balance lead on a JST-XH 3-pin header: the 2S pack's cell midpoint
+# to the carrier's charger (docs/reference/blocks/bq25887-2s-usb-charger.toml,
+# ADR-038, #1272).
+#
+# A 2S balance lead has three wires: the bottom cell's negative, the midpoint,
+# and the top cell's positive. The charger needs only the midpoint. The two
+# end pins stay unconnected on the carrier: the XT30 already carries the pack's
+# + and - through the pack's BMS, and a wire from the raw cell terminals to the
+# carrier's ground or rail would bypass the BMS. They are named for the cells
+# they would be, in the order the common JST-XH 2S lead uses (1 = B-, 2 = the
+# midpoint, 3 = B+); that order is NOT recorded for the robocar's pack, so the
+# first lead is checked with a meter before it is plugged in.
+#
+# Symbol and footprint: KiCad 10.0.6 Connector_Generic:Conn_01x03 and
+# Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical. LCSC C144394 is
+# B3B-XH-A(LF)(SN) (kicad.lcsc, 2026-11-24).
+[part]
+name = "Pack balance lead, JST-XH 3"
+source = "this repo's JST-XH convention (battery-jst-xh2); KiCad 10.0.6 Connector_Generic:Conn_01x03, Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical; LCSC C144394 = B3B-XH-A(LF)(SN)"
+symbol = "Connector_Generic:Conn_01x03"
+footprint = "Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical"
+buy = "lcsc:C144394"  # B3B-XH-A header; the housing and crimps are not in this listing
+
+# Not wired: see above.
+no_connect = ["B-", "B+"]
+
+# Not "+"/"-" on the midpoint: the footprint prints no polarity (as battery-jst-xh2).
+[pins]
+"B-" = 1
+MID = 2
+"B+" = 3
+
+[perfboard]
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+value = "JST-XH balance lead"
