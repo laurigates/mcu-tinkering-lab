@@ -1,5 +1,7 @@
 ---
-reviewed: 2026-11-01
+name: renovate-pr-fix
+description: "Fix a failing Renovate or lock-file-maintenance PR without auto-resolve-conflicts deleting the fix. Use when a renovate/* PR fails CI or conflicts, or a uv lock refresh must be redone."
+user-invocable: false
 ---
 
 # Fixing a Renovate PR: Merge It Before Anything That Touches Its Files
