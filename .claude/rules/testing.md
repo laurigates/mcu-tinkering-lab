@@ -1,5 +1,23 @@
 ---
 reviewed: 2026-11-03
+paths:
+  - 'packages/robotics/robocar/simulation/**'
+  - 'packages/robotics/robocar/twin/**'
+  - 'packages/**/main/**'
+  - 'packages/**/test/**'
+  - 'packages/**/tests/**'
+  - 'packages/**/sim/**'
+  - 'packages/**/components/**'
+  - 'packages/**/hardware/**'
+  - '**/hardware.toml'
+  - '**/conftest.py'
+  - '**/test_*.py'
+  - 'docs/schematics/**'
+  - 'docs/reference/parts/**'
+  - 'tools/**'
+  - '.github/python-suites.json'
+  - '.github/workflows/test.yml'
+  - '.github/workflows/_ci-build-esp32.yml'
 ---
 
 # Testing Requirements
