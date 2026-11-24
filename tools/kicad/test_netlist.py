@@ -700,7 +700,7 @@ role = "UART0_TX_PIN"
 why = "stays on the head"
 
 [[undrawn]]
-role = "UART0_RX_PIN"
+role = "POWER_HOLD_PIN"
 why = "stays on the head"
 
 [[rails]]
@@ -736,7 +736,7 @@ class CableTests(unittest.TestCase):
         (self.project / "main").mkdir(parents=True)
         # The real header's I2C and UART0 macros, extracted, not retyped.
         wanted = re.compile(
-            r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|UART0_RX_PIN) "
+            r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|POWER_HOLD_PIN) "
         )
         text = ROBOCAR_HEADER.read_text(encoding="utf-8")
         lines = [line for line in text.splitlines() if wanted.match(line)]
@@ -980,6 +980,53 @@ class BoardPageTests(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(netlist.main([str(self.project)], self.root), 1)
         self.assertRegex(out.getvalue(), rf"(?m)^FAIL: .*{msg}")
+
+
+class RobocarPowerSwitchTests(unittest.TestCase):
+    """The socketed robocar carrier's power switch, latch and divider (ADR-038, #1270).
+
+    Reads the committed hardware.toml and the registry: the pin numbers below
+    are the cable's (idc-2x08-xiao-cable: pin 11 is D7, pin 8 is D3) and the
+    expander mirror header's (J18 pin 6 is GPB0).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.nets = netlist.build(
+            REPO_ROOT / "packages/robotics/robocar", REPO_ROOT
+        ).nets
+
+    def test_hold_reaches_the_latch_through_the_cable(self):
+        # HOLD: the cable's pin 11 (main end J1), the hold FET's gate and its
+        # pull-down, and nothing else.
+        self.assertEqual(
+            set(self.nets["PWR_HOLD"]), {("J1", "11"), ("Q3", "1"), ("R16", "1")}
+        )
+
+    def test_the_divider_reads_the_switched_rail_into_the_cable(self):
+        self.assertEqual(
+            set(self.nets["PACK_SENSE"]),
+            {("J1", "8"), ("R17", "2"), ("R18", "1"), ("C9", "1")},
+        )
+        # R17 is on VBAT, after the switch and the fuse, so it draws nothing
+        # while the robot is off.
+        self.assertIn(("R17", "1"), self.nets["VBAT"])
+        self.assertIn(("F1", "2"), self.nets["VBAT"])
+
+    def test_the_input_stage_is_the_switched_block(self):
+        # XT30 + -> reverse-polarity FET Q1; the switch FET Q2 and the fuse
+        # follow; the latch drives the switch's gate net through D2.
+        self.assertEqual(set(self.nets["PACK_IN"]), {("J3", "2"), ("Q1", "5")})
+        self.assertIn(("D2", "2"), self.nets["PWR_SW"])
+        self.assertIn(("R15", "2"), self.nets["PWR_SW"])
+
+    def test_the_button_sense_is_on_the_expander_not_the_mcu(self):
+        # No MCU pad is left for it: SENSE is the MCP23017's GPB0 (A5) and the
+        # mirror header's matching pin.
+        self.assertEqual(
+            set(self.nets["PWR_SENSE"]), {("A5", "13"), ("D3", "2"), ("J18", "6")}
+        )
+        self.assertNotIn("J1", {ref for ref, _ in self.nets["PWR_SENSE"]})
 
 
 if __name__ == "__main__":
