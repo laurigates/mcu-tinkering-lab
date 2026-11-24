@@ -189,12 +189,60 @@ static void test_widest_values_fit_and_render(void)
     s.reflex_active = true;
     s.front_failed = true;
     s.rear_failed = true;
+    s.pack_mv = 4294967295u;
     oled_status_format(&s, g_rows);
     assert_all_rows_fit_and_render();
 
     const oled_status_t h = healthy();
     oled_status_format(&h, g_rows);
     assert_all_rows_fit_and_render();
+}
+
+static void test_pack_voltage_follows_the_hardware_row(void)
+{
+    oled_status_t s = healthy();
+    s.pack_mv = 7421;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW OK 7.4V");
+
+    /* Two-digit volts and the rounding of the tenth: 12.65 V is not a 2S pack,
+     * but the formatter must not overrun on it. */
+    s.pack_mv = 8449;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW OK 8.4V");
+    s.pack_mv = 8450;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW OK 8.5V");
+
+    /* The bus row keeps it too. */
+    s.pack_mv = 6600;
+    s.i2c_bus_ok = false;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW NO I2C BUS 6.6V");
+}
+
+static void test_no_pack_reading_shows_nothing(void)
+{
+    /* pack_mv 0 is "no reading": carrier not fitted, no pack, or monitor off. */
+    oled_status_t s = healthy();
+    s.pack_mv = 0;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW OK");
+}
+
+static void test_pack_voltage_yields_to_a_long_hardware_row(void)
+{
+    /* "HW -MOT -SRV -LED" is 17 characters; with " 7.4V" it would be 22, past
+     * the panel's 21. The fault names matter more than the voltage. */
+    oled_status_t s = healthy();
+    s.pack_mv = 7421;
+    s.motors_ok = s.servos_ok = s.leds_ok = false;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW -MOT -SRV -LED");
+
+    s.leds_ok = true;
+    oled_status_format(&s, g_rows);
+    ASSERT_ROW(g_rows, 1, "HW -MOT -SRV 7.4V");
 }
 
 int main(void)
@@ -208,6 +256,9 @@ int main(void)
     test_sonar_failures_and_reflex();
     test_no_telemetry_yet();
     test_widest_values_fit_and_render();
+    test_pack_voltage_follows_the_hardware_row();
+    test_no_pack_reading_shows_nothing();
+    test_pack_voltage_yields_to_a_long_hardware_row();
 
     if (g_failures) {
         printf("oled_status_core: %d failure(s)\n", g_failures);
