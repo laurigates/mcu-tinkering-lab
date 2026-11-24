@@ -28,7 +28,7 @@ static void row_network(const oled_status_t *s, char *out)
              (unsigned)s->ip[2], (unsigned)s->ip[3]);
 }
 
-static void row_hardware(const oled_status_t *s, char *out)
+static void hardware_text(const oled_status_t *s, char *out)
 {
     if (!s->i2c_bus_ok) {
         snprintf(out, ROW_BYTES, "HW NO I2C BUS");
@@ -40,6 +40,22 @@ static void row_hardware(const oled_status_t *s, char *out)
     }
     snprintf(out, ROW_BYTES, "HW%s%s%s", s->motors_ok ? "" : " -MOT", s->servos_ok ? "" : " -SRV",
              s->leds_ok ? "" : " -LED");
+}
+
+static void row_hardware(const oled_status_t *s, char *out)
+{
+    hardware_text(s, out);
+    if (s->pack_mv == 0) {
+        return;
+    }
+    /* Tenths of a volt, rounded; 64-bit so no pack_mv can overflow it. */
+    const unsigned long long tenths = ((unsigned long long)s->pack_mv + 50u) / 100u;
+    char pack[ROW_BYTES];
+    snprintf(pack, sizeof(pack), " %llu.%lluV", tenths / 10u, tenths % 10u);
+    const size_t used = strlen(out);
+    if (used + strlen(pack) <= OLED_STATUS_COLS) {
+        memcpy(out + used, pack, strlen(pack) + 1);
+    }
 }
 
 static void row_planner(const oled_status_t *s, char *out)

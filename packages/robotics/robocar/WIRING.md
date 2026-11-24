@@ -20,24 +20,27 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 | D0 | GPIO1 | `MOTOR_STBY_PIN` | TB6612FNG STBY | HIGH = motors enabled; the six control lines come from the PCA9685 |
 | D1 | GPIO2 | `PIEZO_PIN` | Piezo buzzer + | LEDC PWM, through a series resistor; the other leg to GND |
 | D2 | GPIO3 | `TCA9548A_RST_PIN` | TCA9548A RST | Active-low mux reset, pulsed after repeated failed channel selects; the breakout pulls it up |
-| D3 | GPIO4 | — | *unassigned* |  |
+| D3 | GPIO4 | `PACK_SENSE_PIN` | — | the pack-voltage divider exists only on the carrier PCB; the hand-wired harness leaves D3 open |
 | D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
 | D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
 | D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, log output: the ROM bootloader prints its boot log here at every reset, then the firmware mirrors every ESP_LOG line here at 115200 8N1 (log_mirror.c). The serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
-| D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D7 | GPIO44 | `POWER_HOLD_PIN` | — | the power latch's HOLD output exists only on the carrier PCB; the hand-wired harness has no power switch and leaves D7 open |
 | D8 | GPIO7 | `I2S_BCLK_PIN` | MAX98357A BCLK | Bit clock |
 | D9 | GPIO8 | `I2S_LRCLK_PIN` | MAX98357A LRC | Word select / left-right clock |
 | D10 | GPIO9 | `I2S_DIN_PIN` | MAX98357A DIN | Serial audio data |
 
 <!-- END GENERATED -->
 
-> **Two spare pads: D3 (GPIO4) and D7 (GPIO44, UART0 RX).** Nothing uses
-> them; D3 was the ultrasonic ECHO until the rangefinders moved to I2C (#782).
-> D6 (GPIO43, UART0 TX) is an output, not a spare: the ROM bootloader prints its
-> boot log there at every reset, and the firmware then mirrors every `ESP_LOG`
-> line to it at 115200 8N1 (`main/log_mirror.c`, #798). A USB-serial adapter's
-> RX on D6 (J15 on the carrier) reads both. Beyond those, digital I/O goes
-> through the MCP23017 on TCA9548A channel 2.
+> **No spare pads on the carrier.** D3 (GPIO4, ADC1_CH3) is the pack-voltage
+> divider's input and D7 (GPIO44) is the power latch's `HOLD` output
+> (ADR-038, #1270); both are free on the hand-wired harness. D3 was the
+> ultrasonic ECHO until the rangefinders moved to I2C (#782), and D7 was the
+> UART0 RX pad. D6 (GPIO43, UART0 TX) is an output, not a spare: the ROM
+> bootloader prints its boot log there at every reset, and the firmware then
+> mirrors every `ESP_LOG` line to it at 115200 8N1 (`main/log_mirror.c`, #798).
+> A USB-serial adapter's RX on D6 (J15 on the carrier) reads both. Beyond those,
+> digital I/O goes through the MCP23017 on TCA9548A channel 2; the power
+> button's `SENSE` input is its GPB0.
 
 I2C runs at **100 kHz**: the RCWL-1601 rangefinders fail every read at 400 kHz
 (`I2C_MASTER_FREQ_HZ` in `main/pin_config.h`).
@@ -222,12 +225,20 @@ audio, and eventually random resets. **A distorted voice is a plausible
 low-battery indication on this robot.** Measure the pack before diagnosing
 anything else on this rail.
 
-Nothing on the robot stops the discharge either. The LM2596 has an ON/OFF pin
-(TI SNVS124G, § 6), but the common module ties it to ground on its own board,
-so the regulator keeps drawing as the cells fall past their safe minimum. **Use
-a pack with a BMS**: its cell undervoltage cutoff is the only thing that ends
-the discharge. The carrier adds a 4 A hold PTC fuse (F1) at the pack input for
-a short, not for a flat pack.
+On the hand-wired harness nothing stops the discharge: the LM2596 has an
+ON/OFF pin (TI SNVS124G, § 6), but the common module ties it to ground on its
+own board, so the regulator keeps drawing as the cells fall past their safe
+minimum. **Use a pack with a BMS**: its cell undervoltage cutoff is the only
+thing that ends the discharge. The carrier PCB adds a 4 A hold PTC fuse (F1)
+after its power switch, for a short, not for a flat pack, and a way for firmware
+to end the discharge before the BMS does (ADR-038, #1270): a back-to-back
+P-MOSFET switch in the pack input, a push-button soft latch (the firmware holds
+`HOLD`, D7, high; releasing it switches the robot off), and a 100 kΩ / 22 kΩ
+divider from the switched rail into D3, which reads 1.51 V at a full 8.4 V pack.
+The firmware for the latch and the cutoff is `power_manager` (#1271,
+[docs/firmware/power.md](docs/firmware/power.md)). It is compiled in and off by
+default: a carrier with this switch does not stay on after the button is
+released until `FEATURE_POWER_LATCH_ENABLED` is set to 1 in `main/config.h`.
 
 ### The 5 V current budget
 

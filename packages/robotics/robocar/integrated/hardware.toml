@@ -783,9 +783,15 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 role = "MIC_PDM_DATA_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
 
+# The power switch, latch and pack divider are on the socketed carrier only
+# (ADR-038, #1270); this carrier keeps D3 and D7 open on the head.
 [[undrawn]]
-role = "UART0_RX_PIN"
-why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+role = "POWER_HOLD_PIN"
+why = "the power latch's HOLD output is on the socketed carrier only; this carrier has no power switch yet and leaves D7 open"
+
+[[undrawn]]
+role = "PACK_SENSE_PIN"
+why = "the pack-voltage divider is on the socketed carrier only; this carrier leaves D3 open"
 
 # --- PCA9685 channels ---------------------------------------------------------
 # Every channel role in pin_config.h is wired: the LEDs and servos through

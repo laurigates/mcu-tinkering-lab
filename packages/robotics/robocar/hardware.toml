@@ -319,9 +319,17 @@ role = "UART0_TX_PIN"
 build = "harness"
 why = "UART0 TX, log output: the ROM bootloader prints its boot log here at every reset, then the firmware mirrors every ESP_LOG line here at 115200 8N1 (log_mirror.c). The serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
 
+# The harness has no power switch and no pack divider (ADR-038, #1270): D3 and D7
+# are free pads there. On the carrier they are wired below.
 [[undrawn]]
-role = "UART0_RX_PIN"
-why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+role = "POWER_HOLD_PIN"
+build = "harness"
+why = "the power latch's HOLD output exists only on the carrier PCB; the hand-wired harness has no power switch and leaves D7 open"
+
+[[undrawn]]
+role = "PACK_SENSE_PIN"
+build = "harness"
+why = "the pack-voltage divider exists only on the carrier PCB; the hand-wired harness leaves D3 open"
 
 # --- Power (#646) -----------------------------------------------------------
 # The supply side of the join, emitted as WIRING.md's power diagram. A rail
@@ -478,13 +486,13 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # cable between the head and main boards, and the rails the carrier draws that
 # WIRING.md leaves to prose (GND) or that differ from the harness (3V3).
 
-# The XIAO sits on the head board, on the pan-tilt head; a 2x7 IDC ribbon takes
-# its I2C, STBY, piezo, I2S and MUX_RST lines, UART0 TX, 5V and GND to the main
-# board. docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order,
-# which survives the unkeyed plug going in rotated. Every other XIAO pad stays
-# open on the head: 3V3 (the main board makes its own, below), D3 (free since
-# the rangefinders moved to I2C, #790), and D7 (UART0 RX, spare: its role is
-# [[undrawn]] above, in both views).
+# The XIAO sits on the head board, on the pan-tilt head; a 2x8 IDC ribbon takes
+# its I2C, STBY, piezo, I2S and MUX_RST lines, UART0 TX, the power latch's HOLD
+# (D7), the pack divider's mid-point (D3), 5V and GND to the main board.
+# docs/reference/parts/idc-2x08-xiao-cable.toml gives the pin order, which
+# survives the unkeyed plug going in rotated, and says why the cable grew from
+# 2x7 (ADR-038, #1270). The only XIAO pad that stays open on the head is 3V3
+# (the main board makes its own, below).
 #
 # The PCB carries three head boards, three ways of mounting the ribbon header
 # for Lauri to try in the cradle (2026-10-16); the main board has one end, J1.
@@ -493,10 +501,10 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # connector, on nets HEAD2_* and HEAD3_*. Only one head is fitted with the XIAO
 # at a time.
 [[cables]]
-part = "idc-2x07-xiao-cable"
+part = "idc-2x08-xiao-cable"
 head_ref = "J2"
 main_ref = "J1"
-head_no_connect = ["3V3", "D3", "D7"]
+head_no_connect = ["3V3"]
 spare_heads = [
     { mcu_ref = "U3", head_ref = "J16" },
     { mcu_ref = "U4", head_ref = "J17" },
@@ -546,7 +554,6 @@ pins = [
     "GPA5",
     "GPA6",
     "GPA7",
-    "GPB0",
     "GPB1",
     "GPB2",
     "GPB3",
@@ -604,37 +611,184 @@ role = "TCA9548A_RST_PIN"
 to = "tp_i2c.RST"
 build = "carrier"
 
-# A resettable fuse between the XT30 and everything else (#810): a short on
-# VBAT (the 1 mm track to the LM2596 lead, the test header J11) otherwise has
-# the pack's full fault current behind it. BSMD1812-400-16V (BHFUSE BSMD1812
-# datasheet, Revision 2025): 4 A hold and 8 A trip at 25 C (Itrip is the
-# current it is guaranteed to trip at), 16 V maximum, above the 8.4 V of a
+# The pack input stage is the `pack-input-pfet-switched` block (ADR-038, #1270):
+# XT30 + -> fet_rp (reverse-polarity P-FET) -> fet_sw (power switch) -> F1 ->
+# VBAT, with the switch's SW port driven by the soft latch below. Its comments
+# carry the DMP3013SFV reasoning and the 2S ratings; checked against this robot:
+#
+# - Voltage. DMP3013SFV is a 30 V part with +-25 V VGSS; a charged 2S pack is
+#   8.4 V and an undamped hot-plug ring to twice that, 16.8 V, is inside both.
+#   F1 is 16 V (BSMD1812), above the pack. The block has no gate clamp and is
+#   2S only (the block's own limit); the balancebot's 3S/4S variant is #1273.
+# - Gate drive. VGS = -0.91 x COMMON (block comment). The pack's BMS cuts off
+#   at a cell voltage this repo does not record, and the firmware cutoff sits
+#   above it (#1271); at 6.2 V the gate drive is -5.6 V, inside DMP3013SFV's
+#   RDS(on) row at -4.5 V (17 mohm max, DS40141 Rev. 5-2), and -4.5 V is
+#   reached at COMMON = 4.95 V. Below that the RDS(on) is not specified; the
+#   buck module has dropped out by then anyway.
+# - Current. About 2.4-3.1 A into the LM2596 at full load, up to about 3.4 A
+#   on OUT+ with both motors stalled (pre-fab review SF-2). Two FETs in series
+#   double the channel loss: 2 x 17 mohm x (3.4 A)^2 = 0.39 W at the extreme
+#   (estimate, 25 C RDS(on) maximum), 0.2 W per FET.
+#
+# F1 stays the 4 A hold part of #810 where the block's own fuse is 3 A. A short
+# on VBAT (the 1 mm track to the LM2596 lead, the test header J11) otherwise
+# has the pack's full fault current behind it. BSMD1812-400-16V (BHFUSE
+# BSMD1812 datasheet, Revision 2025): 4 A hold and 8 A trip at 25 C (Itrip is
+# the current it is guaranteed to trip at), 16 V maximum, above the 8.4 V of a
 # charged 2S pack (the 6 V and 12 V parts are not). Its Thermal Derating Chart
 # gives 3.48 A hold at 40 C and 3.16 A at 50 C, against 2.4-3.1 A into the
-# LM2596 at full load (5 V at 3 A out of a 7.4-6.3 V pack). The -300 it
-# replaces (pre-fab review SF-4) derated to 2.55 A at 40 C and 2.28 A at 50 C,
-# under that load. C47263807, Extended, 15,582 in stock (JLCPCB parts search,
-# 2026-10-21). The pack's own 2S BMS ends a short sooner.
-[parts.fuse_in]
-name = "4 A hold PTC fuse, pack input"
-kind = "fuse"
+# LM2596 at full load (5 V at 3 A out of a 7.4-6.3 V pack). The -300 the block
+# carries derates to 2.55 A at 40 C and 2.28 A at 50 C, under that load (pre-fab
+# review SF-4). C47263807, Extended, 15,582 in stock (JLCPCB parts search,
+# 2026-10-21). The pack's own 2S BMS ends a short sooner. The fuse now sits after
+# the FETs, so a fault between XT30 and the FETs (the PACK_IN track and the
+# FET pads, a few mm) has no fuse in front of it; the BMS covers that.
+#
+# Not checked: turn-on inrush. The switch closes in tens of microseconds, and
+# the LM2596 module's input capacitance then charges through two RDS(on) and
+# F1 at whatever the pack delivers. Measure it on the first board (block
+# comment). The latch's HOLD must follow the button press within the MCU's
+# boot time, which is not measured either (soft-latch.toml).
+[blocks.input]
+block = "pack-input-pfet-switched"
+net_prefix = "PACK"
 build = "carrier"
-part = "polyfuse-1812"
-ref = "F1"
-value = "4A hold 16V"
-lcsc = "C47263807"
+refs = { fet_rp = "Q1", fet_sw = "Q2", gate_pu = "R14", gate = "R15", fuse = "F1" }
+parts.fuse = { name = "4 A hold PTC fuse, pack input", value = "4A hold 16V", lcsc = "C47263807" }
+
+# The soft latch on the switch's SW port: one button on, HOLD (D7) held high by
+# firmware, firmware off. SENSE goes to the MCP23017's GPB0, not to a native
+# GPIO: the socketed carrier's only spare XIAO pads are D3 and D7, and both are
+# taken (HOLD and the pack divider). The button wake from deep sleep needs an RTC
+# GPIO and is therefore not available; the long-press switch-off needs the
+# expander fitted.
+[blocks.latch]
+block = "soft-latch"
+net_prefix = "LATCH"
+build = "carrier"
+refs = { hold = "Q3", hold_pd = "R16", d_sw = "D2", d_sense = "D3" }
+
+# The power button is a chassis button on a JST-XH lead, not an on-board tact
+# switch: the repo's tact entry has no LCSC number until its rotation entry is
+# checked by hand (docs/reference/parts/tact-switch-ts1187a.toml), the robot's
+# chassis is where a person reaches, and a lead costs one connector. The button
+# closes BTN to GND. BTN sits at the pack voltage (less one Schottky drop) while
+# the robot is off, with about 76 uA behind it (block comment), so the lead
+# carries no ESD protection: the button-input block's 5 V TVS and 3V3 pull-up
+# would conduct at that voltage and cannot be used here.
+[parts.power_button]
+name = "Power button lead"
+kind = "connector"
+build = "carrier"
+part = "button-jst-xh2"
+ref = "J19"
+value = "Power button"
+
+[[rails]]
+name = "PWR_SW"
+build = "carrier"
+from = "input.SW"
+to = ["latch.SW"]
+
+[[rails]]
+name = "PWR_BTN"
+build = "carrier"
+from = "latch.BTN"
+to = ["power_button.1"]
+
+# The button's SENSE input, on the MCP23017's GPB0 (and the mirror header's
+# pin, so the header still shows the line). GPB0 is not in the mirror
+# header's [[outputs]] list below for that reason.
+[[rails]]
+name = "PWR_SENSE"
+build = "carrier"
+from = "latch.SENSE"
+to = ["expander.GPB0", "exp_header.GPB0"]
+
+# HOLD (the hold FET's gate) and HOLD_PD (its pull-down) are one net; a net
+# takes one pin each, so the block gives them a port each.
+[[nets]]
+role = "POWER_HOLD_PIN"
+to = "latch.HOLD"
+build = "carrier"
+note = "HIGH holds the pack switch on"
+
+[[nets]]
+role = "POWER_HOLD_PIN"
+to = "latch.HOLD_PD"
+build = "carrier"
+note = "100 kΩ pull-down: keeps it low while the MCU is unpowered or in reset"
+
+# The pack-voltage divider into ADC1_CH3 (D3). 100 kOhm from VBAT, the switched
+# rail, so it draws nothing with the robot off; 22 kOhm to GND, the ratio
+# 22/122 = 0.1803 of the balancebot's rev3 divider. A full 2S pack (8.4 V) reads
+# 1.51 V, 6.0 V reads 1.08 V and the BMS-cutoff region around 5 V reads 0.90 V.
+# The ESP32-S3 ADC's usable range at each attenuation is not recorded in this
+# repo's datasheet summary (docs/reference/datasheets/mcu--esp32-s3.md); 1.51 V
+# is chosen to sit in the lower half of any attenuation range ESP-IDF offers,
+# and the range is unverified until read from the datasheet. Current: 8.4 V /
+# 122 kOhm = 69 uA. The
+# source impedance 100k || 22k = 18 kOhm is above the ~10 kOhm usually quoted for
+# the ADC's sample-and-hold; the 100 nF at the pad supplies the sampling charge
+# and puts a 1.8 ms RC on the reading, slower than a motor-start sag (#991),
+# which is what firmware's minimum-duration filter then sees. LCSC numbers as
+# balancebot's R2/R3/C3 (R3 is C17560, Basic).
+[parts.sense_top]
+name = "100 kΩ pack divider, top"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R17"
+value = "100k"
+lcsc = "C149504"
+
+[parts.sense_bottom]
+name = "22 kΩ pack divider, bottom"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R18"
+value = "22k"
+lcsc = "C17560"
+
+[parts.sense_filter]
+name = "100 nF pack divider filter"
+kind = "capacitor"
+build = "carrier"
+part = "c0805"
+ref = "C9"
+value = "100nF"
+lcsc = "C49678"
+
+[[nets]]
+role = "PACK_SENSE_PIN"
+to = "sense_top.B"
+build = "carrier"
+note = "100 kΩ from VBAT"
+
+[[nets]]
+role = "PACK_SENSE_PIN"
+to = "sense_bottom.A"
+build = "carrier"
+note = "22 kΩ to GND: 8.4 V (full 2S) reads 1.51 V"
+
+[[nets]]
+role = "PACK_SENSE_PIN"
+to = "sense_filter.A"
+build = "carrier"
 
 [[rails]]
 name = "PACK_IN"
 build = "carrier"
 from = "pack.+"
-to = ["fuse_in.1"]
+to = ["input.IN"]
 
 [[rails]]
 name = "VBAT"
 build = "carrier"
-from = "fuse_in.2"
-to = ["buck.IN+", "tp_power.VBAT"]
+from = "input.OUT"
+to = ["buck.IN+", "tp_power.VBAT", "sense_top.A"]
 
 [parts.ldo]
 name = "AMS1117-3.3 LDO, main-board 3V3"
@@ -1140,6 +1294,10 @@ to = [
     "tp_i2c.GND",
     "gnd_post_amp.GND",
     "gnd_post_ldo.GND",
+    "latch.GND",
+    "power_button.2",
+    "sense_bottom.B",
+    "sense_filter.B",
 ]
 
 # Carrier net names, where they differ from the role or rail name.
@@ -1149,6 +1307,8 @@ I2C_SCL_PIN = "I2C_SCL"
 MOTOR_STBY_PIN = "MOTOR_STBY"
 TCA9548A_RST_PIN = "MUX_RST"
 UART0_TX_PIN = "UART0_TX"
+POWER_HOLD_PIN = "PWR_HOLD"
+PACK_SENSE_PIN = "PACK_SENSE"
 PIEZO_PIN = "PIEZO"
 I2S_BCLK_PIN = "I2S_BCLK"
 I2S_LRCLK_PIN = "I2S_LRCLK"

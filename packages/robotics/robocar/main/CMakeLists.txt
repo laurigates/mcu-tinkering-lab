@@ -77,6 +77,10 @@ idf_component_register(
         "oled.c"
         "oled_status.c"
         "oled_status_core.c"
+        "power_core.c"
+        "power_latch.c"
+        "pack_sense.c"
+        "power_manager.c"
     INCLUDE_DIRS "."
     # Prebuilt clips, 24 kHz mono int16 (sounds/manifest.toml, tools/build-sounds.py).
     # sound_clips.c names each one's _binary_<tag>_pcm_start/_end symbols.
@@ -97,6 +101,7 @@ idf_component_register(
         "json"
         "nvs_flash"
         "driver"
+        "esp_adc"
         "espressif__mdns"
         "mqtt"
         "app_update"

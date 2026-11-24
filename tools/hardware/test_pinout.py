@@ -329,6 +329,11 @@ class CommittedImagesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             boards = Path(tmp) / "docs/reference/boards"
             shutil.copytree(REPO_ROOT / "docs/reference/boards", boards)
+            # robocar's hardware.toml uses circuit blocks (ADR-031), which the
+            # join reads from the repo root it is given.
+            shutil.copytree(
+                REPO_ROOT / "docs/reference/blocks", Path(tmp) / "docs/reference/blocks"
+            )
             page = boards / "sparkfun-tb6612fng.md"
             page.write_text(
                 page.read_text(encoding="utf-8")

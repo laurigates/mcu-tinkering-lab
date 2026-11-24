@@ -10,8 +10,8 @@ rationale: [ADR-031](../../decisions/ADR-031-circuit-blocks.md).
 |---|---|---|
 | [`tps563208-5v`](tps563208-5v.toml) | 5 V / 3 A synchronous buck, 6.7-17 V in (2S) | robocar-integrated |
 | [`pack-input-pfet-ptc`](pack-input-pfet-ptc.toml) | 2S pack input: reverse-polarity P-FET, PTC fuse | robocar-integrated |
-| [`pack-input-pfet-switched`](pack-input-pfet-switched.toml) | 2S pack input with an on/off switch: back-to-back P-FETs, PTC fuse; the switch carries ~76 µA | none yet; planned for the robocar carriers (ADR-038, #1270) |
-| [`soft-latch`](soft-latch.toml) | Push-button soft power latch driving `pack-input-pfet-switched` | none yet; planned for the robocar carriers (ADR-038, #1270) |
+| [`pack-input-pfet-switched`](pack-input-pfet-switched.toml) | 2S pack input with an on/off switch: back-to-back P-FETs, PTC fuse; the switch carries ~76 µA | robocar (socketed carrier; ADR-038, #1270) |
+| [`soft-latch`](soft-latch.toml) | Push-button soft power latch driving `pack-input-pfet-switched` | robocar (socketed carrier; ADR-038, #1270) |
 | [`button-input`](button-input.toml) | One button: on-board tact switch and off-board connector in parallel, RC debounce, TVS | none yet |
 
 A block no carrier uses is checked for structure (`hardware::test`) and for

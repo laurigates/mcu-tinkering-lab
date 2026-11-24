@@ -140,11 +140,11 @@ Sense module and do not conflict.
   ([D0], [GPIO#MOTOR_STBY_PIN], [TB6612FNG STBY], [HIGH = motors enabled]),
   ([D1], [GPIO#PIEZO_PIN], [Piezo buzzer], [LEDC PWM · 100 Ω in series]),
   ([D2], [GPIO#MUX_RST_PIN], [TCA9548A RST], [Active low; pulsed to free a stuck bus]),
-  ([D3], [—], [_spare_], [Free since the rangefinders moved to I²C]),
+  ([D3], [GPIO#PACK_SENSE_PIN], [*Pack voltage*], [Divider into ADC1 · carrier only]),
   ([D4], [GPIO#I2C_SDA_PIN], [*I²C SDA*], [to TCA9548A]),
   ([D5], [GPIO#I2C_SCL_PIN], [*I²C SCL*], [to TCA9548A]),
   ([D6], [GPIO#UART0_TX_PIN], [UART0 TX], [Boot log, then app log · 115200 8N1]),
-  ([D7], [GPIO#UART0_RX_PIN], [UART0 RX], [Spare · console is on USB-C]),
+  ([D7], [GPIO#POWER_HOLD_PIN], [*Power latch HOLD*], [HIGH keeps the carrier switched on · carrier only]),
   ([D8], [GPIO#I2S_BCLK_PIN], [*I²S BCLK*], [to MAX98357A — bit clock]),
   ([D9], [GPIO#I2S_LRCLK_PIN], [*I²S LRCLK*], [to MAX98357A — word select]),
   ([D10], [GPIO#I2S_DIN_PIN], [*I²S DIN*], [to MAX98357A — serial data]),
@@ -152,8 +152,10 @@ Sense module and do not conflict.
 )
 I²C runs at *#(I2C_FREQ_HZ / 1000) kHz*.
 
-#callout("Two spare pads: D3, D7", kind: "warn")[
-  D3 and D7 (GPIO#UART0_RX_PIN, UART0 RX) are the only free header pads. D6
+#callout("No spare pads", kind: "warn")[
+  D3 (GPIO#PACK_SENSE_PIN, the pack-voltage divider) and D7 (GPIO#POWER_HOLD_PIN,
+  the power latch) were the two free header pads; the carrier's switch took
+  them, and the hand-wired harness leaves both open. D6
   (GPIO#UART0_TX_PIN, UART0 TX) is an output: the ROM bootloader prints its
   boot log there at every reset, and the firmware then mirrors every log line
   to it at 115200 8N1 — clip a USB-serial adapter's RX and GND on to read it

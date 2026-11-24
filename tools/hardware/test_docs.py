@@ -668,11 +668,12 @@ class RobocarDocsTest(unittest.TestCase):
         proj = self.copy_project()
         header = proj / "main/pin_config.h"
         text = header.read_text(encoding="utf-8")
-        # Move the mux reset to the spare D3: it stays on a header pad, so the
-        # join still resolves and only the documents disagree.
+        # Swap the I2S bit clock and word select: both stay on header pads and
+        # on distinct ones, so the join still resolves and only the documents
+        # disagree. (No pad is spare since the power latch took D3 and D7.)
         moved = text.replace(
-            "TCA9548A_RST_PIN GPIO_NUM_3", "TCA9548A_RST_PIN GPIO_NUM_4"
-        )
+            "I2S_BCLK_PIN GPIO_NUM_7", "I2S_BCLK_PIN GPIO_NUM_8"
+        ).replace("I2S_LRCLK_PIN GPIO_NUM_8", "I2S_LRCLK_PIN GPIO_NUM_7")
         self.assertNotEqual(moved, text)
         header.write_text(moved, encoding="utf-8")
         self.assertEqual(
@@ -682,7 +683,7 @@ class RobocarDocsTest(unittest.TestCase):
             self.assertEqual(main([str(proj)], repo_root=REPO_ROOT), 0)
         self.assertEqual(check_project(proj, repo_root=REPO_ROOT), [])
         self.assertIn(
-            "| RST | GPIO4 (D3) |", (proj / "WIRING.md").read_text(encoding="utf-8")
+            "| BCLK | GPIO8 (D9) |", (proj / "WIRING.md").read_text(encoding="utf-8")
         )
 
     def test_a_pin_change_reaches_the_power_diagram(self):

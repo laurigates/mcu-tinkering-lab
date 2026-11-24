@@ -1459,13 +1459,21 @@ class RobocarJoinTest(unittest.TestCase):
         for role in mic:
             self.assertIsNone(self.model.pin_for(role), role)
 
-    def test_the_uart0_pads_are_excused_and_sit_on_d6_d7(self):
+    def test_the_uart0_tx_pad_is_excused_and_sits_on_d6(self):
         # Promoted from a doc comment to real macros (#461) so the build guide
-        # and WIRING.md stop hand-typing GPIO43/44.
+        # and WIRING.md stop hand-typing GPIO43. D7 is no longer UART0 RX here:
+        # it is the power latch's HOLD output (ADR-038, #1270).
         undrawn = {u.role for u in self.model.undrawn}
-        self.assertLessEqual({"UART0_TX_PIN", "UART0_RX_PIN"}, undrawn)
+        self.assertIn("UART0_TX_PIN", undrawn)
         self.assertEqual(self.model.pin_for("UART0_TX_PIN").name, "D6")
-        self.assertEqual(self.model.pin_for("UART0_RX_PIN").name, "D7")
+
+    def test_the_power_latch_and_pack_divider_pads_are_d7_and_d3(self):
+        # The harness has no switch or divider, so both are excused there; the
+        # carrier wires them.
+        undrawn = {u.role for u in self.model.undrawn}
+        self.assertLessEqual({"POWER_HOLD_PIN", "PACK_SENSE_PIN"}, undrawn)
+        self.assertEqual(self.model.pin_for("POWER_HOLD_PIN").name, "D7")
+        self.assertEqual(self.model.pin_for("PACK_SENSE_PIN").name, "D3")
 
     def rail_of(self) -> dict[tuple[str, str], str]:
         return {(e.part, e.pin): r.name for r in self.model.rails for e in r.loads}

@@ -122,6 +122,28 @@
 #define LOG_MIRROR_TASK_CORE 1
 
 // ========================================
+// Power manager (ADR-038, #1271): pack monitor and power button
+// ========================================
+// The task polls the pack divider and the button at this period. A press is
+// POWER_BUTTON_LONG_PRESS_MS long and the cutoff waits POWER_PACK_MIN_LOW_MS
+// (power_core.h), so 100 ms resolves both.
+#define POWER_TASK_STACK_SIZE 4096
+#define POWER_TASK_PRIORITY 3
+#define POWER_TASK_CORE 1
+#define POWER_POLL_MS 100
+// Pack voltage on MQTT: {"pack_mv":7421,"state":"ok"}. Not retained.
+#define POWER_MQTT_TOPIC "robocar/power"
+#define POWER_MQTT_PERIOD_MS 10000
+// Shutdown: the spoken line may wait this long for the TTS fetch and playback
+// (the network may be down, and then it is simply skipped) before HOLD is
+// released.
+#define POWER_SPEAK_MAX_MS 12000
+// After HOLD is released the carrier cuts the supply once the button is up. A
+// robot that is still running after this (USB power, or the button held)
+// sleeps instead of carrying on.
+#define POWER_OFF_GRACE_MS 2000
+
+// ========================================
 // Error events to GlitchTip (ADR-033)
 // ========================================
 // Sentry-shaped JSON on this topic at QoS 1; tools/glitchtip/bridge forwards
@@ -200,6 +222,16 @@
 #define FEATURE_MQTT_ENABLED 1
 #define FEATURE_OTA_ENABLED 1
 #define FEATURE_AI_ENABLED 1
+
+// Carrier power switch and pack monitor (ADR-038, #1271). Off by default: it
+// drives GPIO44 (D7) high at boot, reads the pack divider on GPIO4 (D3) and
+// shuts the robot down on a long press or a low pack. All of that is the
+// socketed carrier's power latch. A hand-wired robot leaves D7 open and D3
+// floating, where the pack reading is noise that could end in a false
+// shutdown. Set to 1 for a robot built on the carrier.
+#ifndef FEATURE_POWER_LATCH_ENABLED
+#define FEATURE_POWER_LATCH_ENABLED 0
+#endif
 
 // Status LED is not available on XIAO Sense (no user-accessible LED)
 #define STATUS_LED_ENABLED 0

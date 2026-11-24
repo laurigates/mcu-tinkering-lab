@@ -41,6 +41,7 @@
 #include "mqtt_logger.h"
 #include "note_gate.h"
 #include "ota_manager.h"
+#include "power_manager.h"
 #include "sdkconfig.h"
 
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF
@@ -189,6 +190,12 @@ static void fill_common(event_report_t *ev, const char *event_id, const char *re
     ev->extras[ev->extra_count++] = (event_report_extra_t){"uptime_ms", p->uptime_ms};
     ev->extras[ev->extra_count++] = (event_report_extra_t){
         "free_internal", (int64_t)heap_caps_get_free_size(MALLOC_CAP_INTERNAL)};
+    /* The pack voltage when the carrier's monitor has a reading: a BROWNOUT
+     * reset with a low pack reads differently from one with a full pack (#991). */
+    const uint32_t pack_mv = power_manager_pack_mv();
+    if (pack_mv != 0) {
+        ev->extras[ev->extra_count++] = (event_report_extra_t){"pack_mv", (int64_t)pack_mv};
+    }
 }
 
 /** The planner-note half of render_pending(): @p ev already holds the common
