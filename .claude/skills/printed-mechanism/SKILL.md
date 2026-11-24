@@ -120,7 +120,7 @@ adversarial review → fixes. Run it only when the user asks for a multi-agent
 run. Write the shared fixtures first (above), and pass the brief, entrants,
 lenses and paths as `args`; the script's header documents them. The pan-tilt
 run used 36 agents and about 5.3M subagent tokens and hit a session limit
-once; see `.claude/rules/multi-agent-workflows.md` for surviving that.
+once; see the `multi-agent-workflows` skill for surviving that.
 
 ## Environment traps
 

@@ -1,5 +1,7 @@
 ---
-reviewed: 2026-11-14
+name: multi-agent-workflows
+description: "Run a Workflow fan-out of parallel or competing agents here: shared inputs, null-safe barriers, resume, checkpoint commits, trial merges, bot and rate-limit traps. Use when authoring, running or resuming a Workflow script."
+user-invocable: false
 ---
 
 # Multi-Agent Workflows: Fair Inputs, Guarded Barriers, Clean Checkpoints
@@ -46,7 +48,7 @@ quiet the stop hook then captures a design between edits, with a check report
 that does not match its geometry. Commit at checkpoints: after a run, or
 after a failed run, the files of the agents that completed. Before each
 commit, re-run the gates on what is being committed and lint through
-pre-commit (`python-lint.md`).
+pre-commit (`.claude/rules/python-lint.md`).
 
 While only a read-only stage is running (a verifier or reviewers after the
 implementer returned), the tree is that implementer's finished work and can be
@@ -120,7 +122,7 @@ changes against `main`, since `main` may have added hooks. On #1149 it merged
 twice 72 minutes apart, once across a release that had bumped the
 simulation's version files, and `main`'s new `actionlint` hook needed
 `scripts/install_pkgs.sh` run first. Its merge commit also turns the PR's
-merge method to squash ([`pr-landing.md`](pr-landing.md)).
+merge method to squash (the `pr-landing` skill, [`SKILL.md`](../pr-landing/SKILL.md)).
 
 ## Have the contract built in scratch before it is implemented
 
@@ -140,7 +142,7 @@ A verify-and-repair round leaves `fix` commits that correct work the same PR
 introduced. Left as separate commits they make the PR squash-only and, in a
 released component, put a changelog line on a bug that never shipped. Fold
 each into the commit it corrects before the PR is final, and reword that
-commit's message to cover it ([`pr-landing.md`](pr-landing.md)).
+commit's message to cover it (the `pr-landing` skill, [`SKILL.md`](../pr-landing/SKILL.md)).
 
 ## Have agents report follow-ups, then verify them once and file
 
