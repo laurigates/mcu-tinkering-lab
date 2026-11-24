@@ -36,7 +36,9 @@ are in `BRINGUP.md`. This skill is the decision table and the traps.
    For a push, a fall or anything the cable would spoil, use the run log
    instead: unplug USB, run, then `just balancebot::log-dump` and `analyze`
    the CSV it writes (README "Untethered run log", ADR-037). `log` says
-   whether the last run saved.
+   whether the last run saved. Dump after **every** run: flash keeps only
+   the newest, so the next run overwrites it (runs 5 and 6 were lost this
+   way on 2026-11-24).
 5. `just balancebot::cli disarm save` when it holds; `save` reports `OK saved`.
 
 | `analyze` shows | Cause | Change |
@@ -45,11 +47,46 @@ are in `BRINGUP.md`. This skill is the decision table and the traps.
 | a rock near √(g/L) (about 1.1 Hz for 0.21 m) | alpha too low: the accelerometer reads the robot's own acceleration as tilt | raise `alpha` (τ = dt·α/(1−α); 0.996 is 0.5 s at 500 Hz) |
 | position held, mean angle away from 0 | trim | add the mean angle to `trim` |
 | position wanders | position hold too weak (high r) | raise `q_x` / `q_dx` |
-| at maxrate | speed limit | raise `maxrate` only if the motors keep up: 8000 stalled the rev1 steppers (buzz) |
+| at maxrate | speed limit | raise `maxrate` only if the motors keep up: 5000 and 6000 ran clean on 3S, 8000 stalled the rev1 steppers (buzz) |
 
 Judge the robot by wheel speed and position range as well as the angle. The
 angle passes through the filter, so a filter change alters what it reads; the
 speed and position do not, and they show whether the robot really moved less.
+
+## Reading a fall
+
+Every push-test fall so far (#1262: `maxrate` 4000, 5000, 6000) had the same
+cause: the wheels reached `maxrate` and the lean kept growing. Read a fall in
+this order:
+
+1. **Sign.** The LQR uses theta = −pitch (`lqr.h`), so a positive logged
+   `angle_deg` is caught by a negative `rate_sps`. Rate and angle of opposite
+   sign at the cap means the wheels were driving the right way.
+2. **The point of no return is when `rate_sps` first sits at the cap**, not the
+   45° cutoff. Note the lean and the time from there to FAULT (0.6° and 0.47 s
+   at 4000; 4.4° and 1.1 s at 5000). The cutoff is not the limit: with the
+   40 000 steps/s² clamp and 65 mm wheels (5.1 m/s²) no lean past about
+   atan(5.1/9.81) ≈ 27° can be held at all, so raising `TILT_CUTOFF_DEG` cannot
+   save a fall.
+3. **Did the motors keep up?** `rate_sps` and `pos_m` are commanded, not
+   measured. Compare the ground acceleration the IMU implies,
+   u = g·θ − L·θ̈ (θ̈ from a 50 ms difference of the gyro), with the change in
+   `rate_sps`. At the cap the commanded change is 0; an implied value near 0
+   (it scatters about ±2 m/s² on these logs) means the wheels held speed. A
+   sustained positive gap would mean skipped steps or wheel slip.
+4. **What asked for the speed.** Rebuild u = −K·s term by term from the log
+   (θ = −pitch in rad, θ̇ = −gyro, x = `pos_m`, ẋ = `rate_sps` / steps-per-metre,
+   K from `stat`). After a push is released, the angle term is what asks for
+   speed; the position term brakes the return.
+
+**Steady pushes.** Under a held push the lean is set by the push (about
+push/weight), not by the gains; `q_x` decides how far the robot rolls before it
+gets there. A lower `q_x` gets pushed further at the same lean, so it does not
+make the release easier. A point-mass simulation with a 2 s push ramp
+(2026-11-24) put the largest survived push at 12 % of weight for `q_x` 400 and
+15 % for 1600 at `maxrate` 5000, failing on release, as the robot did. The
+simulation is pessimistic in absolute terms: the robot held a 12° lean at 5000.
+Change one setting per run, or the logs cannot say which helped.
 
 ## Traps from the bench
 
