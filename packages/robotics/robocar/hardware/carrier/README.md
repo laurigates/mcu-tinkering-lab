@@ -67,6 +67,10 @@ top side; everything else is through-hole.
 | J19 | JST-XH 2-pin | main | Power button lead (a chassis push button, either way round) |
 | R17, R18, C9 | 100 kΩ (C149504), 22 kΩ (C17560), 100 nF (C49678), 0805 | main | Pack-voltage divider into D3 and its filter |
 | J3 | XT30 (AMASS XT30PW-M) | main | Pack in; pad 1 is "−" |
+| U5, L1 | BQ25887RGER (VQFN-24, C2761614), 1 µH 1008 inductor (C435392) | main | The pack's USB charger; see [The USB-C charger](#the-usb-c-charger) |
+| C10–C19, R19–R31 | 0805 | main | The charger block's capacitors and resistors (the block's header lists values and LCSC numbers) |
+| J20 | USB-C receptacle, USB 2.0 16-pin (HRO TYPE-C-31-M-12, C165948) | main | Charge-only port; not the XIAO's USB-C, and not connected to its 5V pin |
+| J21 | JST-XH 3-pin | main | Pack balance lead: only pin 2, the cells' midpoint, is wired |
 | J4 | JST VH 4-pin (B4P-VH), 3.96 mm | main | LM2596 module: IN+, IN−, OUT+, OUT−; the silkscreen prints "I+ I- O+ O-" and "SET LM2596 TO 5.0V FIRST" beside it |
 | J5, J6 | JST-XH 2-pin | main | Left and right motor, side by side at A1's motor outputs |
 | J7, J8 | JST-XH 4-pin | main | RCWL-1601 front and rear, I2C mode: VCC, SCL, SDA, GND (silkscreen "V C D G"); side by side at the front edge |
@@ -167,6 +171,63 @@ D2, D3 and J19, the fixed `PACK_IN` and `VBAT` tracks and F1's position predate
 the switch, and J1, J2, J16 and J17 are 2 mm longer. Add the placements, run
 `just robocar::carrier-board-checked` (KiCad 10.0.6), then `carrier-check`, and
 commit the board and its stamp.
+
+## The USB-C charger
+
+ADR-038 / #1272. The circuit block
+[`bq25887-2s-usb-charger`](../../../../../docs/reference/blocks/bq25887-2s-usb-charger.toml)
+(first use on a board) charges the 2S pack from a 5 V USB-C port on J20 and
+balances the cells. The block's header holds the datasheet reasoning, the IC
+comparison against the MP2672A, and every number below.
+
+- **The port reaches nothing but the charger.** `CHG_VBUS` joins J20's four
+  VBUS pins, U5's VBUS pin and C10, and no rail names it besides. The XIAO's 5V
+  pad is its own VBUS (#1252), so the netlist test
+  (`RobocarChargerTests`) pins `CHG_VBUS` to those pins. J20's CC1 and CC2 each
+  have a 5.1 kΩ pull-down (R30, R31): a sink that asks for 5 V and negotiates
+  nothing. D+, D− and SBU are open. J20's shield and GND pins go to GND.
+- **BAT is on `PACK_IN`**, the pack side of Q1, so the pack charges with the
+  robot off, through J3 pin 2 and the pack's BMS. The charge current does not go
+  through F1 or the switch FETs.
+- **Input and charge current.** R19 (820 Ω) caps the input at 1.35 A typical,
+  1.56 A at the part's maximum (datasheet constant KILIM). That gives about
+  0.83 A into the pack (0.96 A at the maximum), where ADR-038's estimate was
+  1 A from 2 A of input. For 2 × 18650 of 2500–3500 mAh that is 3–4.5 hours
+  (estimate, not measured).
+- **No power path.** With the robot on, the robot's load comes out of the
+  charge current first, and the charger cannot see the current fall at the end
+  of the cycle, so it holds 4.20 V per cell until its 12 hour timer ends it.
+  Charge with the robot off.
+- **Balancing.** R21–R24 (4 × 200 Ω in parallel) set about 82 mA, from the
+  part's own defaults, with no host. The cells' midpoint comes in on J21 pin 2.
+  **J21 pins 1 and 3 are the raw cell terminals and stay unwired**: a wire from
+  either to GND or `PACK_IN` would bypass the pack's BMS switch. The pack's BMS
+  stays, and both circuits only discharge the higher cell, so they do not
+  fight. The BMS's over-charge cutoff must sit above 4.221 V per cell or it
+  cuts an ordinary charge; this pack's BMS is not recorded in the repo.
+- **No cell temperature sensing.** R27 (10 kΩ) stands in for an NTC the pack
+  does not carry, so TS always reads "normal". Only the BMS (if it has an NTC
+  input) and the part's own thermal regulation (120 °C) limit a hot charge.
+- **Heat.** About 0.45 W in U5 (0.51 W at the maximum) and 0.1 W in L1 at 1.35 A
+  input; 16 °C rise at the die at the datasheet's JEDEC θJA of 32.4 °C/W, which
+  is a floor for this board. U5's exposed pad (pin 25) needs a ground pour and
+  vias. No enclosure exists to assess the case.
+- **Sourcing** (kicad.lcsc, 2026-11-24): U5 is extended with 401 in stock, so a
+  run of 100 does not fit. J20 (C165948) and L1 are extended. J21 is a loose
+  B3B-XH-A (LCSC C144394), through-hole, hand-fitted.
+
+**Status.** The netlist, schematic, parts registry and docs are done and
+`just kicad::test` passes. The board is not: `board.toml` has no placement for
+U5, L1, C10–C19, R19–R31, J20 and J21 (nor for the power-switch parts above),
+and the check stamp is not regenerated. KiCad 10.0.6 was not installable in this
+session. Add the placements, run `just robocar::carrier-board-checked`, then
+`carrier-check`, commit the board and its stamp, and then run the `pcb-reviewer`
+pre-fab review. That review has to check: the loop from C13–C15 (SNS) through
+U5 and L1 and back to GND; PMID capacitors C11, C12 at U5; L1 at SW with a small
+copper area; U5's thermal pad vias and the copper under it; the creepage from
+J20's VBUS to the XIAO's 5V pad and the head's ribbon; J21's end pins away from
+every other pad; MID's route away from SW; and that J20 sits at a board edge a
+cable reaches.
 
 ## The GPIO expander
 

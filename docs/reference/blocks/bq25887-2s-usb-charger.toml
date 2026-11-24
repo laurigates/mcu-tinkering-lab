@@ -1,8 +1,10 @@
 # 2S Li-ion charger from a 5 V USB-C port, with cell balancing: TI BQ25887, run
 # on its power-on defaults with no host (no I2C). Designed for the robocar's
-# 2S 18650 pack (ADR-038, #1272); not yet on a board, so it has passed
-# structure checks (hardware::test, test_blocks_registry) and the numbers in
-# tools/hardware/test_charger_block.py, never ERC, a netlist or a layout.
+# 2S 18650 pack (ADR-038, #1272). It is in the robocar socketed carrier's
+# netlist and schematic (packages/robotics/robocar/hardware.toml), but on no
+# board yet: it has passed structure checks (hardware::test,
+# test_blocks_registry), the numbers in tools/hardware/test_charger_block.py and
+# the netlist tests, never ERC, DRC or a layout.
 #
 # ---------------------------------------------------------------------------
 # Why the BQ25887 (candidates read 2026-11-24, datasheets, not listings)

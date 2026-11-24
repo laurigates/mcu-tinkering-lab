@@ -240,6 +240,19 @@ The firmware for the latch and the cutoff is `power_manager` (#1271,
 default: a carrier with this switch does not stay on after the button is
 released until `FEATURE_POWER_LATCH_ENABLED` is set to 1 in `main/config.h`.
 
+The carrier also charges the pack from a 5 V USB-C port (ADR-038, #1272): a TI
+BQ25887 on its power-on defaults, with no host, ahead of the switch on the pack
+side. Its port (J20) is separate from the XIAO's USB-C and reaches nothing but
+the charger, because the XIAO's 5V pad is its own VBUS (#1252). **Charge with the
+robot switched off**: the part has no power path, so a running robot shares the
+charge current and the cycle never terminates. About 0.8 A reaches the pack
+from a 5 V port (input held to 1.35 A by a resistor), so 2 × 18650 take 3–4.5
+hours (estimate). The cells' midpoint comes in on a JST-XH 3-pin balance header
+(J21): wire only its middle pin, and leave the end pins, which are the raw cell
+terminals, open so the pack's BMS cannot be bypassed. The pack's BMS stays on
+the pack. Details, numbers and what is unmeasured:
+[the carrier README](hardware/carrier/README.md#the-usb-c-charger).
+
 ### The 5 V current budget
 
 The LM2596's current limit is 3.4 A minimum over temperature (SNVS124G,

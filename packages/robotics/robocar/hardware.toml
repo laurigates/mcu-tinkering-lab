@@ -778,11 +778,85 @@ role = "PACK_SENSE_PIN"
 to = "sense_filter.A"
 build = "carrier"
 
+# The pack's charger (ADR-038, #1272): the `bq25887-2s-usb-charger` block, on its
+# own USB-C receptacle. Its comments carry the datasheet reasoning; checked
+# against this robot:
+#
+# - The USB-C port reaches nothing but the charger. CHG_VBUS is the receptacle's
+#   VBUS and the charger's VBUS pin, and no other rail names it: the XIAO's 5V
+#   pin is the XIAO's own VBUS (#1252), so tying CHG_VBUS to the 5 V rail, or to
+#   mcu.5V, would back-feed it. The XIAO's own USB-C stays the data port and has
+#   no connection to this one but the common GND.
+# - BAT joins PACK_IN, the pack side of the switched input, so the pack charges
+#   with the robot off; the charge current goes through the XT30's + wire and the
+#   pack's BMS, not through F1 or the switch FETs. Charging with the robot on
+#   shares the part's <= 0.96 A with the load, and the charge then never
+#   terminates (block comment): charge with the robot off.
+# - The pack's BMS stays. Only the cells' midpoint comes to the carrier, on a
+#   JST-XH 3 balance header whose end pins are left open on purpose: wiring a
+#   raw cell terminal to GND or PACK_IN would bypass the BMS's switch.
+# - Cutoff versus charger: the BMS's over-charge cutoff must sit above 4.221 V
+#   per cell (4.20 V + 0.5 %), or it cuts an ordinary charge. This pack's BMS
+#   is not recorded in the repo: read it before the first charge.
+# - No temperature sensing: TS reads a 10 kohm resistor in place of an NTC, so
+#   only the BMS (if it has an NTC input) and the charger's own thermal
+#   regulation (120 degC) limit a hot charge.
+# - Heat: 0.45 W in the IC and 0.1 W in the inductor at 1.35 A input (block
+#   comment). The carrier's copper under the IC and the case are not assessed.
+[blocks.charger]
+block = "bq25887-2s-usb-charger"
+net_prefix = "CHG"
+build = "carrier"
+refs = { ic = "U5", l = "L1", cvbus = "C10", cpmid1 = "C11", cpmid2 = "C12", csns1 = "C13", csns2 = "C14", csns3 = "C15", cbat1 = "C16", cbat2 = "C17", cregn = "C18", cboot = "C19", rilim = "R19", rmid = "R20", rcb1 = "R21", rcb2 = "R22", rcb3 = "R23", rcb4 = "R24", rt1 = "R25", rt2 = "R26", rts = "R27", sda_pu = "R28", scl_pu = "R29", rd1 = "R30", rd2 = "R31" }
+
+# The charge-only USB-C port. Its data and sideband pins are open (the part's
+# no_connect list); the shield goes to GND with the receptacle's own GND pins.
+[parts.charge_port]
+name = "USB-C charge port"
+kind = "connector"
+build = "carrier"
+part = "usb-c-receptacle-hro-16p"
+ref = "J20"
+value = "Charge port"
+
+# The pack's balance lead: the cells' midpoint on pin 2, nothing on pins 1 and 3.
+[parts.balance_lead]
+name = "Pack balance lead (midpoint only)"
+kind = "connector"
+build = "carrier"
+part = "balance-jst-xh3"
+ref = "J21"
+value = "Pack balance"
+
+[[rails]]
+name = "CHG_VBUS"
+build = "carrier"
+from = "charger.VBUS"
+to = ["charge_port.VBUS"]
+
+[[rails]]
+name = "CHG_CC1"
+build = "carrier"
+from = "charger.CC1"
+to = ["charge_port.CC1"]
+
+[[rails]]
+name = "CHG_CC2"
+build = "carrier"
+from = "charger.CC2"
+to = ["charge_port.CC2"]
+
+[[rails]]
+name = "CHG_MID"
+build = "carrier"
+from = "charger.MID"
+to = ["balance_lead.MID"]
+
 [[rails]]
 name = "PACK_IN"
 build = "carrier"
 from = "pack.+"
-to = ["input.IN"]
+to = ["input.IN", "charger.BAT"]
 
 [[rails]]
 name = "VBAT"
@@ -1295,6 +1369,9 @@ to = [
     "gnd_post_amp.GND",
     "gnd_post_ldo.GND",
     "latch.GND",
+    "charger.GND",
+    "charge_port.GND",
+    "charge_port.SHIELD",
     "power_button.2",
     "sense_bottom.B",
     "sense_filter.B",
