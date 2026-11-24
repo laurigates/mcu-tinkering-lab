@@ -1,0 +1,47 @@
+# TI BQ25887 2-cell boost-mode battery charger with cell balancing, 24-pin
+# VQFN (RGE, 4 x 4 mm, exposed pad): the 2S USB charger in
+# docs/reference/blocks/bq25887-2s-usb-charger.toml.
+#
+# Pin order: TI SLUSD89B (Nov 2019) §6 Pin Configuration and Functions,
+# checked against KiCad's BQ25887RGE symbol, which numbers the same 24 pins and
+# adds the exposed pad as pin 25 (a hidden, passive GND). The symbol names two
+# pins ~{PG} and ~{INT}; they are PG and INT here. BAT, SNS, SW, PMID and GND
+# are each two package pins, and GND is three with the pad.
+#
+# Not powered by VBUS alone: the part is also fed from BAT (SLUSD89B §8.3.1),
+# so a pack connected to BAT wakes it and its I2C interface with no adapter.
+[part]
+name = "BQ25887 2S boost charger with cell balancing, VQFN-24"
+source = "TI SLUSD89B §6 (pin numbers and names); KiCad 10.0.6 library: Battery_Management:BQ25887RGE and Package_DFN_QFN:Texas_RGE0024H_VQFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.7mm (pads 1-24 and the exposed pad 25)"
+symbol = "Battery_Management:BQ25887RGE"
+footprint = "Package_DFN_QFN:Texas_RGE0024H_VQFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.7mm"
+value = "BQ25887"
+lcsc = "C2761614"
+# Open-drain status outputs and the charge-disable input: the block leaves them
+# to the carrier (an LED, a divider to a GPIO, or nothing). CD has an internal
+# 900 kohm pull-down, so open means charging is enabled (SLUSD89B §6).
+no_connect = ["STAT", "PG", "INT", "CD"]
+
+[stock]
+mpn = "BQ25887RGER"  # LCSC C2761614
+
+[pins]
+PG = 1
+STAT = 2
+CD = 3
+SDA = 4
+SCL = 5
+INT = 6
+TS = 7
+ILIM = 8
+MID = 9
+CBSET = 10
+REGN = 11
+BTST = 12
+BAT = [13, 14]
+SNS = [15, 16]
+SW = [17, 18]
+GND = [19, 20, 25]
+PMID = [21, 22]
+VBUS = 23
+PSEL = 24

@@ -1,0 +1,20 @@
+# Shielded power inductor in a 1008 (2.5 x 2.0 mm) case, Murata
+# DFE252012F-1R0M=P2: the 1 uH inductor TI's BQ25887 datasheet characterises
+# (SLUSD89B §7.7, §9.2.3 plots are all at L = DFE252012F-1R0). Value per
+# instance. Isat, Irms and DCR are from the LCSC listing for C435392
+# ("1uH 3.3A 4.7A 40 mohm +-20 %"), not from Murata's datasheet, which LCSC's
+# PDF link did not return when this entry was written.
+[part]
+name = "Power inductor, Murata DFE252012F (1008)"
+source = "KiCad 10.0.6 library (Device:L, Inductor_SMD:L_1008_2520Metric); the part and its ratings from the LCSC C435392 listing and TI SLUSD89B §7.7"
+symbol = "Device:L"
+footprint = "Inductor_SMD:L_1008_2520Metric"
+value = "1uH"
+lcsc = "C435392"
+
+[stock]
+mpn = "DFE252012F-1R0M=P2"
+
+[pins]
+"1" = 1
+"2" = 2
