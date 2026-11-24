@@ -12,6 +12,7 @@ rationale: [ADR-031](../../decisions/ADR-031-circuit-blocks.md).
 | [`pack-input-pfet-ptc`](pack-input-pfet-ptc.toml) | 2S pack input: reverse-polarity P-FET, PTC fuse | robocar-integrated |
 | [`pack-input-pfet-switched`](pack-input-pfet-switched.toml) | 2S pack input with an on/off switch: back-to-back P-FETs, PTC fuse; the switch carries ~76 µA | robocar (socketed carrier; ADR-038, #1270) |
 | [`soft-latch`](soft-latch.toml) | Push-button soft power latch driving `pack-input-pfet-switched` | robocar (socketed carrier; ADR-038, #1270) |
+| [`bq25887-2s-usb-charger`](bq25887-2s-usb-charger.toml) | 2S USB-C charger with cell balancing, no host: ILIM-capped input (~1.35 A), ~0.8 A charge, charge only; no power path | none yet; planned for a robocar carrier (ADR-038, #1272) |
 | [`button-input`](button-input.toml) | One button: on-board tact switch and off-board connector in parallel, RC debounce, TVS | none yet |
 
 A block no carrier uses is checked for structure (`hardware::test`) and for
