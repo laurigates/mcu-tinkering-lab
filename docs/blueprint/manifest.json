@@ -479,6 +479,18 @@
         "status": "accepted",
         "created": "2026-11-24"
       },
+      "ADR-038": {
+        "path": "docs/decisions/ADR-038-carrier-power-architecture.md",
+        "title": "Carrier Power Design: the BMS Stays on the Pack, the Switch, Cutoff and Charging Move Onto the Carrier",
+        "status": "accepted",
+        "created": "2026-11-24"
+      },
+      "PRP-carrier-power-architecture": {
+        "path": "docs/prompts/carrier-power-architecture.md",
+        "title": "Carrier Power Design: Switch, Cutoff, Monitoring and Charging",
+        "status": "planned",
+        "created": "2026-11-24"
+      },
       "PRP-hardware-in-the-loop-testing": {
         "path": "docs/prompts/hardware-in-the-loop-testing.md",
         "title": "Hardware-in-the-Loop (HIL) Testing",
