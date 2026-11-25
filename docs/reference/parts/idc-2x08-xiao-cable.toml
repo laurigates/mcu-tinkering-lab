@@ -24,8 +24,9 @@
 # output driving a main-board input and swaps with another such pair, I2C
 # swaps with itself, and the one XIAO input (D3, the divider's mid-point)
 # lands on the unconnected pin 9. Reversed, UART0 TX drives the latch's HOLD
-# gate through a 100 kOhm pull-down and HOLD drives the J15 test header; the
-# robot does not work and nothing is damaged. D7 (GPIO44) is a XIAO output
+# gate against its 10 kOhm pull-down and HOLD drives the J15 test header; the
+# robot does not work and nothing is damaged, but TX idles high, so the latch
+# stays on until the pack is unplugged. D7 (GPIO44) is a XIAO output
 # here, never an input from the main board.
 #
 # Pin 6 carries D6 (UART0 TX, GPIO43) to the main board's J15 test header, as

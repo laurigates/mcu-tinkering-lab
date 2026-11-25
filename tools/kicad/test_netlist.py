@@ -1112,27 +1112,27 @@ class RobocarPowerSwitchTests(unittest.TestCase):
         # XT30 + -> reverse-polarity FET Q1; the switch FET Q2 and the fuse
         # follow; the latch drives the switch's gate net through D2.
         # The charger's BAT pins (U5 13 and 14) and its two BAT capacitors
-        # join the pack side of the input stage (#1272).
+        # join the pack side of the input stage (#1272) through their own PTC,
+        # F2, so a shorted BAT capacitor is fused (#1280).
         self.assertEqual(
-            set(self.nets["PACK_IN"]),
-            {
-                ("J3", "2"),
-                ("Q1", "5"),
-                ("U5", "13"),
-                ("U5", "14"),
-                ("C16", "1"),
-                ("C17", "1"),
-            },
+            set(self.nets["PACK_IN"]), {("J3", "2"), ("Q1", "5"), ("F2", "1")}
+        )
+        self.assertEqual(
+            set(self.nets["CHG_BAT"]),
+            {("F2", "2"), ("U5", "13"), ("U5", "14"), ("C16", "1"), ("C17", "1")},
         )
         self.assertIn(("D2", "2"), self.nets["PWR_SW"])
         self.assertIn(("R15", "2"), self.nets["PWR_SW"])
 
     def test_the_button_sense_is_on_the_expander_not_the_mcu(self):
         # No MCU pad is left for it: SENSE is the MCP23017's GPB0 (A5) and the
-        # mirror header's matching pin.
+        # mirror header's matching pin, with R32 pulling it up to 3V3 against
+        # D2's leakage (#1280).
         self.assertEqual(
-            set(self.nets["PWR_SENSE"]), {("A5", "13"), ("D3", "2"), ("J18", "6")}
+            set(self.nets["PWR_SENSE"]),
+            {("A5", "13"), ("D3", "2"), ("J18", "6"), ("R32", "2")},
         )
+        self.assertIn(("R32", "1"), self.nets["+3V3"])
         self.assertNotIn("J1", {ref for ref, _ in self.nets["PWR_SENSE"]})
 
 

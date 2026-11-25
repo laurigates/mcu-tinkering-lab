@@ -650,8 +650,9 @@ build = "carrier"
 # carries derates to 2.55 A at 40 C and 2.28 A at 50 C, under that load (pre-fab
 # review SF-4). C47263807, Extended, 15,582 in stock (JLCPCB parts search,
 # 2026-10-21). The pack's own 2S BMS ends a short sooner. The fuse now sits after
-# the FETs, so a fault between XT30 and the FETs (the PACK_IN track and the
-# FET pads, a few mm) has no fuse in front of it; the BMS covers that.
+# the FETs, so a fault between XT30 and the FETs (the PACK_IN track from J3 to
+# Q1's drain, 23 mm, and the FET pads) has no fuse in front of it; the BMS
+# covers that. The charger's branch off PACK_IN has its own fuse, F2.
 #
 # Not checked: turn-on inrush. The switch closes in tens of microseconds, and
 # the LM2596 module's input capacitance then charges through two RDS(on) and
@@ -671,11 +672,21 @@ parts.fuse = { name = "4 A hold PTC fuse, pack input", value = "4A hold 16V", lc
 # taken (HOLD and the pack divider). The button wake from deep sleep needs an RTC
 # GPIO and is therefore not available; the long-press switch-off needs the
 # expander fitted.
+#
+# R16 is 10 kOhm, not the block's 100 kOhm (#1280 pre-fab review, Lauri
+# 2026-11-25): GPIO44 (D7) carries the ESP32-S3's weak pull-up through reset
+# (datasheet v2.2, pin 50 U0RXD: "At Reset: WPU"; RPU 45 kOhm typical, Table
+# 5-4). Against 100 kOhm that put Q3's gate at about 2.28 V, inside the
+# 2N7002's 1.0-2.5 V VGS(th) (JSCJ C8545), so whether the robot latched on at
+# boot, and stayed off after a firmware switch-off, depended on the unit. With
+# 10 kOhm the gate sits at about 0.6 V through reset: hold the button until the
+# firmware drives HOLD.
 [blocks.latch]
 block = "soft-latch"
 net_prefix = "LATCH"
 build = "carrier"
 refs = { hold = "Q3", hold_pd = "R16", d_sw = "D2", d_sense = "D3" }
+parts.hold_pd = { name = "10 kΩ HOLD pull-down", value = "10k", lcsc = "C17414" }
 
 # The power button is a chassis button on a JST-XH lead, not an on-board tact
 # switch: the repo's tact entry has no LCSC number until its rotation entry is
@@ -708,11 +719,26 @@ to = ["power_button.1"]
 # The button's SENSE input, on the MCP23017's GPB0 (and the mirror header's
 # pin, so the header still shows the line). GPB0 is not in the mirror
 # header's [[outputs]] list below for that reason.
+#
+# R32 pulls SENSE up to 3V3 (#1280 pre-fab review): the MCP23017's own weak
+# pull-up is about 100 kOhm (40-115 uA at 5 V, io--mcp23017.md), so a few uA
+# of leakage through D2 from the switch node would read as a held button.
+# 10 kOhm needs about 66 uA to pull SENSE under VIH (0.8 VDD); pressed, D3
+# pulls it to about 0.35 V at 0.33 mA, under VIL (0.2 VDD = 0.66 V).
+[parts.sense_pu]
+name = "10 kΩ SENSE pull-up"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R32"
+value = "10k"
+lcsc = "C17414"
+
 [[rails]]
 name = "PWR_SENSE"
 build = "carrier"
 from = "latch.SENSE"
-to = ["expander.GPB0", "exp_header.GPB0"]
+to = ["expander.GPB0", "exp_header.GPB0", "sense_pu.B"]
 
 # HOLD (the hold FET's gate) and HOLD_PD (its pull-down) are one net; a net
 # takes one pin each, so the block gives them a port each.
@@ -860,11 +886,32 @@ build = "carrier"
 from = "charger.MID"
 to = ["balance_lead.MID"]
 
+# The charger's BAT branch through its own PTC (#1280 pre-fab review): BAT
+# joins the pack side of the switch, so its track and the two BAT capacitors
+# (C16, C17) sit across the pack with only the BMS behind them, and a cracked
+# MLCC is a short. F2 at the XT30 limits that branch. BSMD1812-200-16V (BHFUSE,
+# LCSC C883156, Extended, 44,159 in stock on 2026-11-25): 2 A hold, 4 A trip,
+# 16 V, against the charger's 0.96 A maximum charge current.
+[parts.bat_fuse]
+name = "2 A hold PTC fuse, charger BAT branch"
+kind = "fuse"
+build = "carrier"
+part = "polyfuse-1812"
+ref = "F2"
+value = "2A hold 16V"
+lcsc = "C883156"
+
 [[rails]]
 name = "PACK_IN"
 build = "carrier"
 from = "pack.+"
-to = ["input.IN", "charger.BAT"]
+to = ["input.IN", "bat_fuse.1"]
+
+[[rails]]
+name = "CHG_BAT"
+build = "carrier"
+from = "charger.BAT"
+to = ["bat_fuse.2"]
 
 [[rails]]
 name = "VBAT"
@@ -1327,6 +1374,7 @@ to = [
     "pull_up_scl.A",
     "decouple_exp.A",
     "tp_power.3V3",
+    "sense_pu.A",
 ]
 
 # The series resistor's far end to the buzzer.
