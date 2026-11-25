@@ -131,10 +131,11 @@ front reading, so a scenario scripts the obstacle; there is no `reflex` event.
 
 The planner's evidence comes from `reactive_controller_get_telemetry()`, as in
 `planner_task.c`: range, range validity, `robot_moving` and reflex trips. Its
-tick at `t = 0` runs before any read has completed and sees the executor's boot
-value (400 cm, valid), which `plan_activity` adopts as its range reference. A
-scenario that scripts a range at 0 s therefore wakes the planner on its next
-tick with `R`, and request counts include that request.
+tick at `t = 0` runs before any read has completed, when the executor reports
+no valid range (`distance_valid`, #1187), so the first real reading becomes
+`plan_activity`'s range reference and does not wake the planner. A scenario
+that needs the planner awake at 15 s wakes it some other way, such as a
+`console` line at 5 s.
 
 Two trace records, written when the state changes:
 
@@ -293,15 +294,11 @@ builder still lives in `gemini_backend.c`, and its extraction to
 - **Two start-up rules have no test**, because nothing the trace records
   depends on them. A rangefinder trigger latched before the first `range`
   event or plant response is a failed read and not a 400 cm reading: either
-  way the path counts as clear, and the planner's first tick has already read
-  the boot value. With an external plant the floor sample is invalid until
+  way the path counts as clear, and the planner has no valid range until a
+  read succeeds. With an external plant the floor sample is invalid until
   the first response, 33 ms in, and no goal exists that early. The scripted
   case, armed with no `floor` event at all, is
   `scenarios/us-d4-cliff-fails-closed.yaml`.
-- **The boot range value reaches the planner.** Its first tick reads 400 cm
-  before any rangefinder read has completed. Whether the robot's first cycle
-  does the same depends on how long its first camera capture takes, which is
-  unmeasured (ADR-036, open question 2).
 - **A link coming up does not wake the planner**, matching `main.c`, so a
   scenario that expects a request on link-up depends on the dormancy state at
   that moment.

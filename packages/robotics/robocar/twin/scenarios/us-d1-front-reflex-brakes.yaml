@@ -8,12 +8,12 @@
 # after the trigger, and the next trigger is the tick after that
 # (ultrasonic_core.c). A trigger ranges what is ahead at that moment.
 #
-# Waking: the planner boots dormant. Its tick at 0 reads the executor's boot
-# range (400 cm, rangers_reset()), which plan_activity adopts as its reference.
-# The 120 cm scripted at 0 is read at 132 ms, so the 15 s tick sees the range
-# 280 cm off the reference, past PLAN_RANGE_THRESHOLD_CM_DEFAULT (20), and
-# requests (ADR-036 §1 "Planner inputs"). The reply (1 s) is a forward drive at
-# 60 %, written at 16 s.
+# Waking: the planner boots dormant, and the console line at 5 s wakes it for
+# the 15 s tick (as in us-c5-drive-in-frame-heading). The range does not: its
+# tick at 0 runs before the first reading, when the executor reports no valid
+# range (distance_valid, #1187), so the 15 s tick adopts the 120 cm read at
+# 132 ms as its first reference rather than scoring it against the boot
+# placeholder. The reply (1 s) is a forward drive at 60 %, written at 16 s.
 #
 # Wheels: the first tick after 16 s is 16.005 s. 60 % is 153/255, PCA9685 duty
 # 2457. motor_controller.c limits a rise to full scale in 300 ms
@@ -51,6 +51,7 @@ duration: 40s
 world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
   - {at: 0s, range: 120}
   - {at: 19.966s, range: 14}
   - {at: 21.12s, range: 120}

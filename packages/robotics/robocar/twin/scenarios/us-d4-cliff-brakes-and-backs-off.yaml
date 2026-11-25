@@ -6,9 +6,9 @@
 # CLIFF_CLEAR_SAMPLES (3) ticks, at 66 ms. The executor samples the floor
 # sensors on every 33 ms tick.
 #
-# Waking and the drive are as in us-d1-front-reflex-brakes: the 15 s planner
-# tick requests on the range change (400 cm boot value to 120 cm), the reply is
-# a forward drive at 60 % written at 16 s, duty 2457 from 16.170 s.
+# Waking and the drive are as in us-d1-front-reflex-brakes: the console line at
+# 5 s wakes the planner for the 15 s tick, the reply is a forward drive at 60 %
+# written at 16 s, duty 2457 from 16.170 s.
 #
 # Edge: the front sensor loses the floor at 20 s. The ticks at 20.031 s
 # (607 x 33) and 20.064 s are the CLIFF_TRIP_SAMPLES (2) samples, so the
@@ -34,6 +34,7 @@ config: {cliff: true}
 world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: table-top}}
+  - {at: 5s, console: status}
   - {at: 0s, range: 120}
   - {at: 0s, floor: {front: true, rear: true}}
   - {at: 20s, floor: {front: false, rear: true}}

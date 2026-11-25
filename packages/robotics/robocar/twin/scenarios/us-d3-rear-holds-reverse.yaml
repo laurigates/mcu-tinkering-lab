@@ -5,8 +5,7 @@
 #
 # Read cycle and waking are as in us-d1-front-reflex-brakes: both rangefinders
 # are triggered on tick 0 and every 165 ms after, each read 132 ms after its
-# trigger; the 15 s planner tick requests because the front range moved from
-# the boot value (400 cm) to 120 cm.
+# trigger; the console line at 5 s wakes the planner for the 15 s tick.
 #
 # The reply is a drive at heading 180, which the executor runs in reverse
 # (drive_reverses(): past +-90 a drive goal backs up, issue #1025), 60 % =
@@ -31,6 +30,7 @@ duration: 44s
 world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
   - {at: 0s, range: 120}
   - {at: 0s, range: {cm: 120, sensor: rear}}
   - {at: 20s, range: {cm: 8, sensor: rear}}

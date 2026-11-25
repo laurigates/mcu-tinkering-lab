@@ -70,30 +70,36 @@ for v in 5.5 null 1 401; do
 done
 
 # A null range is a failed read to the planner too, not 400 cm. The planner
-# wakes at 15 s on the 120 cm it has read since boot (400 cm) and plans on it.
-# From then on the plant answers null, so the 30 s cycle has no range to
-# compare: its verdict is "+", the ladder's next step. A null read as a valid
-# 400 cm would be 280 cm off the 120 cm planned on, and the verdict "R".
-# Ticks 0..454 run before the planner tick at 15 s and 455..909 before the one
-# at 30 s; each planner tick asks the model once.
-config30='{"t":"config","seed":1,"duration_ms":30100,"plant":"external"}'
+# boots dormant, and its 15 s tick adopts the 120 cm it has read since boot as
+# its reference: the executor reports no valid range before its first reading
+# (#1187), so the tick at 0 has none. The range moves to 60 cm after 15 s, and
+# the 30 s tick wakes on it (verdict "R") and plans on 60 cm. From then on the
+# plant answers null, so the 45 s cycle has no range to compare: its verdict is
+# "+", the ladder's next step. A null read as a valid 400 cm would be 340 cm off
+# the 60 cm planned on, and the verdict "R". Ticks 0..454 run before the
+# planner tick at 15 s, 455..909 before the one at 30 s and 910..1363 before
+# the one at 45 s; the 30 s and 45 s ticks each ask the model once.
+config45='{"t":"config","seed":1,"duration_ms":45100,"plant":"external"}'
 link='{"t":"link","at_ms":0,"wifi":true,"key":true}'
 plan() { # $1 the request id: a reply that calls stop
     printf '{"t":"model_response","id":%s,"status":200,"latency_ms":0,"body":"{\\"candidates\\":[{\\"content\\":{\\"parts\\":[{\\"functionCall\\":{\\"name\\":\\"stop\\",\\"args\\":{}}}]}}]}"}\n' "$1"
 }
 out=$({
-    printf '%s\n' "$config30" "$link" "$frame" "$run"
+    printf '%s\n' "$config45" "$link" "$frame" "$run"
     replies 120 0 455
+    replies 60 455 910
     plan 1
-    replies null 455 910
+    replies null 910 1364
     plan 2
-    replies null 910 913
+    replies null 1364 1367
 } | "$twin")
-printf '%s\n' "$out" | grep -qxF '{"t":"done","at_ms":30100}' || fail "null after 120: no done record"
-printf '%s\n' "$out" | grep -q '"t":"cycle","at_ms":15000,"tick_ms":15000,"why":"R"' ||
-    fail "null after 120: the 15 s cycle must wake on the range"
-printf '%s\n' "$out" | grep -q '"t":"cycle","at_ms":30000,"tick_ms":30000,"why":"+"' ||
-    fail "null after 120: the 30 s cycle must not see a range change: $(printf '%s\n' "$out" | grep '"t":"cycle"')"
+printf '%s\n' "$out" | grep -qxF '{"t":"done","at_ms":45100}' || fail "null after 60: no done record"
+printf '%s\n' "$out" | grep -q '"t":"cycle","at_ms":15000,"tick_ms":15000,"why":"Z"' ||
+    fail "null after 60: the 15 s cycle must adopt the boot range, not wake on it"
+printf '%s\n' "$out" | grep -q '"t":"cycle","at_ms":30000,"tick_ms":30000,"why":"R"' ||
+    fail "null after 60: the 30 s cycle must wake on the range"
+printf '%s\n' "$out" | grep -q '"t":"cycle","at_ms":45000,"tick_ms":45000,"why":"+"' ||
+    fail "null after 60: the 45 s cycle must not see a range change: $(printf '%s\n' "$out" | grep '"t":"cycle"')"
 
 # Each of these must end the run with the given status and a message on stderr.
 # $1 status, $2 text the message contains, $3 name, stdin on fd 0.
