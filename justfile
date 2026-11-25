@@ -187,9 +187,20 @@ lint-c:
 lint-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found — pip install ruff"; exit 0; }
-    ruff check .
+    just _ruff check .
     echo "Python lint checks passed"
+
+# Run the ruff that pre-commit and CI run: the ruff-pre-commit rev pinned in
+# .pre-commit-config.yaml, through uvx. A ruff on PATH can be another version
+# with other defaults (.claude/rules/python-lint.md, #1184).
+[private]
+_ruff *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v uvx >/dev/null 2>&1 || { echo "Error: uvx not found; install uv (just install-dev-tools)" >&2; exit 1; }
+    pinned="$(sed -n '/astral-sh\/ruff-pre-commit/,/rev:/s/^[[:space:]]*rev:[[:space:]]*"\{0,1\}v\{0,1\}\([0-9][0-9.]*\).*/\1/p' .pre-commit-config.yaml | head -1)"
+    [ -n "$pinned" ] || { echo "Error: no ruff-pre-commit rev in .pre-commit-config.yaml" >&2; exit 1; }
+    uvx "ruff@${pinned}" {{args}}
 
 # Format all code (C/C++ and Python)
 [group: "quality"]
@@ -206,8 +217,7 @@ format-c:
 format-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found"; exit 0; }
-    ruff format .
+    just _ruff format .
     echo "Python code formatted"
 
 # Check formatting without modifying files
@@ -225,8 +235,7 @@ format-check-c:
 format-check-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found"; exit 0; }
-    ruff format --check .
+    just _ruff format --check .
     echo "Python formatting check passed"
 
 # Build the robocar (use `just <module>::build` for other projects)
