@@ -6,6 +6,7 @@
 #include "voice_history.h"
 
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,7 +104,48 @@ const char *voice_history_get_reply(size_t index, uint32_t now_ms)
     return s_history[slot].reply;
 }
 
-bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out, size_t out_size)
+/** What the executor is doing with the head, in words for the model. */
+static const char *head_mode_words(reactive_head_mode_t mode)
+{
+    switch (mode) {
+        case REACTIVE_HEAD_CENTRE:
+            return "re-centring";
+        case REACTIVE_HEAD_AIM:
+            return "tracking a target";
+        case REACTIVE_HEAD_TURN:
+            return "turning the body toward a target";
+        case REACTIVE_HEAD_LEASE:
+            return "held by a console command";
+        case REACTIVE_HEAD_GAZE:
+            return "idle gaze";
+        case REACTIVE_HEAD_UNAVAILABLE:
+        default:
+            return NULL;
+    }
+}
+
+/** Append to @p out at @p *len, clamping @p *len to the buffer. */
+static void append(char *out, size_t out_size, size_t *len, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+static void append(char *out, size_t out_size, size_t *len, const char *fmt, ...)
+{
+    if (*len >= out_size - 1) {
+        return;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    const int n = vsnprintf(out + *len, out_size - *len, fmt, ap);
+    va_end(ap);
+    if (n > 0) {
+        *len += (size_t)n;
+        if (*len > out_size - 1) {
+            *len = out_size - 1;
+        }
+    }
+}
+
+bool voice_history_format_telemetry(const reactive_telemetry_t *tele, const voice_body_t *body,
+                                    char *out, size_t out_size)
 {
     if (!out || out_size == 0) {
         return false;
@@ -112,12 +154,34 @@ bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out,
     if (!tele) {
         return false;
     }
+    size_t len = 0;
     if (tele->sensor_failed) {
-        snprintf(out, out_size, "Physical state: ultrasonic sensor unavailable.");
+        append(out, out_size, &len, "Physical state: ultrasonic sensor unavailable.");
     } else {
-        snprintf(out, out_size, "Physical state: distance to obstacle ahead is %u cm%s.",
-                 (unsigned)tele->distance_cm,
-                 tele->reflex_active ? " (obstacle reflex active)" : "");
+        append(out, out_size, &len, "Physical state: distance to obstacle ahead is %u cm%s.",
+               (unsigned)tele->distance_cm, tele->reflex_active ? " (obstacle reflex active)" : "");
+    }
+    if (!body) {
+        return true;
+    }
+    /* Issue #947: without these the model made up "my wheels won't cooperate"
+     * and "my gaze turns smoothly". */
+    if (body->wheels_known) {
+        append(out, out_size, &len, body->driving ? " Wheels moving." : " Wheels stopped.");
+    }
+    if (body->head_known) {
+        const char *mode = head_mode_words(tele->head_mode);
+        if (!mode) {
+            append(out, out_size, &len, " Head servos off.");
+        } else if (body->pan_deg == 0 && body->tilt_deg == 0) {
+            append(out, out_size, &len, " Head facing straight ahead (%s).", mode);
+        } else {
+            const int32_t pan = body->pan_deg;
+            const int32_t tilt = body->tilt_deg;
+            append(out, out_size, &len, " Head turned %ld deg %s and %ld deg %s (%s).",
+                   (long)(pan < 0 ? -pan : pan), pan < 0 ? "left" : "right",
+                   (long)(tilt < 0 ? -tilt : tilt), tilt < 0 ? "down" : "up", mode);
+        }
     }
     return true;
 }
@@ -173,7 +237,10 @@ char *voice_history_build_system_prompt(const char *name, const char *text_brief
         "- If people are talking in the room and you are idle, you may occasionally chime in "
         "with a brief, dry witty remark.\n"
         "- If the audio contains only background noise, coughs, typing, or speech not "
-        "directed at you, reply with '__IGNORE__'.",
+        "directed at you, reply with '__IGNORE__'.\n"
+        "- You cannot move, drive or turn your head while answering. If asked to do "
+        "something physical, say in your persona that you cannot do it right now; never "
+        "promise an action. Describe your body only as the turn's physical state says it is.",
         brief, has_tags ? " " : "", has_tags ? tag_brief : "", robot_name);
 }
 
@@ -297,7 +364,8 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
 
 char *voice_history_build_request_body(const char *name, const char *sys_prompt,
                                        const reactive_telemetry_t *tele, bool has_telemetry,
-                                       const char *b64_jpeg, const char *b64_wav, uint32_t now_ms)
+                                       const voice_body_t *body_state, const char *b64_jpeg,
+                                       const char *b64_wav, uint32_t now_ms)
 {
     if (!b64_wav) {
         return NULL; /* the clip is the turn; there is no request without it */
@@ -305,7 +373,7 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
 
     char tele_summary[VOICE_HISTORY_TELE_MAX] = {0};
     if (has_telemetry && tele) {
-        voice_history_format_telemetry(tele, tele_summary, sizeof(tele_summary));
+        voice_history_format_telemetry(tele, body_state, tele_summary, sizeof(tele_summary));
     }
 
     /* Sized from the inputs, not a fixed buffer (issue #847). */

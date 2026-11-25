@@ -119,25 +119,45 @@ size_t voice_history_count(uint32_t now_ms);
  */
 const char *voice_history_get_reply(size_t index, uint32_t now_ms);
 
+/** What the body is doing while the voice turn is built (issue #947). The
+ *  caller reads it from the motor driver and the servos; voice_history stays
+ *  free of both. A zeroed struct says nothing. */
+typedef struct {
+    bool wheels_known; /**< driving is valid. */
+    bool driving;      /**< Either wheel has a nonzero commanded speed. */
+    bool head_known;   /**< pan_deg and tilt_deg are valid. */
+    int16_t pan_deg;   /**< + = right, about centre. */
+    int16_t tilt_deg;  /**< + = up, about centre. */
+} voice_body_t;
+
 /**
- * @brief Format physical telemetry into a concise prompt summary string.
+ * @brief Format physical telemetry and body state into a prompt summary string.
  *
  * Examples:
  *   - "Physical state: distance to obstacle ahead is 45 cm."
  *   - "Physical state: distance to obstacle ahead is 8 cm (obstacle reflex active)."
  *   - "Physical state: ultrasonic sensor unavailable."
+ *   - "Physical state: distance to obstacle ahead is 45 cm. Wheels stopped.
+ *      Head turned 20 deg left and 5 deg up (idle gaze)."
+ *
+ * The body sentences follow only for the parts @p body marks known. The head
+ * sentence takes its mode from tele->head_mode; with the servos released it
+ * says so and gives no angle, since the last commanded one is not the pose.
  *
  * @param tele Pointer to telemetry snapshot (may be NULL).
+ * @param body Body state (may be NULL: no body sentences).
  * @param out Destination buffer.
  * @param out_size Size of destination buffer.
  * @return True if a summary was formatted, false if tele is NULL or buffer invalid.
  */
-bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out, size_t out_size);
+bool voice_history_format_telemetry(const reactive_telemetry_t *tele, const voice_body_t *body,
+                                    char *out, size_t out_size);
 
 /** Buffer for voice_history_format_telemetry() in the request build. The
- *  longest summary (sensor up, 65535 cm, reflex active) is 82 bytes;
- *  test_voice_history.c pins that it fits. */
-#define VOICE_HISTORY_TELE_MAX 128
+ *  longest summary (sensor up, 65535 cm, reflex active, wheels moving, the head
+ *  at INT16_MIN on both axes turning the body) is about 180 bytes;
+ *  test_voice_prompts.c pins that it fits. */
+#define VOICE_HISTORY_TELE_MAX 256
 
 /**
  * @brief Build the current turn's user prompt text.
@@ -197,6 +217,7 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
  * @param sys_prompt System instruction prompt text (NULL for "Be brief.").
  * @param tele Optional reactive controller telemetry (NULL if unavailable).
  * @param has_telemetry True if tele is valid.
+ * @param body_state Body state for the physical-state line (NULL: none).
  * @param b64_jpeg Optional base64 JPEG data (NULL to omit).
  * @param b64_wav Base64 audio WAV data.
  * @param now_ms Current timestamp in milliseconds.
@@ -221,6 +242,7 @@ char *voice_history_build_system_prompt(const char *name, const char *text_brief
 
 char *voice_history_build_request_body(const char *name, const char *sys_prompt,
                                        const reactive_telemetry_t *tele, bool has_telemetry,
-                                       const char *b64_jpeg, const char *b64_wav, uint32_t now_ms);
+                                       const voice_body_t *body_state, const char *b64_jpeg,
+                                       const char *b64_wav, uint32_t now_ms);
 
 #endif  // VOICE_HISTORY_H

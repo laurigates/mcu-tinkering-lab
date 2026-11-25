@@ -77,7 +77,7 @@ static void test_system_prompt_keeps_every_brief_whole(void)
             ASSERT(tags != NULL && tags > brief);
         }
         ASSERT(strstr(sys, k_long_name) != NULL);
-        static const char closing[] = "reply with '__IGNORE__'.";
+        static const char closing[] = "as the turn's physical state says it is.";
         const size_t len = strlen(sys);
         ASSERT(len > sizeof(closing) - 1);
         ASSERT(strcmp(sys + len - (sizeof(closing) - 1), closing) == 0);
@@ -103,9 +103,17 @@ static void test_turn_prompt_is_never_cut(void)
         .distance_cm = UINT16_MAX,
         .reflex_active = true,
         .sensor_failed = false,
+        .head_mode = REACTIVE_HEAD_TURN, /* the longest head label */
     };
+    /* The longest body line: every field at its widest (#947). */
+    const voice_body_t body = {.wheels_known = true,
+                               .driving = true,
+                               .head_known = true,
+                               .pan_deg = INT16_MIN,
+                               .tilt_deg = INT16_MIN};
     char tele[VOICE_HISTORY_TELE_MAX];
-    ASSERT(voice_history_format_telemetry(&worst, tele, sizeof(tele)));
+    ASSERT(voice_history_format_telemetry(&worst, &body, tele, sizeof(tele)));
+    ASSERT(strstr(tele, "Head turned 32768 deg left and 32768 deg down") != NULL);
     ASSERT(strlen(tele) < sizeof(tele) - 1); /* fits, with room to spare */
     ASSERT(strstr(tele, "(obstacle reflex active).") != NULL);
 

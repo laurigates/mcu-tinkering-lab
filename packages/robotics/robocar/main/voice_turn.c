@@ -35,8 +35,10 @@
 #include "gemini_parse.h"
 #include "http_timing.h"
 #include "mic_pdm.h"
+#include "motor_controller.h"
 #include "pin_config.h"
 #include "reactive_controller.h"
+#include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
 #include "voice_budget.h"
@@ -311,7 +313,7 @@ static esp_err_t record_clip(int16_t *pcm, size_t samples, bool vad, record_resu
 
 /** Build the request body, taking ownership of nothing and freeing nothing. */
 static char *build_body(const char *b64_wav, const char *b64_jpeg, const reactive_telemetry_t *tele,
-                        bool has_telemetry, uint32_t now_ms)
+                        bool has_telemetry, const voice_body_t *body_state, uint32_t now_ms)
 {
     const voice_persona_t *persona = voice_persona_get();
     const char *name =
@@ -325,8 +327,8 @@ static char *build_body(const char *b64_wav, const char *b64_jpeg, const reactiv
         return NULL;
     }
 
-    char *body = voice_history_build_request_body(name, sys_prompt, tele, has_telemetry, b64_jpeg,
-                                                  b64_wav, now_ms);
+    char *body = voice_history_build_request_body(name, sys_prompt, tele, has_telemetry, body_state,
+                                                  b64_jpeg, b64_wav, now_ms);
     free(sys_prompt);
     return body;
 }
@@ -440,8 +442,23 @@ static void run_turn(uint32_t window_ms, bool vad)
     reactive_telemetry_t tele = {0};
     const bool has_telemetry = (reactive_controller_get_telemetry(&tele) == ESP_OK);
 
+    /* What the body is doing, so the model need not invent it (issue #947). */
+    voice_body_t body_state = {0};
+    uint8_t left_speed = 0;
+    uint8_t right_speed = 0;
+    if (motor_get_state(&left_speed, &right_speed, NULL, NULL) == ESP_OK) {
+        body_state.wheels_known = true;
+        body_state.driving = left_speed != 0 || right_speed != 0;
+    }
+    servo_position_t pos;
+    if (servo_is_initialized() && servo_get_position(&pos) == ESP_OK) {
+        body_state.head_known = true;
+        body_state.pan_deg = pos.pan_angle;
+        body_state.tilt_deg = pos.tilt_angle;
+    }
+
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    char *body = build_body(b64, b64_jpeg, &tele, has_telemetry, now_ms);
+    char *body = build_body(b64, b64_jpeg, &tele, has_telemetry, &body_state, now_ms);
 
     /* The body now holds the only other copy (the cJSON tree only referenced
      * these strings), so release ours before the upload, not after it. */
