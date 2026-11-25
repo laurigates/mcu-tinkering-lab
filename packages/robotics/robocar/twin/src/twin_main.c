@@ -1115,7 +1115,7 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     reactive_telemetry_t tele = {0};
     if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
         ev.distance_cm = tele.distance_cm;
-        ev.range_valid = !tele.sensor_failed;
+        ev.range_valid = tele.distance_valid && !tele.sensor_failed;
         ev.robot_moving = tele.manual_active;
     }
     goal_t current = {0};

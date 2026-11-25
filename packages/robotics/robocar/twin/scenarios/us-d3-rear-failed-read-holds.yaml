@@ -8,7 +8,7 @@
 # read, 36.267 s here, and the reverse ramped up again toward the obstacle.
 #
 # The timeline is us-d3-rear-holds-reverse's up to the release: woken by the
-# front range at 15 s, a reverse at 60 % from 16 s, 8 cm behind from 20 s,
+# console line at 5 s, a reverse at 60 % from 16 s, 8 cm behind from 20 s,
 # braked at 20.262 s.
 #
 # Failure: `range_fail` on the rear sensor at 36 s. The front sensor is not
@@ -24,6 +24,7 @@ duration: 44s
 world:
   - {at: 0s, link: {wifi: true, key: true}}
   - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
   - {at: 0s, range: 120}
   - {at: 0s, range: {cm: 120, sensor: rear}}
   - {at: 20s, range: {cm: 8, sensor: rear}}
