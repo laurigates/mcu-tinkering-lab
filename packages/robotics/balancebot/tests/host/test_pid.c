@@ -81,6 +81,42 @@ static void test_set_integral_clamps(void)
     assert(pid.integral == -5.0f);
 }
 
+// The velocity loop's I term must reach the lean it is allowed (#1258): with
+// integral_max in the integral's own units (steps/s * s), a clamp of 3 and
+// ki = 0.0005 left it 0.0015 deg.
+static void test_i_term_limit(void)
+{
+    pid_t pid;
+    pid_init(&pid, 0.0f, 0.0005f, 0.0f, 3.0f, 3.0f);
+    pid_limit_i_term(&pid, 3.0f);
+    assert(fabsf(pid.integral_max - 6000.0f) < 1e-2f);
+    // A sustained 100 steps/s error for 100 s winds up to the term limit.
+    float out = 0.0f;
+    for (int i = 0; i < 10000; i++) {
+        out = pid_update(&pid, 100.0f, 0.0f, NAN, 0.01f);
+    }
+    assert(fabsf(out - 3.0f) < 1e-4f);
+    assert(fabsf(pid.integral - 6000.0f) < 1e-2f);
+
+    // A larger ki shrinks the limit and re-clamps the stored integral, so the
+    // term stays at the limit rather than jumping past it.
+    pid.ki = 0.001f;
+    pid_limit_i_term(&pid, 3.0f);
+    assert(fabsf(pid.integral - 3000.0f) < 1e-2f);
+    assert(fabsf(pid.ki * pid.integral - 3.0f) < 1e-4f);
+
+    // Negative ki: the limit is symmetric and positive.
+    pid.ki = -0.001f;
+    pid_limit_i_term(&pid, 3.0f);
+    assert(fabsf(pid.integral_max - 3000.0f) < 1e-2f);
+
+    // ki = 0: the integral cannot move the output, so none is stored.
+    pid.ki = 0.0f;
+    pid_limit_i_term(&pid, 3.0f);
+    assert(pid.integral_max == 0.0f);
+    assert(pid.integral == 0.0f);
+}
+
 // LQR -> PID switch: the first PID output must equal the last LQR output.
 // Numbers are in the firmware's units (deg, deg/s, steps/s^2) and in the
 // range a live switch sees; the gains are the angle PID's with a nonzero ki.
@@ -145,6 +181,7 @@ int main(void)
     test_numeric_derivative_fallback();
     test_reset();
     test_set_integral_clamps();
+    test_i_term_limit();
     test_bumpless_first_output_matches_target();
     test_bumpless_clamped();
     test_bumpless_without_ki_is_zero();

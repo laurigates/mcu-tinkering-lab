@@ -55,6 +55,12 @@ void pid_set_integral(pid_t *pid, float integral)
     pid->integral = clampf(integral, -pid->integral_max, pid->integral_max);
 }
 
+void pid_limit_i_term(pid_t *pid, float term_max)
+{
+    pid->integral_max = pid->ki != 0.0f ? term_max / fabsf(pid->ki) : 0.0f;
+    pid_set_integral(pid, pid->integral);
+}
+
 float pid_bumpless_integral(const pid_t *pid, float setpoint, float measurement, float rate,
                             float dt, float target_out)
 {

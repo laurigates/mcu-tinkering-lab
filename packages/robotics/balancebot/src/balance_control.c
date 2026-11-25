@@ -79,6 +79,7 @@ static void apply_gains(void)
     angle_pid.kd = params.angle_kd;
     vel_pid.kp = params.vel_kp;
     vel_pid.ki = params.vel_ki;
+    pid_limit_i_term(&vel_pid, MAX_LEAN_OFFSET_DEG);  // integral_max follows vki
     filter.alpha = params.filter_alpha;
     steps_per_m = lqr_steps_per_metre(params.steps_per_rev, params.wheel_diam_m);
 }
@@ -417,8 +418,10 @@ void balance_control_core1_main(void)
     imu_filter_init(&filter, params.filter_alpha);
     pid_init(&angle_pid, params.angle_kp, params.angle_ki, params.angle_kd, ANGLE_INTEGRAL_MAX,
              ANGLE_PID_OUT_MAX);
-    pid_init(&vel_pid, params.vel_kp, params.vel_ki, 0.0f, MAX_LEAN_OFFSET_DEG,
-             MAX_LEAN_OFFSET_DEG);
+    // MAX_LEAN_OFFSET_DEG bounds the I term (deg), not the raw integral
+    // (steps/s * s), which pid_limit_i_term() scales by vki.
+    pid_init(&vel_pid, params.vel_kp, params.vel_ki, 0.0f, 0.0f, MAX_LEAN_OFFSET_DEG);
+    pid_limit_i_term(&vel_pid, MAX_LEAN_OFFSET_DEG);
 
     // Publish before the slow startup, so `stat` shows core 1 starting rather
     // than an untouched snapshot that reads like a hang.
