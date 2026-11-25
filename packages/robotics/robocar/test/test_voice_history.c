@@ -274,25 +274,78 @@ static void test_telemetry_formatting(void)
     char buf[128];
 
     /* NULL telemetry */
-    ASSERT(!voice_history_format_telemetry(NULL, buf, sizeof(buf)));
+    ASSERT(!voice_history_format_telemetry(NULL, NULL, buf, sizeof(buf)));
 
     /* Normal obstacle reading */
     reactive_telemetry_t tele = {.distance_cm = 45, .reflex_active = false, .sensor_failed = false};
-    ASSERT(voice_history_format_telemetry(&tele, buf, sizeof(buf)));
+    ASSERT(voice_history_format_telemetry(&tele, NULL, buf, sizeof(buf)));
     ASSERT(strcmp(buf, "Physical state: distance to obstacle ahead is 45 cm.") == 0);
 
     /* Reflex active reading */
     tele.distance_cm = 8;
     tele.reflex_active = true;
-    ASSERT(voice_history_format_telemetry(&tele, buf, sizeof(buf)));
+    ASSERT(voice_history_format_telemetry(&tele, NULL, buf, sizeof(buf)));
     ASSERT(strcmp(buf,
                   "Physical state: distance to obstacle ahead is 8 cm (obstacle reflex active).") ==
            0);
 
     /* Sensor failed reading */
     tele.sensor_failed = true;
-    ASSERT(voice_history_format_telemetry(&tele, buf, sizeof(buf)));
+    ASSERT(voice_history_format_telemetry(&tele, NULL, buf, sizeof(buf)));
     ASSERT(strcmp(buf, "Physical state: ultrasonic sensor unavailable.") == 0);
+}
+
+/* Issue #947: the model said "my wheels won't cooperate" and "my gaze turns
+ * smoothly" with nothing in the request about either. The line now carries
+ * what the body is doing, so it has no gap to invent into. + pan is right,
+ * + tilt is up, as everywhere above servo_controller.c. */
+static void test_telemetry_carries_body_state(void)
+{
+    char buf[VOICE_HISTORY_TELE_MAX];
+    reactive_telemetry_t tele = {.distance_cm = 45, .head_mode = REACTIVE_HEAD_GAZE};
+
+    voice_body_t body = {
+        .wheels_known = true, .driving = false, .head_known = true, .pan_deg = -20, .tilt_deg = 5};
+    ASSERT(voice_history_format_telemetry(&tele, &body, buf, sizeof(buf)));
+    ASSERT(strcmp(buf, "Physical state: distance to obstacle ahead is 45 cm. Wheels stopped. "
+                       "Head turned 20 deg left and 5 deg up (idle gaze).") == 0);
+
+    body.driving = true;
+    body.pan_deg = 30;
+    body.tilt_deg = -10;
+    tele.head_mode = REACTIVE_HEAD_AIM;
+    ASSERT(voice_history_format_telemetry(&tele, &body, buf, sizeof(buf)));
+    ASSERT(strstr(buf, "Wheels moving.") != NULL);
+    ASSERT(strstr(buf, "Head turned 30 deg right and 10 deg down (tracking a target).") != NULL);
+
+    body.pan_deg = 0;
+    body.tilt_deg = 0;
+    tele.head_mode = REACTIVE_HEAD_CENTRE;
+    ASSERT(voice_history_format_telemetry(&tele, &body, buf, sizeof(buf)));
+    ASSERT(strstr(buf, "Head facing straight ahead (re-centring).") != NULL);
+
+    /* Released servos: the angle is the last one commanded, not where the head is. */
+    tele.head_mode = REACTIVE_HEAD_UNAVAILABLE;
+    ASSERT(voice_history_format_telemetry(&tele, &body, buf, sizeof(buf)));
+    ASSERT(strstr(buf, "Head servos off.") != NULL);
+    ASSERT(strstr(buf, "deg") == NULL);
+
+    /* Nothing read: say nothing rather than guess. */
+    const voice_body_t unknown = {0};
+    ASSERT(voice_history_format_telemetry(&tele, &unknown, buf, sizeof(buf)));
+    ASSERT(strcmp(buf, "Physical state: distance to obstacle ahead is 45 cm.") == 0);
+}
+
+/* Issue #947: "I'll turn my gaze left at once" and nothing moved. A voice turn
+ * has no way to act, so the instruction says so and asks for a refusal instead
+ * of a promise. */
+static void test_system_prompt_says_voice_turn_cannot_act(void)
+{
+    char *sys = voice_history_build_system_prompt("Teuvo", "Be dry.", NULL);
+    ASSERT(sys != NULL);
+    ASSERT(strstr(sys, "cannot move") != NULL);
+    ASSERT(strstr(sys, "never promise") != NULL);
+    free(sys);
 }
 
 static void test_prompt_building(void)
@@ -442,7 +495,7 @@ static void test_full_request_body_generation(void)
     reactive_telemetry_t tele = {.distance_cm = 50, .reflex_active = false, .sensor_failed = false};
 
     char *json_str = voice_history_build_request_body("Teuvo", "Speak like a 1950s gentleman.",
-                                                      &tele, true, "b64img", "b64wav", 2000);
+                                                      &tele, true, NULL, "b64img", "b64wav", 2000);
     ASSERT(json_str != NULL);
 
     cJSON *root = cJSON_Parse(json_str);
@@ -560,8 +613,8 @@ static void test_request_body_peak_is_one_copy(void)
     s_track_live = 0;
     s_track_peak = 0;
 
-    char *body =
-        voice_history_build_request_body("Teuvo", sys_prompt, &tele, true, b64_jpeg, b64_wav, 2000);
+    char *body = voice_history_build_request_body("Teuvo", sys_prompt, &tele, true, NULL, b64_jpeg,
+                                                  b64_wav, 2000);
     const size_t peak = s_track_peak;
     ASSERT(body != NULL);
     const size_t body_len = strlen(body);
@@ -618,6 +671,9 @@ int main(void)
     test_run("conversation_window_wrap_around", test_conversation_window_wrap_around);
     test_run("conversation_window_reset", test_conversation_window_reset);
     test_run("telemetry_formatting", test_telemetry_formatting);
+    test_run("telemetry_carries_body_state", test_telemetry_carries_body_state);
+    test_run("system_prompt_says_voice_turn_cannot_act",
+             test_system_prompt_says_voice_turn_cannot_act);
     test_run("prompt_building", test_prompt_building);
     test_run("contents_without_history", test_contents_without_history);
     test_run("contents_with_history_and_image", test_contents_with_history_and_image);
