@@ -5,6 +5,7 @@
 
 #include "arm_gate.h"
 #include "config.h"
+#include "ctrl_switch.h"
 #include "drive.h"
 #include "hardware/watchdog.h"
 #include "imu_filter.h"
@@ -40,13 +41,11 @@ static float last_accel_sps2;  // last applied controller output (steps/s^2)
 // LQR. Float only on this core: the double solve happens on core 0 and the
 // result arrives as one CMD_SET_LQR_GAINS item, so K never changes mid-tick
 // and is never half-updated.
-static ctrl_mode_t ctrl_mode;  // law in use; starts PID, LQR only via command
+static ctrl_switch_t ctrl_sw;  // law in use, LQR reference, LQR->PID pending
 static float lqr_K[LQR_N];
 static bool lqr_k_valid;
-static float x_ref_steps;          // position the LQR holds (set on PID->LQR)
-static float steps_per_m;          // from steps_per_rev and wheel_diam_m
-static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
-static drive_t drive;              // speed/turn references; zeroed on every state change
+static float steps_per_m;  // from steps_per_rev and wheel_diam_m
+static drive_t drive;      // speed/turn references; zeroed on every state change
 static float open_loop_sps[STEPPER_COUNT];
 static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
 static arm_gate_t arm_gate;     // last raw sample and CMD_ARM's gravity gate
@@ -97,7 +96,7 @@ void balance_control_init(const balance_params_t *initial)
     // Fail closed: core 1 starts on the PID and switches to LQR only when a
     // CMD_SET_CONTROLLER arrives after a valid CMD_SET_LQR_GAINS.
     params.ctrl_mode = CTRL_PID;
-    ctrl_mode = CTRL_PID;
+    ctrl_switch_init(&ctrl_sw);
     lqr_k_valid = false;
     steps_per_m = lqr_steps_per_metre(params.steps_per_rev, params.wheel_diam_m);
     queue_init(&cmd_queue, sizeof(balance_cmd_t), BAL_CMD_QUEUE_DEPTH);
@@ -154,7 +153,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.rate_cmd_sps = wheel_rate_sps;
     snapshot.angle_setpoint = angle_setpoint;
     snapshot.loop_us = loop_us;
-    snapshot.ctrl_mode = (uint8_t)ctrl_mode;
+    snapshot.ctrl_mode = (uint8_t)ctrl_sw.mode;
     snapshot.lqr_k_valid = lqr_k_valid;
     for (int i = 0; i < LQR_N; i++) {
         snapshot.lqr_K[i] = lqr_K[i];
@@ -190,9 +189,8 @@ static void enter_state(balance_state_t next)
         wheel_rate_sps = 0.0f;
         angle_setpoint = 0.0f;
         wheel_pos_steps = 0.0f;
-        x_ref_steps = 0.0f;
         last_accel_sps2 = 0.0f;
-        pid_bumpless_pending = false;
+        ctrl_switch_on_run(&ctrl_sw);
         stepper_enable(true);
         if (!watchdog_started) {
             // Enabled on first arm so bench work (flash saves, gyro cal)
@@ -350,23 +348,14 @@ static void handle_command(const balance_cmd_t *cmd)
             break;
         }
         case CMD_SET_CONTROLLER:
-            if (cmd->ctrl_mode == CTRL_LQR && ctrl_mode != CTRL_LQR) {
-                if (!lqr_k_valid || !positive(steps_per_m)) {
-                    break;  // refused; core 0 checks first and reports why
-                }
-                // PID -> LQR, bumpless: hold the current position (error
-                // starts at 0); wheel_rate_sps carries over unchanged.
-                x_ref_steps = wheel_pos_steps;
-                angle_setpoint = 0.0f;
-                pid_bumpless_pending = false;
-                ctrl_mode = CTRL_LQR;
-            } else if (cmd->ctrl_mode == CTRL_PID && ctrl_mode != CTRL_PID) {
-                // LQR -> PID: the integral back-calculation needs this tick's
-                // pitch, so it runs in the RUN branch below.
-                pid_bumpless_pending = (state == BAL_STATE_RUN);
-                ctrl_mode = CTRL_PID;
+            // A refusal (no valid K, or no steps<->metres scale) leaves the
+            // law as it was; core 0 checks first and reports why. LQR -> PID's
+            // back-calculation needs this tick's pitch, so it runs in the RUN
+            // branch below.
+            if (ctrl_switch_request(&ctrl_sw, (ctrl_mode_t)cmd->ctrl_mode, lqr_k_valid, steps_per_m,
+                                    state == BAL_STATE_RUN, wheel_pos_steps, &angle_setpoint)) {
+                params.ctrl_mode = (uint32_t)ctrl_sw.mode;
             }
-            params.ctrl_mode = (uint32_t)ctrl_mode;
             break;
         case CMD_SET_IMU_MOUNT:
             // Changing the axes mid-balance would swing the pitch 180 degrees;
@@ -486,7 +475,7 @@ void balance_control_core1_main(void)
                     // accelerates the robot comes from the law itself.
                     drive_step(&drive, dt, DRIVE_SPEED_ACCEL_SPS2, DRIVE_TURN_ACCEL_SPS2);
                     float accel;
-                    if (ctrl_mode == CTRL_LQR) {
+                    if (ctrl_sw.mode == CTRL_LQR) {
                         // u = -K [theta, theta_dot, x - x_ref, x_dot - v_ref]
                         // in m/s^2, scaled to steps/s^2. theta's sign follows
                         // the PID (see lqr.h), so IMU_PITCH_SIGN carries over.
@@ -494,11 +483,11 @@ void balance_control_core1_main(void)
                         // keeping at rest is unchanged; after a drive it holds
                         // where the reference stopped.
                         if (drive.speed_ref_sps != 0.0f) {
-                            x_ref_steps =
-                                drive_advance_ref(x_ref_steps, wheel_pos_steps, drive.speed_ref_sps,
-                                                  dt, DRIVE_X_LEAD_MAX_M * steps_per_m);
+                            ctrl_sw.x_ref_steps = drive_advance_ref(
+                                ctrl_sw.x_ref_steps, wheel_pos_steps, drive.speed_ref_sps, dt,
+                                DRIVE_X_LEAD_MAX_M * steps_per_m);
                         }
-                        float x_err_m = (wheel_pos_steps - x_ref_steps) / steps_per_m;
+                        float x_err_m = (wheel_pos_steps - ctrl_sw.x_ref_steps) / steps_per_m;
                         float x_dot = (wheel_rate_sps - drive.speed_ref_sps) / steps_per_m;
                         float u = lqr_accel(lqr_K, lqr_theta_from_pitch(pitch),
                                             lqr_theta_dot_from_gyro(gyro_rate), x_err_m, x_dot);
@@ -513,18 +502,13 @@ void balance_control_core1_main(void)
                         // Outer loop (100 Hz): lean against wheel velocity to
                         // hold the drive speed (0 at rest = hold station).
                         // Wheel rate above it = drifting forward -> lean back.
-                        if (pid_bumpless_pending) {
+                        if (ctrl_sw.pid_bumpless_pending) {
                             // LQR -> PID: the velocity PI restarts from a zero
                             // integral, then the angle integral is loaded so
                             // this tick's PID output equals the last LQR one.
-                            pid_reset(&vel_pid);
-                            angle_setpoint =
-                                pid_update(&vel_pid, drive.speed_ref_sps, wheel_rate_sps, NAN,
-                                           dt * VELOCITY_LOOP_DIV);
-                            pid_set_integral(
-                                &angle_pid, pid_bumpless_integral(&angle_pid, angle_setpoint, pitch,
-                                                                  gyro_rate, dt, last_accel_sps2));
-                            pid_bumpless_pending = false;
+                            angle_setpoint = ctrl_switch_resume_pid(
+                                &ctrl_sw, &angle_pid, &vel_pid, drive.speed_ref_sps, wheel_rate_sps,
+                                pitch, gyro_rate, dt, dt * VELOCITY_LOOP_DIV, last_accel_sps2);
                         } else if (tick % VELOCITY_LOOP_DIV == 0) {
                             angle_setpoint =
                                 pid_update(&vel_pid, drive.speed_ref_sps, wheel_rate_sps, NAN,

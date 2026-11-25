@@ -25,6 +25,7 @@ add_executable(balancebot
     src/cli.c
     src/cli_gate.c
     src/crc32.c
+    src/ctrl_switch.c
     src/drive.c
     src/imu_cal.c
     src/imu_filter.c
@@ -65,7 +66,8 @@ target_compile_options(balancebot PRIVATE -Wall -Wextra)
 # lqr.c is covered too: its double math is the core-0 solve, written out
 # explicitly, and its core-1 helpers are float.
 set_source_files_properties(src/balance_control.c src/pid.c src/lqr.c src/imu_filter.c
-    src/arm_gate.c src/imu_cal.c src/drive.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
+    src/arm_gate.c src/imu_cal.c src/drive.c src/ctrl_switch.c
+    PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
 
 target_link_libraries(balancebot
     pico_stdlib

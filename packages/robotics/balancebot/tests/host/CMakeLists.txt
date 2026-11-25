@@ -9,7 +9,7 @@ enable_testing()
 
 set(SRC ${CMAKE_CURRENT_LIST_DIR}/../../src)
 
-foreach(name pid imu_filter crc32 lqr param_record arm_gate cli_gate imu_cal status_color drive log_record pack_sense)
+foreach(name pid imu_filter crc32 lqr param_record arm_gate cli_gate imu_cal status_color drive log_record pack_sense ctrl_switch)
     add_executable(test_${name} test_${name}.c ${SRC}/${name}.c)
     target_include_directories(test_${name} PRIVATE ${SRC})
     target_compile_options(test_${name} PRIVATE -Wall -Wextra -Werror)
@@ -31,6 +31,10 @@ target_sources(test_imu_cal PRIVATE ${SRC}/param_record.c ${SRC}/crc32.c ${SRC}/
 set_source_files_properties(${SRC}/imu_cal.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
 # drive.c runs on core 1, which is float-only.
 set_source_files_properties(${SRC}/drive.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
+# The PID/LQR switch back-calculates the angle PID's integral.
+target_sources(test_ctrl_switch PRIVATE ${SRC}/pid.c)
+# ctrl_switch.c runs on core 1, which is float-only.
+set_source_files_properties(${SRC}/ctrl_switch.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
 # The LQR sign-invariant test compares against the angle PID.
 target_sources(test_lqr PRIVATE ${SRC}/pid.c)
 # lqr.c mixes a double solver with a float control law: keep every

@@ -46,18 +46,20 @@ before the battery). The procedure itself is in README "Tuning loop".
 
 ```bash
 just balancebot::build   # containerized, → build/balancebot.uf2
-just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal, drive, log_record, pack_sense
+just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal, drive, log_record, pack_sense, ctrl_switch
 ```
 
 `pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c`, `param_record.c`, `arm_gate.c`,
-`cli_gate.c`, `imu_cal.c`, `drive.c`, `log_record.c` and `pack_sense.c` are **pure C with no SDK includes** so the host tests can compile
+`cli_gate.c`, `imu_cal.c`, `drive.c`, `log_record.c`, `pack_sense.c` and `ctrl_switch.c` are **pure C with no SDK includes** so the host tests can compile
 them — keep them that way. The gyro calibration's stillness judgement and
 `trim capture`'s average live in `imu_cal.c`; keep `mpu6050_calibrate_gyro()`
 and `cmd_trim()` calling it. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live
 in `arm_gate.c` for that reason; keep `handle_command()` calling it. The CLI's
 `arm`, `mount` and `load` refusals, and what `arm` and a sent mount report
 once core 1 drained them, live in `cli_gate.c`; keep `cmd_arm()`, `cmd_mount()`,
-`adopt_mount()` and the `load` branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
+`adopt_mount()` and the `load` branch calling it. The live PID/LQR switch
+(CMD_SET_CONTROLLER and the LQR->PID back-calculation tick) lives in
+`ctrl_switch.c`; keep `handle_command()` and the RUN branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
 The carrier's pack-voltage sense (#747) follows the same split: `pack_sense.c`
 holds the divider scale, the absent judgement and the warning and cutoff
 monitor, `pack.c` reads D0 on core 0 and sends core 1 `CMD_SET_PACK_LOW`, and
