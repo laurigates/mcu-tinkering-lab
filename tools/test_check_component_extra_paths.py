@@ -365,11 +365,12 @@ def test_the_real_matrix_covers_every_consumer() -> None:
 
 def test_the_real_exclude_paths_name_directories_inside_their_project() -> None:
     assert [str(f) for f in cce.check_exclude_paths(cce.REPO_ROOT, REAL_MATRIX)] == []
-    # The robocar firmware's directory holds four separate projects; each
+    # The robocar firmware's directory holds five separate projects; each
     # must be excluded, or a change to it alone rebuilds the firmware.
     robocar = next(e for e in REAL_MATRIX if e["project"] == "robocar")
     assert robocar["exclude_paths"] == [
         "robotics/robocar/bringup",
+        "robotics/robocar/head",
         "robotics/robocar/integrated",
         "robotics/robocar/simulation",
         "robotics/robocar/twin",
@@ -528,7 +529,7 @@ def test_real_release_please_excludes_match_the_matrix() -> None:
     assert release_findings(REAL_MATRIX, REAL_RELEASE_PACKAGES) == []
     # The comparison must have something to compare.
     robocar = REAL_RELEASE_PACKAGES["packages/robotics/robocar"]
-    assert len(robocar["exclude-paths"]) == 4
+    assert len(robocar["exclude-paths"]) == 5
 
 
 def test_the_real_release_check_fails_when_the_list_is_lost() -> None:

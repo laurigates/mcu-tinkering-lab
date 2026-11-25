@@ -86,41 +86,55 @@ def pour_layers(board, pour):
     return layers
 
 
-def end_pad(board, origin, tr, point):
-    """The pad of `tr`'s net and layer under `point`, else exit."""
+def end_pads(board, origin, tr, point):
+    """Every pad of `tr`'s net and layer under `point`, else exit.
+
+    Usually one; a footprint can stack two pads of one net at one spot (a
+    USB-C receptacle's A1/B12), and all of them are under the point.
+    """
     at = pcbnew.VECTOR2I(
         pcbnew.FromMM(origin[0] + point[0]), pcbnew.FromMM(origin[1] + point[1])
     )
     layer = board.GetLayerID(tr["layer"])
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            if (
-                pad.GetNetname() == tr["net"]
-                and pad.IsOnLayer(layer)
-                and pad.HitTest(at)
-            ):
-                return pad
-    sys.exit(
-        f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad on {tr['layer']}"
-    )
+    pads = [
+        pad
+        for fp in board.GetFootprints()
+        for pad in fp.Pads()
+        if pad.GetNetname() == tr["net"] and pad.IsOnLayer(layer) and pad.HitTest(at)
+    ]
+    if not pads:
+        sys.exit(
+            f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad on "
+            f"{tr['layer']}"
+        )
+    return pads
+
+
+def end_pad(board, origin, tr, point):
+    """The (first) pad of `tr`'s net and layer under `point`, else exit."""
+    return end_pads(board, origin, tr, point)[0]
 
 
 def track_pins(board, origin, tracks):
-    """(net, "REF-PAD") of the pad under each track's first point.
+    """(net, "REF-PAD") of every pad under each track's first point.
 
     Both ends must be on a pad of the track's net. The first pad leaves
-    Freerouting's netlist (dsn.drop_pins): the track joins it to the last.
+    Freerouting's netlist (dsn.drop_pins): the track joins it to the last. A
+    pad stacked on it (same net, same spot) leaves too: left in, it is a pin
+    Freerouting must reach at the track's walled-off end, and one such pin
+    can make it give up the whole net (carrier-pcb trap 28).
     """
     pins = []
     for tr in tracks:
-        first = end_pad(board, origin, tr, tr["points"][0])
+        firsts = end_pads(board, origin, tr, tr["points"][0])
         last = end_pad(board, origin, tr, tr["points"][-1])
-        if first.GetParentFootprint() is last.GetParentFootprint() and (
-            first.GetNumber() == last.GetNumber()
-        ):
-            sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
-        ref = first.GetParentFootprint().GetReference()
-        pins.append((tr["net"], f"{ref}-{first.GetNumber()}"))
+        for first in firsts:
+            if first.GetParentFootprint() is last.GetParentFootprint() and (
+                first.GetNumber() == last.GetNumber()
+            ):
+                sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
+            ref = first.GetParentFootprint().GetReference()
+            pins.append((tr["net"], f"{ref}-{first.GetNumber()}"))
     return pins
 
 
@@ -560,7 +574,8 @@ def route(spec):
 
     if os.path.exists(ses_path):
         os.remove(ses_path)
-    subprocess.run(
+    log_path = os.path.join(out, "freerouting.log")
+    done = subprocess.run(
         [
             "java",
             # no window, no Dock icon: on macOS a JVM otherwise takes the
@@ -576,9 +591,36 @@ def route(spec):
             "-mp",
             "100",
             "--gui.enabled=false",
+            # Not in --help; a LoggingSettings key, like gui.enabled. The
+            # DEBUG lines name what the router could not reach.
+            "--logging.console.level=DEBUG",
         ],
-        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
+    with open(log_path, "w") as f:
+        f.write(done.stdout)
+    # The console keeps Freerouting's usual INFO-and-above output.
+    usual = [line for line in done.stdout.splitlines(True) if " DEBUG " not in line]
+    print("".join(usual), end="")
+    stuck = dsn.stuck_points(done.stdout, spec["origin"])
+    if stuck:
+        print(
+            "Freerouting could not reach (board mm, from its DEBUG log, "
+            f"{log_path}): " + ", ".join(f"({x:.2f}, {y:.2f})" for x, y in stuck)
+        )
+    with open(dsn_path) as f:
+        failed = dsn.failed_connections(done.stdout, f.read())
+
+    def shown(pads):
+        head = ", ".join(pads[:8])
+        return f"{head} (+{len(pads) - 8} more)" if len(pads) > 8 else head or "tracks"
+
+    for reason, a, b in failed:
+        print(f"Freerouting: {reason}: {shown(a)} || {shown(b)}")
+    if done.returncode != 0:
+        sys.exit(f"Freerouting exited {done.returncode}; see {log_path}")
     if not os.path.exists(ses_path):
         sys.exit("Freerouting wrote no session file")
     if not pcbnew.ImportSpecctraSES(board, ses_path):

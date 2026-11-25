@@ -93,6 +93,11 @@ NOT_IN_MATRIX: dict[str, str] = {
         "them build them, and the module only runs their host suites "
         "(`just components::test`, the `components` entry of python-suites.json)"
     ),
+    "robotics/robocar/head": (
+        "head panel PCB only; it carries the XIAO that runs "
+        "packages/robotics/robocar's firmware, and carrier-check.yml checks "
+        "the board"
+    ),
     "robotics/robocar/integrated": (
         "carrier PCB only; it runs packages/robotics/robocar's firmware, and "
         "carrier-check.yml checks the board"

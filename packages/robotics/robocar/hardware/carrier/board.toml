@@ -3,13 +3,12 @@
 # registry (docs/reference/parts/); this file says where each part sits, how
 # wide each net's tracks are, and what goes on the silkscreen.
 #
-# One PCB carries four pieces: the main board (chassis plate), a plain rectangle on the left, and a
-# column of three head boards (pan-tilt cradle) on the right, each a different
-# way of mounting the ribbon header (Lauri, 2026-10-16). 3 mm or wider
-# copper-free bands under silkscreen saw lines separate them. JLCPCB sees one
-# rectangular design with no V-cuts, tabs or mouse bites; Lauri saws the pieces
-# apart after delivery. Every cut runs straight across the board or the head
-# column, so no cut has an inside corner and no relief hole is needed.
+# The main board (chassis plate), the whole 100 x 100 mm PCB. The three head
+# boards that carry the XIAO are a PCB of their own (../../head/, side "head");
+# they shared this panel, in a column on the right, until #1280 (Lauri,
+# 2026-11-25), when the main board needed their area for the power switch, the
+# soft latch and the USB charger (ADR-038). This board is side "main" of the
+# hardware.toml's [[cables]] split (kicad.netlist).
 #
 # Every dimension below is Claude's proposal, not a measurement, and each one
 # says what to measure. Correct it, then re-run
@@ -27,56 +26,23 @@
 
 [project]
 name = "robocar-carrier"     # the KiCad project directory and file stem here
+side = "main"                # the heads are ../../head/hardware/carrier/
 # The schematic writer grows the sheet until the drawing fits; this carrier's
 # needs A2, so the sheet is named as the generated file has it.
 paper = "A2"
 
-# One rectangle for all four pieces. 100 x 100 mm keeps the order in JLCPCB's
-# smallest price band (Lauri: stay within it). The main board is x 0-70.5, about
-# 70 x 100 mm after sawing. No ready-made chassis plate constrains it, and hole
-# placement has no hard requirement (Lauri, 2026-10-16): the chassis is drilled
-# to match the board.
+# 100 x 100 mm keeps the order in JLCPCB's smallest price band (Lauri: stay
+# within it). No ready-made chassis plate constrains it, and hole placement has
+# no hard requirement (Lauri, 2026-10-16): the chassis is drilled to match the
+# board.
 [outline]
 origin = [100.0, 100.0]
 size = [100.0, 100.0]
 
-# The saw bands: no copper of any kind. build_board.py makes each rectangle a
-# KiCad rule area, so DRC, the zone fill and Freerouting keep out, and
-# kicad.boardcheck checks the committed copper against it.
-#
-# Each head is a 29.5 x 29.5 mm square after sawing, 0.25 mm per side inside
-# the cradle's 30.0 x 30.0 mm (Lauri, 2026-10-15). Head k's square starts at
-# x 70.5 and y 0, 35.25 or 70.5; its copper is the 28 x 28 mm from x 72 and
-# that y: a 1.5 mm band inside the left and bottom cuts, a 0.5 mm edge keepout
-# along its top and right edges. The waste strips between heads (y 29.5-35.25
-# and 64.75-70.5) take the saw kerf. Head 2's top band reaches 1 mm past its
-# cut (#810). Head 3's stops 0.5 mm past the y 70.5 cut, the .kicad_pro
-# copper-to-edge clearance, and a HEAD3_MOTOR_STBY track runs 0.73 mm from the
-# cut: at 0.75 mm or more Freerouting could not route HEAD3_PIEZO past J17 (8
-# attempts out of 8), and J17 cannot move down, where its pads would sit under
-# U4's silkscreen. The saw runs in the waste strip, so that track is 0.73 mm
-# from the sanded edge, as far as a track sits from the outline elsewhere.
-[[keepouts]]
-name = "head column cut band, vertical"
-rect = [69.0, 0.0, 72.0, 100.0]
-
-[[keepouts]]
-name = "head 1 / head 2 cut band"
-rect = [72.0, 28.0, 99.5, 36.25]
-
-[[keepouts]]
-name = "head 2 / head 3 cut band"
-rect = [72.0, 63.25, 99.5, 71.0]
-
-[[keepouts]]
-name = "head 3 bottom band"
-rect = [72.0, 98.5, 99.5, 100.0]
-
 # KiCad's copper-to-edge clearance (0.5 mm, .kicad_pro) as rule areas along
 # the outline: Freerouting keeps only its class clearance from the board
-# boundary, and on the 28 mm heads it routed tracks onto the edge. Not along the
-# main board's bottom edge, where J3's courtyard reaches the outline and a rule
-# area would refuse the footprint.
+# boundary (carrier-pcb trap 22). Not along the bottom edge, where J3's
+# courtyard reaches the outline and a rule area would refuse the footprint.
 [[keepouts]]
 name = "edge clearance, top"
 rect = [0.0, 0.0, 100.0, 0.5]
@@ -95,48 +61,25 @@ rect = [99.5, 0.0, 100.0, 100.0]
 # breakout socket's courtyard is its module's outline, so no part sits under a
 # module.
 [placement]
-# Head boards. All three: the XIAO socket with its USB-C toward the head's top
-# edge (Lauri confirmed the camera then faces forward), and two M2 holes in the
-# top corners at the #799 positions, 22.5 mm apart (Lauri confirmed them,
-# 2026-10-16). The holes' ISO 7380 footprint leaves 18.4 mm between their
-# courtyards, so the XIAO (17.88 mm) fits between them; fit M2 button heads.
-# Drill the cradle to match the holes.
-#
-# Head 1: the ribbon header on the back face at the bottom, the XIAO above it.
-U1 = [85.75, 12.7, 90]
-J2 = [91.75, 26.0, 90, "back"]
-H5 = [74.5, 3.05, 0]
-H6 = [97.0, 3.05, 0]
-# Head 2: the header on the front face at the bottom, the XIAO above it.
-U3 = [85.75, 47.6, 90]
-J16 = [79.75, 61.65, 90]
-H7 = [74.5, 38.3, 0]
-H8 = [97.0, 38.3, 0]
-# Head 3: the header on the back face at the top, between the M2 holes; the
-# XIAO below it, where #799 had it.
-U4 = [85.75, 88.0, 90]
-J17 = [92.75, 75.0, 90, "back"]
-H9 = [74.5, 73.55, 0]
-H10 = [97.0, 73.55, 0]
-
-# Main board, x 0.5-69. M3 holes at its corners; the chassis is drilled to
-# match them (no hard requirement on placement, Lauri, 2026-10-16).
+# M3 holes at the corners; the chassis is drilled to match them (no hard
+# requirement on placement, Lauri, 2026-10-16). H2 and H4 moved from x 65 to the
+# right-hand corners when the heads left the panel (#1280).
 H1 = [4.0, 4.0, 0]
-H2 = [65.0, 4.0, 0]
+H2 = [96.0, 4.0, 0]
 H3 = [4.0, 96.0, 0]
-H4 = [65.0, 96.0, 0]
+H4 = [96.0, 96.0, 0]
 # Front row: both rangefinders side by side over the TCA9548A's channel 3 and 4
-# pads, then the ribbon's main end and the UART0 tap beside it. J1's pins
-# now sit 21-33 mm in from the main board's right edge (the x 70.5 saw line),
-# about 22 mm further than its old spot beside the head column. Lauri's
-# "a 10-15 cm ribbon reaches the head" (2026-10-16) was said of that old spot;
-# confirm it still reaches from here.
+# pads, then the ribbon's main end and the UART0 tap beside it. Lauri's
+# "a 10-15 cm ribbon reaches the head" (2026-10-16) was said of J1's spot
+# beside the old head column, about 22 mm further right; confirm it reaches
+# from here. J1 is a 2x8 since ADR-038, 2 mm longer toward +x, so D1 and J15
+# moved 2.2 mm right.
 J7 = [11.0, 4.0, 0]       # RCWL-1601 front
 J8 = [25.0, 4.0, 0]       # RCWL-1601 rear
 J1 = [37.5, 6.0, 90]      # ribbon, main end
 # D1 between J1 and J15: the XIAO's 5V through a Schottky (pre-fab review BL-2).
-D1 = [52.37, 4.0, 90]
-J15 = [55.5, 2.3, 0]      # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
+D1 = [54.6, 4.0, 90]
+J15 = [57.7, 2.3, 0]      # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
 # The MCP23017's decoupling (WIRING.md's C6) beside the CJMCU-2317's VCC pin.
 C6 = [38.6, 8.6, 0]
 # The TCA9548A turned so its channel 3/4 header faces the rangefinders and its
@@ -195,51 +138,107 @@ U2 = [45.6, 70.6, 90]     # AMS1117-3.3
 C8 = [45.6, 77.0, 0]      # LDO output
 J14 = [44.0, 81.2, 90]    # GND post beside the AMS1117
 A4 = [67.0, 79.0, 0]      # MAX98357A socket; the speaker lead leaves the module
-# Rear row: power in and the buck lead (JST VH, pre-fab review SF-2) together,
-# the OLED lead above the buck lead, the amplifier's bulk under the amplifier
-# beside its Vin pin, its ground post, the buzzer and its resistor.
-J3 = [12.5, 86.3, 180]    # XT30 pack in, mating face to the rear edge
-F1 = [4.2, 85.8, 90]      # pack-input PTC fuse, beside the XT30, between J5 and H3
-J4 = [24.7, 94.4, 0]      # LM2596 lead, JST VH 4
+# Rear row, left: the buzzer and its resistor where the XT30 and the buck lead
+# were, the OLED lead, the amplifier's bulk under the amplifier beside its Vin
+# pin, its ground post.
 J9 = [31.6, 82.6, 0]      # SSD1306 OLED lead
 C3 = [62.6, 86.55, 180]   # MAX98357A Vin bulk
-J13 = [50.5, 85.3, 90]    # GND post beside the MAX98357A, above the buzzer
-R1 = [58.4, 95.5, 0]      # buzzer series resistor
-BZ1 = [50.8, 93.6, 180]   # 12 mm buzzer, soldered to the board; "+" toward R1
+J13 = [50.5, 85.3, 90]    # GND post beside the MAX98357A
+BZ1 = [20.0, 92.5, 180]   # 12 mm buzzer, soldered to the board; "+" toward R1
+R1 = [25.5, 95.5, 0]      # buzzer series resistor
+
+# Rear row, right: the pack path along the rear edge (ADR-038, #1270), PACK_IN
+# from the XT30's "+" through the back-to-back P-FETs Q1 and Q2 (common source
+# PACK_COMMON, gates on PACK_GATE), the PTC F1 after Q2, and VBAT into the buck
+# lead's IN+. J4 is turned 180 degrees so IN+ (pin 1) is its right-hand pin.
+# R14 and R15 sit north of the FETs: beside the rear edge, between the FETs
+# and the fixed tracks, Freerouting could not get PWR_SW or PACK_GATE out.
+J3 = [82.0, 86.3, 180]    # XT30 pack in, mating face to the rear edge
+Q1 = [73.5, 96.5, 0]      # pack-side P-FET, drain on PACK_IN, source pin 1 at the top
+Q2 = [67.5, 96.5, 180]    # load-side P-FET, drain on PACK_SWD, gate at the top
+F1 = [61.0, 96.5, 180]    # PTC fuse after Q2: PACK_SWD to VBAT
+J4 = [53.9, 94.4, 180]    # LM2596 lead, JST VH 4, IN+ at the right
+R14 = [70.5, 92.8, 180]   # gate pull-up to PACK_COMMON (FETs off): Q1 source to Q2 gate
+R15 = [66.5, 92.8, 180]   # gate (east pad) to PWR_SW (west pad)
+
+# The soft latch (block soft-latch): the power button's lead J19, its two
+# diodes (D2 into PWR_SW, D3 into the expander's PWR_SENSE) and Q3, which holds
+# PWR_SW low once the XIAO drives PWR_HOLD; R16 pulls PWR_HOLD down.
+J19 = [91.0, 76.0, 0]     # power button lead, JST XH 2
+D2 = [80.0, 74.0, 0]
+D3 = [80.0, 77.0, 0]
+Q3 = [80.0, 80.5, 0]
+R16 = [75.0, 80.5, 90]
+
+# The pack divider (R17 over R18, C9 at the ribbon end) near J1, which takes
+# PACK_SENSE to the XIAO's D3.
+R17 = [68.0, 2.5, 0]
+R18 = [68.0, 5.0, 0]
+C9 = [72.5, 3.75, 90]
+
+# The BQ25887 USB charger (block bq25887-2s-usb-charger). U5 is turned so its
+# VBUS/PMID side faces the port J20 at the right edge. The PMID capacitors
+# C11 and C12 stand beside U5's PMID pins with their GND pads beside its GND
+# pins 19 and 20; VBUS leaves between them to C10 and the port. L1 (PMID to
+# SW) and C19 (BTST to SW) make a small SW node beside the port. The SNS
+# capacitors C13-C15 and the BAT capacitors C16-C17 stand in a row under the
+# SNS and BAT pins; the setting resistors and REGN's C18 face the TS..BTST
+# pins on the left; the balance lead J21 is above.
+J20 = [95.33, 62.0, 90]   # USB-C, receptacle mouth to the right edge
+U5 = [80.0, 60.0, 270]
+C10 = [88.0, 58.0, 90]    # VBUS
+C11 = [83.7, 61.3, 270]   # PMID
+C12 = [85.75, 61.3, 270]  # PMID
+L1 = [88.2, 64.4, 90]     # PMID (top) to SW (bottom)
+C19 = [88.2, 68.6, 90]    # SW (top) to BTST
+C17 = [75.6, 67.5, 270]   # BAT
+C16 = [77.65, 67.5, 270]  # BAT
+C13 = [79.7, 67.5, 270]   # SNS
+C14 = [81.75, 67.5, 270]  # SNS
+C15 = [83.8, 67.5, 270]   # SNS
+# U5's TS..BTST pins (7-12) fan out west in pin order: the TS resistors,
+# ILIM, MIDSENSE, a 1 mm gap for CBSET to pass to its column, then REGN's
+# capacitor; BTST goes under them. Out of order, MIDSENSE and CBSET crossed
+# and Freerouting left them unrouted.
+R27 = [74.6, 50.3, 180]   # TS to GND, the stand-in for an NTC
+R26 = [74.6, 52.5, 180]   # TS to GND
+R25 = [74.6, 54.7, 0]     # TS divider: REGN (west pad) to TS (east pad)
+R19 = [74.6, 56.9, 180]   # ILIM
+R20 = [74.6, 59.1, 180]   # MIDSENSE (east pad) to MID
+C18 = [74.6, 61.5, 180]   # REGN
+R29 = [79.3, 54.6, 270]   # SCL pull-up: REGN (top pad) to SCL, over U5's SCL pin
+R28 = [81.3, 54.6, 270]   # SDA pull-up: REGN (top pad) to SDA, over U5's SDA pin
+R21 = [70.7, 57.0, 180]   # CBSET (east pad) to MID, four in parallel
+R22 = [70.7, 59.2, 180]
+R23 = [70.7, 61.4, 180]
+R24 = [70.7, 63.6, 180]
+R30 = [92.0, 69.0, 0]     # CC1 pull-down
+R31 = [95.3, 71.2, 0]     # CC2 pull-down, at the end of CC2's fixed track
+J21 = [72.0, 44.0, 0]     # pack balance lead, JST XH 3; only pin 2 (MID) wired
 
 [silk]
 # The 0.8 mm pin labels on the 2.54 mm headers do not fit at JLCPCB's standard
 # 1.0 mm, so the order selects high-precision silkscreen (0.8 mm, 0.1 mm stroke;
 # docs/reference/jlc-blog/). carrier-fab prints the reminder.
 high_precision = true
-hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
+# R19, R20 and C18 sit between the CBSET column and U5's pins with no room
+# for a label on either side; README § The USB-C charger names them.
+hidden_refs = ["H1", "H2", "H3", "H4", "R19", "R20", "C18"]
 # Seeed's reference text is below KiCad's minimum silkscreen height. Text is
 # 1.0 mm tall, JLCPCB's legible minimum, except where 1.0 mm does not fit
 # (#810): J18's column and row labels against its
-# outline, HEAD 3 against U4's, the CJMCU-2317 pin names inside its
+# outline, the CJMCU-2317 pin names inside its
 # socket outline, J7's and J8's references and pin letters against the
 # TCA9548A socket's silkscreen, the clone's VIN, and the references of the
 # 2.9 mm pull-up row behind it. Those stay at 0.8 mm,
 # boardcheck's floor; build_board.py gives every stroke 0.16 mm or more.
-ref_sizes = { J7 = 0.8, J8 = 0.8, U1 = 1.0, U3 = 1.0, U4 = 1.0, C5 = 0.8, R12 = 0.8, R13 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 1.0, R11 = 1.0 }
+ref_sizes = { J7 = 0.8, J8 = 0.8, C5 = 0.8, R12 = 0.8, R13 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 1.0, R11 = 1.0, R21 = 0.8, R22 = 0.8, R23 = 0.8, R24 = 0.8, R25 = 0.8, R26 = 0.8, R27 = 0.8, R28 = 0.8, R29 = 0.8, R30 = 0.8, R31 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 0.8, C13 = 0.8, C14 = 0.8, C15 = 0.8, C16 = 0.8, C17 = 0.8, C19 = 0.8, R14 = 0.8, R15 = 0.8, R16 = 0.8, R17 = 0.8, R18 = 0.8, C9 = 0.8, D2 = 0.8, D3 = 0.8, Q3 = 0.8, U5 = 0.8, L1 = 0.8}
 # Off the board edge and out from under neighbours.
-ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.6], C4 = [1.6, 54.7], C1 = [35.5, 75.1], C2 = [35.5, 65.2], C6 = [35.0, 8.6], C7 = [45.6, 61.0], D1 = [52.4, 7.4], J4 = [40.3, 96.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [6.3, 8.5], J8 = [21.75, 8.5], J9 = [41.0, 87.0], J12 = [30.0, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [47.0, 97.0], C3 = [62.6, 86.55], C8 = [49.2, 78.5], J1 = [43.5, 1.5], J11 = [30.0, 14.0], J14 = [44.0, 83.9], J15 = [55.5, 7.4], C5 = [1.7, 35.33], R12 = [4.6, 35.33], R13 = [7.5, 35.33], R2 = [10.4, 35.33], R3 = [13.3, 35.33], R4 = [16.2, 35.33], R5 = [19.1, 35.33], R6 = [22.0, 35.33], R7 = [24.9, 35.33], R8 = [27.8, 35.33], R9 = [30.7, 35.33], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
-# The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
-# so each runs in the direction that puts the label in the waste.
-cut_lines = [
-    [70.5, 99.5, 70.5, 0.5],
-    [99.5, 29.5, 70.5, 29.5],
-    [70.5, 35.25, 99.5, 35.25],
-    [99.5, 64.75, 70.5, 64.75],
-    [70.5, 70.5, 99.5, 70.5],
-]
+ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.6], C4 = [1.6, 54.7], C1 = [35.5, 75.1], C2 = [35.5, 65.2], C6 = [35.0, 8.6], C7 = [45.6, 61.0], D1 = [54.6, 7.4], J4 = [37.5, 96.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [6.3, 8.5], J8 = [21.75, 8.5], J9 = [41.0, 87.0], J12 = [30.0, 23.0], J18 = [65.7, 36.6], C3 = [62.6, 86.55], C8 = [49.2, 78.5], J1 = [43.5, 1.5], J11 = [30.0, 14.0], J14 = [44.0, 83.9], J15 = [57.7, 7.4], C5 = [1.7, 35.33], R12 = [4.6, 35.33], R13 = [7.5, 35.33], R2 = [10.4, 35.33], R3 = [13.3, 35.33], R4 = [16.2, 35.33], R5 = [19.1, 35.33], R6 = [22.0, 35.33], R7 = [24.9, 35.33], R8 = [27.8, 35.33], R9 = [30.7, 35.33], R10 = [34.4, 35.5], R11 = [38.4, 35.5], R27 = [71.4, 50.3], R26 = [71.4, 52.5], R25 = [71.4, 54.7], R21 = [67.4, 57.0], R22 = [67.4, 59.2], R23 = [67.4, 61.4], R24 = [67.4, 63.6], R29 = [79.3, 51.6], R28 = [81.6, 51.6], U5 = [76.9, 57.4], C10 = [88.0, 55.1], C11 = [83.7, 64.4], C12 = [85.75, 64.4], C19 = [86.0, 68.6], C17 = [75.6, 70.7], C16 = [77.65, 70.7], C13 = [79.7, 70.7], C14 = [81.75, 70.7], C15 = [83.8, 70.7], R30 = [92.0, 70.6], R31 = [98.25, 71.2], J20 = [96.0, 55.0], D2 = [76.6, 74.0], D3 = [84.3, 77.0], Q3 = [83.3, 80.5], R16 = [72.6, 80.5], R14 = [73.9, 91.9], R15 = [63.6, 92.8], R17 = [64.6, 2.5], R18 = [64.6, 5.0], C9 = [74.6, 3.75], BZ1 = [16.2, 95.9], L1 = [87.9, 61.9]}
 texts = [
     { text = "robocar", at = [22.0, 43.6], size = 1.0 },
     { text = "carrier", at = [22.0, 45.4], size = 1.0 },
     { text = "FRONT ^", at = [22.0, 47.6], size = 1.2 },
-    { text = "HEAD 1", at = [75.0, 26.0], size = 1.0 },
-    { text = "HEAD 2", at = [75.0, 61.0], size = 1.0 },
-    { text = "HEAD 3", at = [74.4, 96.0], size = 0.8 },
     # Test header net names, one beside each pin (2.54 mm pitch).
     { text = "+3V3", at = [38.3, 11.0], size = 1.0 },
     { text = "+5V", at = [38.3, 13.54], size = 1.0 },
@@ -249,8 +248,8 @@ texts = [
     { text = "SDA", at = [38.3, 25.04], size = 1.0 },
     { text = "SCL", at = [38.3, 27.58], size = 1.0 },
     { text = "RST", at = [38.3, 30.12], size = 1.0 },
-    { text = "GND", at = [58.8, 2.3], size = 1.0 },
-    { text = "U0TX", at = [59.2, 4.84], size = 1.0 },
+    { text = "GND", at = [61.0, 2.3], size = 1.0 },
+    { text = "U0TX", at = [61.4, 4.84], size = 1.0 },
     { text = "GND", at = [44.0, 85.6], size = 1.0 },
     { text = "GND", at = [51.77, 82.6], size = 1.0 },
     # The GPIO mirror header J18: column letters over the top (row 10) end,
@@ -337,14 +336,14 @@ texts = [
     { text = "V", at = [34.1, 87.0], size = 1.0 },
     { text = "C", at = [36.6, 87.0], size = 1.0 },
     { text = "D", at = [39.1, 87.0], size = 1.0 },
-    { text = "I+", at = [24.7, 89.95], size = 1.0 },
-    { text = "I-", at = [28.66, 89.95], size = 1.0 },
-    { text = "O+", at = [32.62, 89.95], size = 1.0 },
-    { text = "O-", at = [36.58, 89.95], size = 1.0 },
-    { text = "SET", at = [25.4, 83.3], size = 1.0 },
-    { text = "LM2596", at = [25.4, 84.8], size = 1.0 },
-    { text = "TO 5.0V", at = [25.4, 86.3], size = 1.0 },
-    { text = "FIRST", at = [25.4, 87.8], size = 1.0 },
+    { text = "I+", at = [53.9, 88.4], size = 1.0 },
+    { text = "I-", at = [49.94, 88.4], size = 1.0 },
+    { text = "O+", at = [45.98, 88.4], size = 1.0 },
+    { text = "O-", at = [42.02, 88.4], size = 1.0 },
+    { text = "SET", at = [33.5, 89.5], size = 1.0 },
+    { text = "LM2596", at = [33.5, 91.0], size = 1.0 },
+    { text = "TO 5.0V", at = [33.5, 92.5], size = 1.0 },
+    { text = "FIRST", at = [33.5, 94.0], size = 1.0 },
 ]
 
 # Fixed tracks: build_board.py lays them down locked; route_board.py walls
@@ -354,8 +353,8 @@ texts = [
 # The 5V trunk, all on F.Cu with no via (pre-fab review SF-1). Routed, every
 # motor, servo and head 5V path changed layer through one 1.0/0.5 mm via at
 # (42.35, 63.40), and the LDO and amplifier branch through one at
-# (49.46, 73.75). The chain: the buck lead's OUT+ (J4:3) up the east side of
-# the OLED lead to C1's "+" pad, on to C2's, across above the TB6612FNG's
+# (49.46, 73.75). The chain: the buck lead's OUT+ (J4:3) up and west above
+# J4 to x 41.05, up to C1's "+" pad, on to C2's, across above the TB6612FNG's
 # first row to its VM pin (A1:8), and on to the PCA9685's V+ pin (A2:1). The
 # motors draw from C1, C2 and VM, so that run is 1.5 mm (beside J9's pads and
 # U2's GND pin) and 2.0 mm above A1; the servo run on to A2:1 is 1.5 mm. Each
@@ -388,7 +387,7 @@ name = "5V trunk, J4 OUT+ to C1"
 net = "+5V"
 layer = "F.Cu"
 width_mm = 1.5
-points = [[32.62, 94.4], [32.62, 91.2], [41.05, 91.2], [41.05, 75.1], [39.2, 75.1]]
+points = [[45.98, 94.4], [45.98, 91.2], [41.05, 91.2], [41.05, 75.1], [39.2, 75.1]]
 
 # The LDO and amplifier branch, 1.0 mm, also all on F.Cu: from C2 along the
 # bottom of the PCA9685 to the LDO's input capacitor C7, down the east side
@@ -429,26 +428,327 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[66.3, 86.55], [66.3, 80.6], [67.0, 79.9], [67.0, 79.0]]
 
-# The pack input, 2 mm on F.Cu with no via, as on the integrated carrier
-# (pre-order review: routed at 1.0 mm, with two 0.75 mm VBAT segments, while
-# F1 only guarantees a trip at 8 A). PACK_IN leaves J3's "+" pad down and
-# runs under the XT30's body, below its pins, to F1's pack-side pad; VBAT
-# leaves F1's other pad along the corridor between A1's GND pins and J3's
-# pads (0.55 mm from each) to the LM2596 lead's IN+ (J4:1). J11's VBAT pin
-# stays routed from there.
+# The pack path along the rear edge, all on F.Cu with no via, 2 mm where it
+# carries the robot's whole current (as the old PACK_IN and VBAT tracks did):
+# from Q1's drain to the XT30's "+" (J3:2, the pad left to Freerouting for the
+# charger's BAT branch), Q2's drain into F1, and F1 into the buck lead's IN+.
+# The FETs' common source is tied pin to pin (0.4 mm, between pins 0.65 mm
+# apart) and joined across by one 1.0 mm segment between the middle pins,
+# 0.58 mm from each gate pad. At 1.5 mm its router keepout (half the width
+# plus the widest class clearance) covered Q1's gate pad, and Freerouting's
+# DEBUG log reported the PACK_GATE search "could not be created". The two parts face each other rotated 180
+# degrees, so their gate pins sit at opposite corners: Q2's on the north side,
+# Q1's on the south, and Freerouting joins them through B.Cu. R14 ties to
+# Q1's source pin 1, the one on the north side, so no PACK_COMMON pad is left
+# to Freerouting (it could not reach Q2:2 between the fixed tracks: carrier-pcb
+# trap 28).
 [[tracks]]
-name = "pack input, J3 + to F1"
+name = "pack input, Q1 drain to J3 +"
 net = "PACK_IN"
 layer = "F.Cu"
 width_mm = 2.0
-points = [[17.5, 86.3], [17.5, 91.0], [4.2, 91.0], [4.2, 88.025]]
+points = [[73.96, 96.5], [76.5, 96.5], [76.5, 90.0], [87.0, 90.0], [87.0, 86.3]]
+
+[[tracks]]
+name = "Q1 source, pin 1 to 2"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[72.0, 95.53], [72.0, 96.18]]
+
+[[tracks]]
+name = "Q1 source, pin 3 to 2"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[72.0, 96.82], [72.0, 96.18]]
+
+[[tracks]]
+name = "Q1 source to Q2 source"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 1.0
+points = [[72.0, 96.18], [69.0, 96.82]]
+
+[[tracks]]
+name = "Q2 source, pin 3 to 2"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[69.0, 96.18], [69.0, 96.82]]
+
+[[tracks]]
+name = "Q2 source, pin 1 to 2"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[69.0, 97.47], [69.0, 96.82]]
+
+[[tracks]]
+name = "R14 to Q1 source pin 1"
+net = "PACK_COMMON"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[71.5, 92.8], [72.0, 95.53]]
+
+[[tracks]]
+name = "PACK_GATE, Q2 gate to R14"
+net = "PACK_GATE"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[69.0, 95.53], [69.5, 92.8]]
+
+# R14's gate pad then starts a track too, so the PACK_GATE pad Freerouting
+# joins to Q1's gate is R15's, open to the north and south. The track stops at
+# R15:1's east edge: ending at the centre, its keepout covered the pad but a
+# 0.6 mm strip beside R15:2, and the search still "could not be created". Left as the last
+# pad of two fixed tracks, R14:2 was walled in, and Freerouting's log named
+# R14-2 and Q1-4 a search it "could not create".
+[[tracks]]
+name = "PACK_GATE, R14 to R15"
+net = "PACK_GATE"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[69.5, 92.8], [68.0, 92.8]]
+
+[[tracks]]
+name = "Q2 drain to F1"
+net = "PACK_SWD"
+layer = "F.Cu"
+width_mm = 2.0
+points = [[66.6, 96.5], [63.22, 96.5]]
 
 [[tracks]]
 name = "VBAT, F1 to J4 IN+"
 net = "VBAT"
 layer = "F.Cu"
 width_mm = 2.0
-points = [[4.2, 83.575], [4.2, 83.0], [24.7, 83.0], [24.7, 94.4]]
+points = [[58.78, 96.5], [53.9, 94.4]]
+
+# The charger's power nodes at U5, whose pins are 0.25 mm wide at 0.5 mm:
+# Freerouting gives a net one width and lands it on a pin at full width
+# (carrier-pcb trap 24), so every wide net meets U5 through a fixed track no
+# wider than 0.3 mm at the pin, and each node's capacitors are tied pad to pad.
+# GND: pins 19 and 20 to the exposed pad (which takes its vias in the pad,
+# [fanout] in_pad) and to C11's and C12's GND pads; pin 24 to C10's. The fixed
+# PMID and SW tracks wall C11's and C12's GND pads in, so each starts a tie
+# and leaves Freerouting's netlist: with C12:2 left in it, Freerouting gave up
+# on 32 GND connections across the board (carrier-pcb trap 28). That group
+# reaches GND through the exposed pad's vias and the pour.
+# VBUS: pin 23 out between pin 24's tie and the PMID capacitors to C10.
+# PMID: pins 21-22 to C11, C12 and L1's top pad. SW: pins 17-18 under the
+# PMID capacitors to L1's bottom pad and C19, the whole SW node about 9 mm.
+# BAT (PACK_IN): pins 13-14 to C16 and C17, then 1 mm west of C17 (C17's
+# GND pad is right under its "+"), south of the capacitor row with room
+# between for their GND vias, and east of the latch to the XT30's "+". SNS: pins 15-16 to C13, C13-C15 tied. On the first routes
+# Freerouting left each of these links unrouted. Freerouting joins C10 to the
+# port's VBUS pads.
+[[tracks]]
+name = "U5 GND, pin 19 to 20"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[81.96, 61.25], [81.96, 60.75]]
+
+[[tracks]]
+name = "U5 GND, pin 20 to the exposed pad"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[81.96, 60.75], [80.0, 60.75]]
+
+[[tracks]]
+name = "C11 GND to U5 pin 19"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[83.7, 62.34], [81.96, 61.25]]
+
+[[tracks]]
+name = "C12 GND to C11 GND"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[85.75, 62.34], [83.7, 62.34]]
+
+[[tracks]]
+name = "U5 GND, pin 24 to C10"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[81.96, 58.75], [86.5, 58.75], [86.5, 56.96], [88.0, 56.96]]
+
+[[tracks]]
+name = "U5 VBUS to C10"
+net = "CHG_VBUS"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[81.96, 59.25], [88.0, 59.25]]
+
+[[tracks]]
+name = "U5 PMID, pin 22 to 21"
+net = "CHG_PMID"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[81.96, 59.75], [81.96, 60.25]]
+
+[[tracks]]
+name = "U5 PMID to C11"
+net = "CHG_PMID"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[81.96, 60.25], [83.7, 60.25]]
+
+[[tracks]]
+name = "C11 PMID to C12"
+net = "CHG_PMID"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[83.7, 60.26], [85.75, 60.26]]
+
+[[tracks]]
+name = "C12 PMID to L1"
+net = "CHG_PMID"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[85.75, 60.26], [87.0, 60.26], [87.0, 63.32], [88.2, 63.32]]
+
+[[tracks]]
+name = "U5 SW, pin 17 to 18"
+net = "CHG_SW"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[80.75, 61.96], [81.25, 61.96]]
+
+[[tracks]]
+name = "U5 SW to L1"
+net = "CHG_SW"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[81.25, 61.96], [81.9, 65.2], [88.2, 65.2]]
+
+[[tracks]]
+name = "L1 SW to C19"
+net = "CHG_SW"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[88.2, 65.47], [88.2, 67.56]]
+
+[[tracks]]
+name = "U5 BAT, pin 13 to 14"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[78.75, 61.96], [79.25, 61.96]]
+
+[[tracks]]
+name = "U5 BAT to C16"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[79.25, 61.96], [79.25, 63.2], [77.65, 64.8], [77.65, 66.46]]
+
+[[tracks]]
+name = "C16 BAT to C17"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[77.65, 66.46], [75.6, 66.46]]
+
+[[tracks]]
+name = "C15 SNS to C14"
+net = "CHG_SNS"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[83.8, 66.46], [81.75, 66.46]]
+
+[[tracks]]
+name = "C14 SNS to C13"
+net = "CHG_SNS"
+layer = "F.Cu"
+width_mm = 0.6
+points = [[81.75, 66.46], [79.7, 66.46]]
+
+[[tracks]]
+name = "U5 SNS, pin 16 to 15"
+net = "CHG_SNS"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[80.25, 61.96], [79.75, 61.96]]
+
+[[tracks]]
+name = "U5 SNS to C13"
+net = "CHG_SNS"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[79.75, 61.96], [79.75, 66.46]]
+
+# VBUS from C10 to the port's A9/B4 pad and down the port's west side to its
+# A4/B9 pad. With C10:1 left to Freerouting, its log named C10 the start of a
+# VBUS search that "could not be created": the fixed tracks from U5 had
+# walled it in on three sides.
+[[tracks]]
+name = "C10 VBUS to J20 A9"
+net = "CHG_VBUS"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[88.5, 59.3], [90.3, 59.55], [91.28, 59.55]]
+
+[[tracks]]
+name = "J20 VBUS, A9 to A4"
+net = "CHG_VBUS"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[91.28, 59.55], [89.8, 59.55], [89.8, 64.45], [91.28, 64.45]]
+
+# C10's GND pad to the port's shield, so C10:2 leaves Freerouting's netlist
+# for the shield's through-hole pad. Between the U5 pin 24 tie, C10's VBUS pad
+# and the VBUS track it had no open side, and Freerouting's log listed it as
+# the one GND pad it found "no connection" to from every other.
+[[tracks]]
+name = "C10 GND to the J20 shield"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[88.0, 56.96], [90.0, 56.96], [92.2, 57.68]]
+
+# CC2 from the port's B5 pad east under the receptacle, past the locating
+# peg, and down to R31. Inside the port's VBUS link, with the peg north of it
+# and CC1's route south, it had no other way out, and Freerouting found "no
+# connection" in every attempt.
+[[tracks]]
+name = "J20 CC2 to R31"
+net = "CHG_CC2"
+layer = "F.Cu"
+width_mm = 0.2
+points = [[91.28, 60.25], [94.3, 60.25], [94.3, 71.2]]
+
+# The port's GND pads, each a stacked pair (A12/B1, A1/B12), straight up or
+# down into the shield pad 0.27 mm away. Left to Freerouting, the A12/B1 pad
+# had a fixed VBUS track's keepout on its open side and Freerouting could not
+# enter it ("insert trace failed ... target: (1912850,-1587500)" in its DEBUG
+# log, board (91.28, 58.75)), so it gave up on 36 GND connections across the
+# board. route_board drops both pads of a stacked pair under a first point.
+[[tracks]]
+name = "J20 GND A12/B1 to the shield"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[91.28, 58.75], [91.28, 57.9]]
+
+[[tracks]]
+name = "J20 GND A1/B12 to the shield"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[91.28, 65.25], [91.28, 66.1]]
+
+[[tracks]]
+name = "charger BAT, C17 to J3 +"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 1.0
+points = [[75.6, 66.46], [73.4, 66.46], [73.4, 71.8], [85.0, 71.8], [85.0, 84.5], [87.0, 86.3]]
 
 # C3's GND pad to the ground post J13 beside it: J13's through-hole pad joins
 # both layers' GND pour, which is what a fanout via would do. [fanout]'s
@@ -461,32 +761,14 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[58.9, 86.55], [53.04, 85.3]]
 
-# Head 3's ground on both layers of the head's outer ring (pre-fab review
-# N-1). Routed tracks fence the XIAO socket's pads in, and the fill's island
-# removal deleted whatever outer pour no HEAD3_GND pad touched: the committed
-# board kept 58 mm² of F.Cu and 63 mm² of B.Cu ground out of about 756 mm² per
-# layer. A B.Cu track round the right, bottom and left of the ring, from U4's
-# GND pin to J17:13, keeps the B.Cu outer fill joined to a pad, and an F.Cu
-# track down the right side from J17:2 to U4's GND pin does the same for the
-# F.Cu fill there; [pour] stitch joins the layers. The same ring on F.Cu as
-# well left HEAD3_PIEZO, HEAD3_UART0_TX and HEAD3_I2S_LRCLK unrouted in 8
-# attempts out of 8: the signals inside the ring then have no way round it.
-[[tracks]]
-name = "head 3 GND ring, B.Cu"
-net = "HEAD3_GND"
-layer = "B.Cu"
-width_mm = 0.5
-points = [
-    [93.37, 82.92], [96.6, 82.92], [96.6, 97.4], [75.2, 97.4], [75.2, 77.2],
-    [77.4, 75.0], [80.75, 75.0],
-]
-
-[[tracks]]
-name = "head 3 GND, F.Cu right side"
-net = "HEAD3_GND"
+# Around A1's VM pad, where the 2 mm 5V trunk starts: route_board's keepout
+# stops flush at a track's end, but the track's round end is wider than the
+# socket pad, and Freerouting ran CH1_SDA 0.14 mm from it (#1280). A1:8 is
+# the trunk's first pad, out of Freerouting's netlist, so nothing needs in.
+[[route_keepouts]]
+name = "5V trunk end at A1 VM, F.Cu"
 layer = "F.Cu"
-width_mm = 0.5
-points = [[92.75, 73.0], [95.0, 73.0], [95.0, 81.3], [93.37, 82.92]]
+rect = [9.3, 61.6, 11.7, 64.0]
 
 # Room for C2's required GND fanout via, west of its GND pad where the
 # committed board had it (28.9, 65.2). With the 2 mm VBAT corridor fixed, 5 of
@@ -520,43 +802,69 @@ rect = [41.85, 74.6, 43.45, 76.2]
 # patterns over them; every pattern must match, and no net may be in two classes.
 [[net_classes]]
 name = "power"
-nets = ["PACK_IN", "VBAT", "GND", "+5V", "MOT_*"]
+nets = ["PACK_IN", "PACK_SWD", "VBAT", "+5V", "MOT_*"]
 track_um = 1000
 clearance_um = 300
 via_um = [1000, 500]
 
-# The heads' rails: the XIAO and its camera draw well under 1 A, and 1 mm
-# tracks do not fit between the 28 mm head's pads. XIAO_5V is the ribbon's 5V
-# behind D1, HEAD*_XIAO_5V its copy on each head.
+# GND at 0.5 mm: the pours carry its current, and a 1.0 mm track landing on
+# the USB-C port's 0.6 mm GND pads would come within 0.25 mm of the VBUS pad
+# beside them (until #1280 GND was in the power class at 1.0 mm). Its routing
+# vias are 0.6/0.3 mm: route_board grows a smaller via to its class's size,
+# and grown to 1.0 mm two landed 0.16 mm and 0.07 mm from +3V3 copper. The
+# [fanout] vias keep their own 1.0/0.5 mm.
+[[net_classes]]
+name = "ground"
+nets = ["GND"]
+track_um = 500
+clearance_um = 200
+via_um = [600, 300]
+
+# The USB-C input, port to C10, at 1.35 A (R19's input limit).
+[[net_classes]]
+name = "usb_power"
+nets = ["CHG_VBUS"]
+track_um = 500
+clearance_um = 200
+via_um = [600, 300]
+
+# The charger's switching nodes. Their wide paths are fixed [[tracks]]; this
+# is the width Freerouting may use into U5's 0.5 mm-pitch pins.
+[[net_classes]]
+name = "charger"
+nets = ["CHG_PMID", "CHG_SW", "CHG_SNS"]
+track_um = 300
+clearance_um = 200
+via_um = [600, 300]
+
+# The logic rails: the XIAO and its camera draw well under 1 A. XIAO_5V is
+# the ribbon's 5V behind D1.
 [[net_classes]]
 name = "logic_power"
-nets = ["+3V3", "XIAO_5V", "HEAD*_XIAO_5V", "HEAD*_GND"]
+nets = ["+3V3", "XIAO_5V"]
 track_um = 500
 clearance_um = 250
 via_um = [800, 400]
 
 # Every net not in a class above. Its via must be the .kicad_pro Default class's.
 # 200 um clearance, the .kicad_pro Default's, because Freerouting left
-# sub-minimum necking between 2.54 mm-pitch pads at 250 (#793).
+# sub-minimum necking between 2.54 mm-pitch pads at 250 (#793). 0.2 mm wide,
+# the .kicad_pro minimum, since #1280: J1's 2x8 2.0 mm-pitch pads leave 0.65 mm
+# between pins and U5's setting pins sit at 0.5 mm, where a 0.3 mm track does
+# not pass; at 0.3 mm UART0_TX and I2C_SDA could not leave J1. 220 um
+# clearance: at exactly the DRC's 200 Freerouting left gaps of 0.18-0.19 mm.
 [signal]
-track_um = 300
-clearance_um = 200
+track_um = 200
+clearance_um = 220
 via_um = [600, 300]
 
-# A copper pour on both layers after routing, one region per ground: each
-# head's ground arrives through the ribbon as HEAD_GND, HEAD2_GND or HEAD3_GND,
-# a different net from the main board's GND. The regions stop 1 mm short of
-# each cut line (boardcheck holds them to it);
-# the keepouts would clear the fill from them anyway. The .kicad_dru lets a
-# thermal on any of these nets resolve to one spoke because route_board first
-# checks every pad of each has a routed track.
+# A GND pour on both layers after routing, the whole board. The .kicad_dru
+# lets a thermal resolve to one spoke because route_board first checks every
+# pad of the net has a routed track.
 [pour]
 layers = ["F.Cu", "B.Cu"]
 regions = [
-    { net = "GND", rect = [0.0, 0.0, 69.0, 100.0] },
-    { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 28.0] },
-    { net = "HEAD2_GND", rect = [72.0, 36.25, 100.0, 63.25] },
-    { net = "HEAD3_GND", rect = [72.0, 71.5, 100.0, 98.5] },
+    { net = "GND", rect = [0.0, 0.0, 100.0, 100.0] },
 ]
 clearance_mm = 0.4
 min_thickness_mm = 0.25
@@ -564,7 +872,7 @@ thermal_gap_mm = 0.3
 spoke_mm = 0.35
 # A via of each ground at each 5 mm grid point where both layers' fill holds
 # one (pcb/stitch.py): joins the F.Cu and B.Cu pours where no pad or routed via
-# does, on the heads' outer rings above all (N-1).
+# does.
 stitch = { pitch_mm = 5.0, via_um = [600, 300] }
 
 # A via beside every SMD pad of a poured net, added after routing where there
@@ -584,6 +892,9 @@ track_um = 400
 reach_mm = 2.5
 required = ["C1:2", "C2:2", "C4:2", "C5:2", "C7:2", "C8:2", "U2:1"]
 exempt = ["C3:2"]
+# U5's exposed pad (pin 25) sits inside its ring of pins, where Freerouting
+# cannot reach it (trap 28): it leaves the netlist and takes its via in the pad.
+in_pad = ["U5:25"]
 
 # Where carrier-fab writes the commit on F.SilkS: `<sha7> <pcb8>`, the git
 # commit and the first 8 hex digits of the check stamp's board_sha256, so the

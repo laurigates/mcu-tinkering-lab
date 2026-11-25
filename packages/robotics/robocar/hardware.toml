@@ -10,9 +10,10 @@
 #   build = "harness"  only the hand-wired harness
 #   build = "carrier"  only the carrier PCB (hardware/carrier/, issue #750)
 # The docs generators — WIRING.md, pin_defs.typ, the pinouts and the docs
-# schematic — read the harness view, `join()`'s default. The carrier is one
-# KiCad project with two boards: the head, holding the XIAO, and the main
-# board, joined by a 2x7 IDC ribbon ([[cables]] below).
+# schematic — read the harness view, `join()`'s default. The carrier is two
+# PCBs, each its own KiCad project: the main board (hardware/carrier/) and the
+# head panel holding the XIAO (head/hardware/carrier/), joined by a 2x8 IDC
+# ribbon ([[cables]] below).
 #
 # Regenerate everything that reads it — docs/auto/pin_defs.typ and the marked
 # tables and power diagram in WIRING.md — with `just hardware::gen`;
@@ -494,12 +495,15 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # 2x7 (ADR-038, #1270). The only XIAO pad that stays open on the head is 3V3
 # (the main board makes its own, below).
 #
-# The PCB carries three head boards, three ways of mounting the ribbon header
-# for Lauri to try in the cradle (2026-10-16); the main board has one end, J1.
-# Head 1 is [source] ref U1 with J2; the spare heads are U3 with J16 (head 2)
-# and U4 with J17 (head 3), each a copy of the XIAO socket and of the head
-# connector, on nets HEAD2_* and HEAD3_*. Only one head is fitted with the XIAO
-# at a time.
+# The head panel carries three head boards, three ways of mounting the ribbon
+# header for Lauri to try in the cradle (2026-10-16); the main board has one
+# end, J1. Head 1 is [source] ref U1 with J2; the spare heads are U3 with J16
+# (head 2) and U4 with J17 (head 3), each a copy of the XIAO socket and of the
+# head connector, on nets HEAD2_* and HEAD3_*. Only one head is fitted with the
+# XIAO at a time. The heads are a PCB of their own, ordered apart from the main
+# board (Lauri, 2026-11-25, #1280: the main board needed their area for the
+# switch, latch and charger): the main board.toml says side = "main", the head
+# panel's side = "head", and head_parts names the heads' mounting holes.
 [[cables]]
 part = "idc-2x08-xiao-cable"
 head_ref = "J2"
@@ -508,6 +512,10 @@ head_no_connect = ["3V3"]
 spare_heads = [
     { mcu_ref = "U3", head_ref = "J16" },
     { mcu_ref = "U4", head_ref = "J17" },
+]
+head_parts = [
+    "hole_head_1", "hole_head_2", "hole_head2_1", "hole_head2_2",
+    "hole_head3_1", "hole_head3_2",
 ]
 build = "carrier"
 
@@ -1151,8 +1159,8 @@ build = "carrier"
 part = "m3-mounting-hole"
 ref = "H4"
 
-# Head board through the pan-tilt kit's top cradle (#750). Positions are
-# provisional, in hardware/carrier/board.toml.
+# Head board through the pan-tilt kit's top cradle (#750), on the head panel
+# (the cable's head_parts). Positions are in head/hardware/carrier/board.toml.
 [parts.hole_head_1]
 name = "M2 mounting hole, head board"
 kind = "mounting-hole"

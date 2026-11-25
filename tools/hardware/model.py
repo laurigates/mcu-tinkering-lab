@@ -154,6 +154,7 @@ on every entry in every view, so a typo in a carrier-only entry still fails.
     spare_heads = [             # optional: more head boards, each with its own
         { mcu_ref = "U3", head_ref = "J16" },  # MCU copy and head connector
     ]
+    head_parts = ["hole_head_1"]  # optional: other [parts] on the head boards
     build    = "carrier"        # required: a cable exists only on the carrier
 
 A `[[cables]]` entry (#750) splits the carrier into a head board, holding the
@@ -164,7 +165,10 @@ among all refs, in every view), allows one cable per carrier, and requires each
 (#750): a table of exactly `mcu_ref` and `head_ref`, two refs unique among all
 refs. The netlist gives each spare head its own copy of the MCU socket and of
 the head connector, wired like the first head; the main board keeps one end,
-`main_ref`. The harness view never holds a cable. `tools/kicad/netlist.py` reads the
+`main_ref`. `head_parts` names the other parts soldered to the head boards
+(mounting holes), each a carrier part declared under `[parts]`; with it, a
+board.toml `[project] side` can put the heads on a PCB of their own
+(`tools/kicad/netlist.py`). The harness view never holds a cable. `tools/kicad/netlist.py` reads the
 registry entry and does the rest: it splits every MCU net at the cable and
 rejects an MCU pad on a net the cable does not carry. A role that stays on the
 head goes under `[[undrawn]]`.
@@ -246,6 +250,7 @@ _KEYS = {
         "main_ref",
         "head_no_connect",
         "spare_heads",
+        "head_parts",
         "build",
     },
 }
@@ -387,6 +392,10 @@ class Cable:
     main_ref: str  # the connector on the main board: "J2"
     head_no_connect: tuple[str, ...] = ()  # MCU pads left unconnected on the head
     spare_heads: tuple[SpareHead, ...] = ()  # more head boards, wired like the first
+    # [parts] keys soldered to the head boards besides the MCU and the head
+    # connector (mounting holes); with them, kicad.netlist can split the
+    # carrier into a main PCB and a head PCB.
+    head_parts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -931,12 +940,23 @@ def _cable(where: str, table: dict[str, Any]) -> Cable:
                 head_ref=_optional(at, spare, "head_ref", _REF),
             )
         )
+    head_parts = table.get("head_parts", [])
+    if not isinstance(head_parts, list) or not all(
+        isinstance(k, str) and k for k in head_parts
+    ):
+        raise HardwareError(
+            f"{where}: head_parts must be a list of [parts] keys, got {head_parts!r}"
+        )
+    dupes = sorted({k for k in head_parts if head_parts.count(k) > 1})
+    if dupes:
+        raise HardwareError(f"{where}: head_parts lists {dupes} twice")
     return Cable(
         part=_require(where, table, "part"),
         head_ref=head_ref,
         main_ref=main_ref,
         head_no_connect=tuple(pads),
         spare_heads=tuple(spare_heads),
+        head_parts=tuple(head_parts),
     )
 
 
@@ -1182,6 +1202,11 @@ def join(
                 f"the {view} view"
             )
         return HardwareError(f"{where}: part {key!r} is not declared under [parts]")
+
+    for (where, _), cable in zip(cable_entries, cables, strict=True):
+        for key in cable.head_parts:
+            if key not in parts:
+                raise no_part(f"{where} head_parts", key)
 
     # One role on several nets is a fan-out (a bus pin to two devices) and is
     # allowed; the same role to the same endpoint twice is a copy-paste slip.

@@ -248,5 +248,105 @@ class DropPinsTests(unittest.TestCase):
             dsn.drop_pins(self.TEXT, [("VBAT", "U10-3")])
 
 
+class StuckPointTests(unittest.TestCase):
+    """dsn.stuck_points: Freerouting's DEBUG insert failures in board mm."""
+
+    # Copied from a Freerouting 2.5.0 run on the robocar carrier (#1280): the
+    # point is J20's A12/B1 GND pad at board (91.28, 58.75).
+    LINE = (
+        "2026-11-25 12:37:18.784 DEBUG  FoundConnectionInserter: insert trace "
+        "failed for net #1 at corner 6/6 on layer 0, trace width: 2500, from "
+        "corner: 5, okPoint: (1912850,-1580998), target: (1912850,-1587500)\n"
+    )
+
+    def test_a_failed_insert_is_a_board_point(self):
+        self.assertEqual(dsn.stuck_points(self.LINE, [100.0, 100.0]), [(91.28, 58.75)])
+
+    def test_each_point_once_in_first_logged_order(self):
+        other = self.LINE.replace("(1912850,-1587500)", "(1670000,-1986000)")
+        log = self.LINE + other + self.LINE
+        self.assertEqual(
+            dsn.stuck_points(log, [100.0, 100.0]), [(91.28, 58.75), (67.0, 98.6)]
+        )
+
+    def test_a_log_without_failures_has_none(self):
+        info = "2026-11-25 12:37:18.784 INFO   Auto-routing pass #1 completed\n"
+        self.assertEqual(dsn.stuck_points(info, [100.0, 100.0]), [])
+
+
+class FailedSearchTests(unittest.TestCase):
+    """dsn.failed_searches: Freerouting's component/pin indices as pads."""
+
+    DSN = """(pcb x
+  (placement
+    (component Capacitor_SMD:C_0805
+      (place C18 1 -1 front 180)
+      (place C10 2 -2 front 90)
+    )
+    (component "Connector_USB:USB_C"
+      (place J20 3 -3 front 90)
+    )
+  )
+  (library
+    (image Capacitor_SMD:C_0805
+      (pin RoundRect[T]Pad_1 1 -1040 0)
+      (pin RoundRect[T]Pad_1 2 1040 0)
+    )
+    (image "Connector_USB:USB_C"
+      (pin RoundRect[T]Pad_2 A1 -3250 4045)
+      (pin RoundRect[T]Pad_2 A4 -2450 4045)
+      (pin Oval[A]Pad_3 SH -4320 3130)
+    )
+  )
+)
+"""
+    # Shaped like the #1280 log line (indices renumbered for the fixture).
+    LINE = (
+        "2026-11-25 12:46:58.770 DEBUG  [04D7A2] Autorouter Failed to route "
+        "connection between pin of component #2 and polylinetrace, via, pin #1 "
+        "of component #3, pin #0 of component #3, because the maze search "
+        "algorithm could not be created.\n"
+    )
+
+    def test_indices_become_pads(self):
+        self.assertEqual(
+            dsn.failed_searches(self.LINE, self.DSN), ["C10, J20-A4, J20-A1"]
+        )
+
+    def test_each_connection_once(self):
+        self.assertEqual(
+            dsn.failed_searches(self.LINE + self.LINE, self.DSN),
+            ["C10, J20-A4, J20-A1"],
+        )
+
+    def test_failed_connections_keep_both_sides_and_the_reason(self):
+        other = self.LINE.replace(
+            "the maze search algorithm could not be created",
+            "no connection was found between their nets",
+        )
+        self.assertEqual(
+            dsn.failed_connections(self.LINE + other, self.DSN),
+            [
+                (
+                    "the maze search algorithm could not be created",
+                    ("C10",),
+                    ("J20-A4", "J20-A1"),
+                ),
+                (
+                    "no connection was found between their nets",
+                    ("C10",),
+                    ("J20-A4", "J20-A1"),
+                ),
+            ],
+        )
+
+    def test_other_failures_are_not_listed(self):
+        other = self.LINE.replace(
+            "the maze search algorithm could not be created",
+            "no connection was found between their nets",
+        )
+        self.assertEqual(dsn.failed_searches(other, self.DSN), [])
+
+
 if __name__ == "__main__":
     unittest.main()

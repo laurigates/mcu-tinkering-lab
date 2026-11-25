@@ -230,3 +230,104 @@ def drop_pins(text, pins):
             raise DsnError(f"{pin} is not a pin of net {net!r}")
         text = text[: found.start(2)] + kept + text[found.end(2) :]
     return text
+
+
+_STUCK = re.compile(r"insert trace failed .*? target: \((-?\d+),(-?\d+)\)")
+
+
+def stuck_points(log, origin, units_per_mm=10000):
+    """Board-relative mm of each point Freerouting failed to reach, from its log.
+
+    `log` is Freerouting's output at DEBUG; each "insert trace failed ...
+    target: (x,y)" names a point in DSN units (KiCad writes resolution um 10,
+    so 10000 per mm) with y negated. The points come back once each, in the
+    order first logged, as (x, y) in mm from board.toml's [outline] origin.
+    """
+    seen = []
+    for m in _STUCK.finditer(log):
+        x = round(int(m.group(1)) / units_per_mm - origin[0], 2)
+        y = round(-int(m.group(2)) / units_per_mm - origin[1], 2)
+        if (x, y) not in seen:
+            seen.append((x, y))
+    return seen
+
+
+_FAILED = re.compile(r"Failed to route connection between (.*?), because ([^.\n]*)")
+_PIN_OF = re.compile(r"pin (?:#(\d+) )?of component #(\d+)")
+_PLACE = re.compile(r'\(place\s+("[^"]+"|\S+)')
+_COMPONENT = re.compile(r'\(component\s+("[^"]+"|\S+)')
+_IMAGE_PIN = re.compile(r'\(pin\s+\S+\s+(?:\(rotate [^)]*\)\s+)?("[^"]+"|\S+)\s')
+
+
+def _unquote(name):
+    return name[1:-1] if name.startswith('"') else name
+
+
+def _pins_by_index(dsn_text):
+    """[(ref, image)] by DSN place order, and {image: [pin names]} by pin order."""
+    pl_start = dsn_text.index("(placement")
+    lib_start = dsn_text.index("(library")
+    places, images, image = [], {}, None
+    for line in dsn_text[pl_start:lib_start].splitlines():
+        c = _COMPONENT.search(line)
+        if c:
+            image = _unquote(c.group(1))
+        p = _PLACE.search(line)
+        if p:
+            places.append((_unquote(p.group(1)), image))
+    for block in dsn_text[lib_start:].split("(image ")[1:]:
+        name = block.split(None, 1)[0]
+        images[_unquote(name)] = [
+            _unquote(m.group(1)) for m in _IMAGE_PIN.finditer(block)
+        ]
+    return places, images
+
+
+def _pads(items, places, images):
+    pads = []
+    for pin, comp in _PIN_OF.findall(items):
+        ref, img = places[int(comp) - 1]
+        pads.append(f"{ref}-{images.get(img, [])[int(pin)]}" if pin else ref)
+    return pads
+
+
+def failed_connections(log, dsn_text):
+    """Freerouting's failed connections from its DEBUG log, by pad.
+
+    Each "Failed to route connection between A and B, because R" names pins
+    as "pin #k of component #n": n counts the DSN's (place ...) entries from
+    1 in file order, k the component image's (pin ...) entries from 0 (a pin
+    logged without its number comes back as its REF). Returns (reason,
+    A pads, B pads) once each, in the order first logged; a side made only of
+    tracks and vias is an empty tuple. "the maze search algorithm could not be
+    created" is a start item with no way out (a walled-in pad); "no connection
+    was found between their nets" with one small side is the pad the rest of
+    the net cannot reach (carrier-pcb trap 28).
+    """
+    places, images = _pins_by_index(dsn_text)
+    out = []
+    for items, reason in _FAILED.findall(log):
+        a, _, b = items.partition(" and ")
+        entry = (
+            reason.strip(),
+            tuple(_pads(a, places, images)),
+            tuple(_pads(b, places, images)),
+        )
+        if entry not in out:
+            out.append(entry)
+    return out
+
+
+def failed_searches(log, dsn_text):
+    """The connections whose route search could not start, one string each.
+
+    The pads of both sides, "REF-PAD, REF-PAD ..." (failed_connections with
+    reason "the maze search algorithm could not be created").
+    """
+    out = []
+    for reason, a, b in failed_connections(log, dsn_text):
+        if reason == "the maze search algorithm could not be created":
+            text = ", ".join(a + b)
+            if text and text not in out:
+                out.append(text)
+    return out

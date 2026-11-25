@@ -17,6 +17,7 @@ mcu-tinkering-lab/
 ├── packages/
 │   ├── robotics/                   # Robots
 │   │   ├── robocar/                # AI robot car: firmware (XIAO ESP32-S3 Sense) and its socketed carrier PCB
+│   │   │   ├── head/               # Head panel PCB: the three XIAO head boards, ordered apart from the carrier (hardware only)
 │   │   │   ├── integrated/         # Carrier PCB variant with the breakout chips on board (hardware only)
 │   │   │   ├── bringup/            # Hardware self-test firmware
 │   │   │   ├── simulation/         # Python 3.12 plant model for the behaviour twin (Pymunk, ADR-036) and the legacy demo
@@ -181,8 +182,8 @@ mux), and Gemini TTS voice through a MAX98357A. Architecture, core affinity and
 the rules for changing it are in
 [`packages/robotics/robocar/CLAUDE.md`](packages/robotics/robocar/CLAUDE.md).
 
-`integrated/`, `bringup/`, `simulation/` and `twin/` beneath it are separate
-projects, each with its own justfile; the `mod` lines in the root `justfile`
+`head/`, `integrated/`, `bringup/`, `simulation/` and `twin/` beneath it are
+separate projects, each with its own justfile; the `mod` lines in the root `justfile`
 name their modules.
 
 The earlier dual-ESP32 design (Heltec main controller + ESP32-CAM over I2C,

@@ -49,12 +49,17 @@ BOARD_TABLES = frozenset(
         "fab",
     }
 )
-PROJECT_KEYS = frozenset({"name", "paper", "stage"})
+PROJECT_KEYS = frozenset({"name", "paper", "stage", "side", "join"})
 # How far a carrier has got. A "schematic" carrier has no board yet: the board
 # gates (boardcheck, the stamp, the KiCad check's DRC) skip it and say so. The
 # default, "board", is every other carrier, and a missing board fails it.
 STAGE_SCHEMATIC, STAGE_BOARD = "schematic", "board"
 STAGES = (STAGE_SCHEMATIC, STAGE_BOARD)
+# A carrier whose [[cables]] joins two PCBs ordered separately: "main" holds
+# every part but the heads, "head" the MCU copies, the head connectors and the
+# cable's head_parts (kicad.netlist). With no side, one PCB holds both.
+SIDE_MAIN, SIDE_HEAD = "main", "head"
+SIDES = (SIDE_MAIN, SIDE_HEAD)
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
@@ -64,6 +69,9 @@ class BoardConfig:
 
     `name` is the KiCad project directory and file stem; `data` is the whole
     file, for the modules that read its other tables; `stage` is one of STAGES.
+    `side` is one of SIDES, or "" for a carrier on one PCB; `join` is the
+    directory whose hardware.toml the netlist reads, relative to the project
+    (`[project] join`), or None for the project's own.
     """
 
     path: Path
@@ -71,6 +79,8 @@ class BoardConfig:
     paper: str
     data: dict[str, Any]
     stage: str = STAGE_BOARD
+    side: str = ""
+    join: str | None = None
 
     @property
     def has_board(self) -> bool:
@@ -113,7 +123,26 @@ def load_board_config(project: Path) -> BoardConfig:
         raise KicadError(
             f"{path}: [project] stage must be one of {list(STAGES)}, got {stage!r}"
         )
-    return BoardConfig(path=path, name=name, paper=paper, data=data, stage=stage)
+    side = proj.get("side", "")
+    if side != "" and side not in SIDES:
+        raise KicadError(
+            f"{path}: [project] side must be one of {list(SIDES)}, got {side!r}"
+        )
+    join = proj.get("join")
+    if join is not None and (not isinstance(join, str) or not join):
+        raise KicadError(
+            f"{path}: [project] join must be a directory relative to the project, "
+            f"got {join!r}"
+        )
+    return BoardConfig(
+        path=path,
+        name=name,
+        paper=paper,
+        data=data,
+        stage=stage,
+        side=side,
+        join=join,
+    )
 
 
 def skip_line(project: Path, repo_root: Path = REPO_ROOT) -> str:

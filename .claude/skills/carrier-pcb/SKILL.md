@@ -28,13 +28,17 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   `board.toml` holds placement, silkscreen, net classes and the pour, VBAT as
   fixed `[[tracks]]` with no via, `[fanout]` and `[pour] stitch` vias, and a
   `.kicad_dru` rule that keeps the pour off the mounting holes
-- `packages/robotics/robocar/hardware/carrier/`: a main board and three head
-  boards on one PCB, split by `[[keepouts]]` bands under `[silk] cut_lines` saw
-  lines, with a `[pour]` region per ground net (`GND`, `HEAD_GND`,
-  `HEAD2_GND`, `HEAD3_GND`). The spare heads come from `[[cables]]
-  spare_heads` (ADR-021). Two head IDC headers sit on the back face
-  (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
-  pads run the other way: at rotation 90 they run toward -x)
+- `packages/robotics/robocar/hardware/carrier/` and
+  `packages/robotics/robocar/head/hardware/carrier/`: one hardware.toml split
+  into two PCBs (#1280, trap 57). The main board (`side = "main"`) is the whole
+  100 × 100 mm panel, with the pack switch, latch and BQ25887 charger and the
+  fixed tracks that meet the charger's 0.5 mm-pitch pins. The head panel
+  (`side = "head"`, `join = ".."`) is three head boards split by
+  `[[keepouts]]` bands under `[silk] cut_lines` saw lines, with a `[pour]`
+  region per head ground (`HEAD_GND`, `HEAD2_GND`, `HEAD3_GND`); the spare
+  heads come from `[[cables]] spare_heads` (ADR-021). Two head IDC headers sit
+  on the back face (`[placement]` entry `[x, y, rot, "back"]`, mirrored about
+  its anchor, so the pads run the other way: at rotation 90 they run toward -x)
 - `packages/robotics/robocar/integrated/hardware/carrier/`: the same carrier with
   the breakout chips and a buck converter on the board, for comparison.
   `just robocar-integrated::compare` runs `kicad.area`, the
@@ -509,6 +513,47 @@ down):
     `extends`.** `Transistor_FET:2N7002` extends `Q_NMOS_GSD`. Name the base
     symbol in the registry entry (same pins, G 1, S 2, D 3) and say so in
     `source`.
+
+### Found splitting the robocar carrier into two PCBs (#1280)
+
+54. **Freerouting says which pad it could not reach, at DEBUG.** Its `--help`
+    lists no log option, but `--logging.console.level=DEBUG` is a
+    `LoggingSettings` key like `--gui.enabled=false`. route_board.py passes it,
+    keeps the whole log in `output/freerouting.log` and prints each
+    `insert trace failed ... target: (x,-y)` point in board mm
+    (`dsn.stuck_points`; DSN units are 0.1 µm, y negated). When a whole net
+    collapses (trap 28), read that line before bisecting the DSN: on #1280 it
+    named J20's GND pad, walled in by a fixed VBUS track's keepout, where 36
+    GND connections had gone unrouted. `MazeSearchEngine.init: Failed - no
+    accessible expansion doors found` is the same story from the start side.
+55. **A 0.3 mm signal track cannot pass between 2.0 mm-pitch header pins.**
+    `PinHeader_2x08_P2.00mm` pads are 1.35 mm, leaving 0.65 mm: 0.3 mm plus
+    0.2 mm clearance each side needs 0.7. Every lower-row pin then has to
+    leave round the header's ends, and the robocar head 2 left one or two
+    signals unrouted in 25 attempts until `[signal] track_um = 200`. Check
+    the pad gap against track + 2 x clearance before blaming placement.
+56. **A footprint can stack two pads of one net at one spot** (a USB-C
+    receptacle's A1/B12, A12/B1, A4/B9, A9/B4). Each is its own pin to
+    Freerouting, so a fixed track ending on such a spot must drop both:
+    route_board.py's `track_pins` drops every same-net pad under a track's
+    first point.
+57. **A carrier split in two needs `side` on both board.toml files.** With
+    `[project] side = "main"` the netlist keeps every part but the heads;
+    `side = "head"`, in a project with no hardware.toml, needs `join` naming
+    the directory whose hardware.toml it reads, and the cable's `head_parts`
+    for the heads' other parts (mounting holes). A net with nodes on both
+    PCBs fails the build.
+58. **The pad a fixed track leaves to Freerouting must keep an open side.**
+    route_board.py walls each `[[tracks]]` segment off with a keepout half the
+    width plus the widest class clearance either side, flush with the ends.
+    Ending at the centre of an 0805 pad, that keepout covers all but a
+    0.6 mm strip of it, too narrow for a 0.2 mm track with 0.2 mm clearance:
+    on #1280 R15's gate pad, C10's VBUS pad and C10's GND pad were each the
+    one pad of their net left to Freerouting and walled in, and the log said
+    "the maze search algorithm could not be created" or "no connection was
+    found". End a track at the far edge of a small pad, or make the pad left
+    over a through-hole one (a connector or shield pin), and read
+    route_board's `Freerouting:` lines, which name the pads.
 
 ## Verify the gate can fail
 

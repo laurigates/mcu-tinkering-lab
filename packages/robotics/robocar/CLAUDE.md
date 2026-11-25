@@ -2,7 +2,7 @@
 
 Project-specific guidance for Claude Code. See repo-root `CLAUDE.md` for monorepo-wide conventions.
 
-`integrated/`, `bringup/`, `simulation/` and `twin/` are separate projects with their own README and justfile; this file is loaded for work in them too, and its rules describe the firmware in this directory, not those projects.
+`head/`, `integrated/`, `bringup/`, `simulation/` and `twin/` are separate projects with their own README and justfile; this file is loaded for work in them too, and its rules describe the firmware in this directory, not those projects.
 
 ## What this project is
 
