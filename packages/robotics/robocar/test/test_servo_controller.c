@@ -105,6 +105,8 @@ static pthread_mutex_t s_gate_m = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t s_gate_cv = PTHREAD_COND_INITIALIZER;
 static int s_gate_channel = -1; /* armed when >= 0; disarms on first match */
 static bool s_gate_after;       /* park after recording the write */
+static bool s_gate_at_give;     /* park at the next lock give instead (#1127) */
+static bool s_give_pending;     /* the matching write landed; park at give */
 static bool s_gate_parked;
 static bool s_gate_open;
 static bool s_lock_contended; /* a take found the module's lock held */
@@ -125,11 +127,13 @@ esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t count)
     if (park) {
         s_gate_channel = -1;
     }
-    if (park && !s_gate_after) {
+    if (park && s_gate_at_give) {
+        s_give_pending = true;
+    } else if (park && !s_gate_after) {
         park_locked();
     }
     record(EV_WRITE, channel, count);
-    if (park && s_gate_after) {
+    if (park && s_gate_after && !s_gate_at_give) {
         park_locked();
     }
     const esp_err_t ret = s_next_result;
@@ -165,9 +169,17 @@ BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t wait)
     return pdTRUE;
 }
 
+/* A gate armed at give parks the giver just after it lets the lock go, so the
+ * other writer sees exactly the state the holder left behind it. */
 BaseType_t xSemaphoreGive(SemaphoreHandle_t sem)
 {
     pthread_mutex_unlock((pthread_mutex_t *)sem);
+    pthread_mutex_lock(&s_gate_m);
+    if (s_give_pending) {
+        s_give_pending = false;
+        park_locked();
+    }
+    pthread_mutex_unlock(&s_gate_m);
     return pdTRUE;
 }
 
@@ -537,15 +549,22 @@ static void test_only_a_changed_angle_counts_as_head_motion(void)
 
 /* ---- write vs release interleavings (issue #1058) ------------------------ */
 
-static void arm_gate(uint8_t channel, bool after)
+static void arm_gate_mode(uint8_t channel, bool after, bool at_give)
 {
     pthread_mutex_lock(&s_gate_m);
     s_gate_channel = channel;
     s_gate_after = after;
+    s_gate_at_give = at_give;
+    s_give_pending = false;
     s_gate_parked = false;
     s_gate_open = false;
     s_lock_contended = false;
     pthread_mutex_unlock(&s_gate_m);
+}
+
+static void arm_gate(uint8_t channel, bool after)
+{
+    arm_gate_mode(channel, after, false);
 }
 
 /* Waits on s_gate_cv until *flag_a or *flag_b is set, for at most 2 s, so a
@@ -675,6 +694,38 @@ static void test_an_executor_write_during_off_is_refused(void)
     CHECK(!servo_is_enabled(SERVO_PAN) && !servo_is_enabled(SERVO_TILT), "both must read off");
 }
 
+/* The release has written 0 and let the lock go when the executor's tick
+ * writes. The flag must already read off by then, so the executor is refused.
+ * The case above parks the releaser inside the bus write, with the lock still
+ * held, so it cannot see an unlock that comes before the flag update (#1127). */
+static void test_the_release_clears_the_flag_before_it_unlocks(void)
+{
+    CHECK(servo_enable_all() == ESP_OK, "servo on failed");
+    reset_bus();
+
+    writer_t exec = {.is_release = false, .pan_deg = -30};
+    writer_t console = {.is_release = true};
+    pthread_t te, tc;
+
+    arm_gate_mode(SERVO_PAN_CHANNEL, false, true);
+    pthread_create(&tc, NULL, writer_main, &console);
+    CHECK(wait_for(&s_gate_parked, NULL), "the release never let the lock go");
+
+    pthread_create(&te, NULL, writer_main, &exec);
+    CHECK(wait_for(&exec.done, NULL), "the executor's write did not finish");
+    open_gate();
+    pthread_join(tc, NULL);
+    pthread_join(te, NULL);
+
+    CHECK(console.result == ESP_OK, "servo off returned %d", console.result);
+    CHECK(exec.result == ESP_ERR_INVALID_STATE,
+          "pan was still enabled after the release unlocked: the write returned %d", exec.result);
+    CHECK(last_write(SERVO_PAN_CHANNEL) == 0,
+          "pan must end released, but the last pan write was %d (the executor's %u)",
+          last_write(SERVO_PAN_CHANNEL), (unsigned)servo_angle_to_count(SERVO_PAN, -30));
+    CHECK(!servo_is_enabled(SERVO_PAN) && !servo_is_enabled(SERVO_TILT), "both must read off");
+}
+
 int main(void)
 {
     struct {
@@ -707,6 +758,8 @@ int main(void)
          test_only_a_changed_angle_counts_as_head_motion},
         {"off_during_an_executor_write_stays_off", test_off_during_an_executor_write_stays_off},
         {"an_executor_write_during_off_is_refused", test_an_executor_write_during_off_is_refused},
+        {"the_release_clears_the_flag_before_it_unlocks",
+         test_the_release_clears_the_flag_before_it_unlocks},
     };
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         int before = s_failures;
