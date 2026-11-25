@@ -300,6 +300,17 @@ jobs:
             --cov-fail-under=25 \
             -v
 
+      # The 25 % floor above is a whole-package figure: without the plant's
+      # three test files the total fell from 41 % to 31 % and still passed,
+      # with plant.py at 36 % (#1191). This floor holds the plant and the
+      # arena, measured at 99 % (plant.py misses 4 of 299 lines).
+      - name: Hold the plant's coverage
+        working-directory: packages/robotics/robocar/simulation
+        run: |
+          uv run --locked coverage report \
+            --include='src/robocar_sim/plant.py,src/robocar_sim/arena.py' \
+            --fail-under=95
+
       - name: Archive coverage reports
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -330,6 +341,11 @@ jobs:
     needs: [detect-changes]
     if: needs.detect-changes.outputs.python-suites-any == 'true'
     runs-on: ubuntu-latest
+    # The physics suite starts a child process per scenario, and the harness
+    # has no per-test timeout, so a hang it misses would run to the 360-minute
+    # job limit (#1191). The slowest suite job took 51 s on main at eeabacb
+    # (enclosure, run 45564061168); 20 minutes leaves room for a cold uv cache.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.detect-changes.outputs.python-suites) }}
