@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.14...gamepad-synth-v0.1.15) (2026-11-25)
+
+
+### Bug Fixes
+
+* **synth:** let fetch-deps work on a fresh clone ([1394a41](https://github.com/laurigates/mcu-tinkering-lab/commit/1394a4121b63e138a323e00ef4183857367157b6)), closes [#1175](https://github.com/laurigates/mcu-tinkering-lab/issues/1175)
+
 ## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.13...gamepad-synth-v0.1.14) (2026-11-14)
 
 
