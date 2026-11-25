@@ -382,3 +382,28 @@ rotation = 0
 pads = ["A5", "B5", "A6", "B6", "A7", "B7", "A8", "B8", "SH=4"]
 max_err_mm = 0.13
 checked = "2026-11-24"
+
+[C3031887] # SD101AW
+footprint = "Diode_SMD:D_SOD-123"
+lcsc_footprint = "SOD-123_L2.7-W1.6-LS3.7-RD"
+rotation = 0
+max_err_mm = 0.01
+checked = "2026-11-25"
+
+# LCSC's footprint draws its cathode bar beside pad 1 (x 3996.2 against pad 1
+# at 3993.6 and pad 2 at 4006.4, EasyEDA's 10 mil units), as KiCad does (read
+# 2026-11-25).
+
+[C309062] # CL32B226KAJNNNE
+footprint = "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder"
+lcsc_footprint = "C1210"
+rotation = 0
+max_err_mm = 0.05
+checked = "2026-11-25"
+
+[C883156] # BSMD1812-200-16V
+footprint = "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder"
+lcsc_footprint = "F1812"
+rotation = 0
+max_err_mm = 0.37
+checked = "2026-11-25"
