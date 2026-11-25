@@ -47,6 +47,7 @@ TEST(test_a_fresh_budget_allows_both_kinds)
     ASSERT(voice_budget_ignored_vad() == 0u);
     ASSERT(voice_budget_ignored_listen() == 0u);
     ASSERT(voice_budget_refused() == 0u);
+    ASSERT(voice_budget_dropped() == 0u);
     ASSERT(voice_budget_ration_used(0u) == 0u);
     ASSERT(voice_budget_ration_wait_ms(0u) == 0u);
 }
@@ -163,6 +164,7 @@ TEST(test_resume_clears_the_ration_window_and_counters)
     voice_budget_note_ignored(true);
     voice_budget_note_ignored(false);
     voice_budget_note_refused();
+    voice_budget_note_dropped();
 
     voice_budget_resume();
     ASSERT(voice_budget_ration_used(2000u) == 0u);
@@ -170,6 +172,7 @@ TEST(test_resume_clears_the_ration_window_and_counters)
     ASSERT(voice_budget_ignored_vad() == 0u);
     ASSERT(voice_budget_ignored_listen() == 0u);
     ASSERT(voice_budget_refused() == 0u);
+    ASSERT(voice_budget_dropped() == 0u);
     ASSERT(voice_budget_vad_requests() == 0u);
 }
 
@@ -281,6 +284,19 @@ TEST(test_ignored_replies_are_counted_by_kind)
     ASSERT(voice_budget_requests() == 3u);
 }
 
+TEST(test_a_dropped_clip_is_counted_but_not_charged)
+{
+    /* #949: a clip with too little speech is a false wake, but no request. */
+    voice_budget_configure_ration(1u, 5u * MIN);
+    voice_budget_note_dropped();
+    voice_budget_note_dropped();
+
+    ASSERT(voice_budget_dropped() == 2u);
+    ASSERT(voice_budget_ignored_vad() == 0u);
+    ASSERT(voice_budget_requests() == 0u);
+    ASSERT(voice_budget_check(1000u, true) == VOICE_BUDGET_OK);
+}
+
 TEST(test_the_window_survives_the_uint32_millisecond_wrap)
 {
     voice_budget_configure_ration(2u, 5u * MIN);
@@ -333,6 +349,7 @@ int main(void)
     run_test_an_hour_of_a_talkative_room_is_bounded();
     run_test_the_default_ceiling_stops_an_unattended_night();
     run_test_ignored_replies_are_counted_by_kind();
+    run_test_a_dropped_clip_is_counted_but_not_charged();
     run_test_the_window_survives_the_uint32_millisecond_wrap();
     run_test_a_disabled_ceiling_never_trips();
 

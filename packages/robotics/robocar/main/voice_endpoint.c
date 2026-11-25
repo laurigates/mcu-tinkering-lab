@@ -67,6 +67,11 @@ voice_endpoint_verdict_t voice_endpoint_update(voice_endpoint_t *ep, int16_t lev
     return VOICE_ENDPOINT_CONTINUE;
 }
 
+bool voice_endpoint_enough_speech(const voice_endpoint_t *ep)
+{
+    return ep != NULL && ep->speech_frames >= VOICE_ENDPOINT_MIN_SPEECH_FRAMES;
+}
+
 const char *voice_endpoint_verdict_name(voice_endpoint_verdict_t v)
 {
     switch (v) {

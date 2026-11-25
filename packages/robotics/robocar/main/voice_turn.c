@@ -97,6 +97,7 @@ typedef struct {
     size_t preroll_samples; /**< How many of them came from the pre-roll ring. */
     voice_endpoint_verdict_t end;
     uint32_t speech_frames;
+    bool enough_speech; /**< voice_endpoint_enough_speech(); VAD turns only (#949). */
     int16_t floor_db;
 } record_result_t;
 
@@ -263,6 +264,7 @@ static size_t record_vad(int16_t *pcm, size_t samples, record_result_t *res, esp
         res->end = VOICE_ENDPOINT_END_MAX;
     }
     res->speech_frames = ep.speech_frames;
+    res->enough_speech = voice_endpoint_enough_speech(&ep);
     return filled;
 }
 
@@ -397,6 +399,23 @@ static void run_turn(uint32_t window_ms, bool vad)
         return;
     }
     const size_t got = rec.samples;
+
+    /* Issue #949: a hands-free clip with almost no speech after the cue is
+     * mostly pre-roll and silence, and the model answers a fragment it filled
+     * in itself. Not sent, so no request is charged. The sound that armed the
+     * audio latch is consumed as an ignored turn's is, so the planner does not
+     * remark on it either. Only frames after the cue count: a short question
+     * said wholly inside the pre-roll is dropped as well (bench check). */
+    if (vad && !rec.enough_speech) {
+        ESP_LOGI(TAG,
+                 "listen: vad clip=%u ms speech=%u frames (< %u) — too little speech, not sent",
+                 (unsigned)((got * 1000u) / MIC_SAMPLE_RATE_HZ), (unsigned)rec.speech_frames,
+                 (unsigned)VOICE_ENDPOINT_MIN_SPEECH_FRAMES);
+        voice_budget_note_dropped();
+        heap_caps_free(pcm);
+        ambient_audio_mark_spoken();
+        return;
+    }
 
     audio_clip_stats_t st;
     audio_clip_normalise(pcm, got, &st);
