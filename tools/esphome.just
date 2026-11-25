@@ -51,7 +51,7 @@ _esphome-upload port_pattern="":
     if [ -z "{{port_pattern}}" ]; then
         exec esphome run {{config_file}}
     fi
-    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1)
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1 || true)
     if [ -z "$PORT" ]; then
         echo "Error: No ESP32 device found on USB"
         echo "Available ports:"
@@ -69,7 +69,7 @@ _esphome-logs port_pattern="":
     if [ -z "{{port_pattern}}" ]; then
         exec esphome logs {{config_file}}
     fi
-    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1)
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "({{port_pattern}})" | head -1 || true)
     if [ -z "$PORT" ]; then
         echo "No USB device found, trying OTA..."
         esphome logs {{config_file}} --device {{device_name}}.local
