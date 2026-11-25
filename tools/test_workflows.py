@@ -46,6 +46,12 @@ What the tests hold:
   and copies the same btstack directories and files as the script.
   ``_ci-build-esp32.yml`` and the xbox-switch-bridge justfile run the script
   and name neither the tag nor the repository themselves (issue #1082).
+- In auto-fix.yml, auto-resolve-conflicts.yml, claude.yml and
+  build-firmware.yml, every job carries the concierge guard or needs a job
+  that does, and each guarded ``if:``, evaluated for every event the workflow
+  declares with ``teuvo-concierge[bot]`` as the actor and every other context
+  value unknown, is false. A guard ANDed with one alternative of an ``||``
+  contains the guard's text and still lets the App through (issue #1251).
 - auto-fix.yml passes the release-please App to the reusable auto-fix, so the
   fix commits it pushes start CI (issue #866).
 - security-secrets.yml runs one secret scan, the gitleaks job, and no longer
@@ -762,6 +768,176 @@ CONCIERGE_GUARDED = (
     "build-firmware.yml",
 )
 
+CONCIERGE_RUN_GUARD = (
+    f"github.event.workflow_run.triggering_actor.login != '{CONCIERGE_BOT}'"
+)
+
+
+class _Unknown:
+    """A context value the test does not set: any value GitHub could give."""
+
+    def __repr__(self) -> str:
+        return "UNKNOWN"
+
+
+UNKNOWN = _Unknown()
+EXPR_TOKEN = re.compile(
+    r"\s*(?:(?P<str>'(?:[^']|'')*')|(?P<op>==|!=|&&|\|\||[!(),])"
+    r"|(?P<name>[A-Za-z_][\w.\-]*))"
+)
+
+
+def _truth(value):
+    """GitHub's truthiness, with UNKNOWN staying unknown."""
+    return value if value is UNKNOWN else bool(value)
+
+
+def _equal(a, b):
+    if a is UNKNOWN or b is UNKNOWN:
+        return UNKNOWN
+    if isinstance(a, str) and isinstance(b, str):
+        return a.lower() == b.lower()
+    return a == b
+
+
+def evaluate_if(expression: str, context: dict[str, object]):
+    """Evaluate a job ``if:`` in the subset these workflows use: ``==``,
+    ``!=``, ``&&``, ``||``, ``!``, parentheses, string literals, ``true``,
+    ``false``, ``null``, ``startsWith``, ``contains`` and dotted context
+    names. A name missing from ``context`` is UNKNOWN, and the result is
+    three-valued (Kleene): False only when no value of the unknown names
+    could make the condition pass. String comparison ignores case, as
+    GitHub's does."""
+    text = expression.strip()
+    if text.startswith("${{") and text.endswith("}}"):
+        text = text[3:-2]
+    tokens, pos = [], 0
+    while pos < len(text):
+        if text[pos:].strip() == "":
+            break
+        m = EXPR_TOKEN.match(text, pos)
+        if not m:
+            raise ValueError(f"cannot read {text[pos:]!r}")
+        tokens.append((m.lastgroup, m.group(m.lastgroup)))
+        pos = m.end()
+    tokens.append(("end", ""))
+    index = 0
+
+    def peek():
+        return tokens[index]
+
+    def take(expected=None):
+        nonlocal index
+        token = tokens[index]
+        if expected is not None and token[1] != expected:
+            raise ValueError(f"expected {expected!r}, got {token[1]!r}")
+        index += 1
+        return token
+
+    def parse_or():
+        values = [parse_and()]
+        while peek()[1] == "||":
+            take()
+            values.append(parse_and())
+        if len(values) == 1:
+            return values[0]
+        truths = [_truth(v) for v in values]
+        if True in truths:
+            return True
+        return UNKNOWN if UNKNOWN in truths else False
+
+    def parse_and():
+        values = [parse_comparison()]
+        while peek()[1] == "&&":
+            take()
+            values.append(parse_comparison())
+        if len(values) == 1:
+            return values[0]
+        truths = [_truth(v) for v in values]
+        if False in truths:
+            return False
+        return UNKNOWN if UNKNOWN in truths else True
+
+    def parse_comparison():
+        left = parse_unary()
+        if peek()[1] in ("==", "!="):
+            op = take()[1]
+            result = _equal(left, parse_unary())
+            if op == "!=" and result is not UNKNOWN:
+                result = not result
+            return result
+        return left
+
+    def parse_unary():
+        if peek()[1] == "!":
+            take()
+            value = _truth(parse_unary())
+            return value if value is UNKNOWN else not value
+        return parse_primary()
+
+    def parse_primary():
+        kind, value = take()
+        if value == "(":
+            inner = parse_or()
+            take(")")
+            return inner
+        if kind == "str":
+            return value[1:-1].replace("''", "'")
+        if kind != "name":
+            raise ValueError(f"unexpected {value!r}")
+        if peek()[1] == "(":
+            take("(")
+            args = [parse_or()]
+            while peek()[1] == ",":
+                take()
+                args.append(parse_or())
+            take(")")
+            if UNKNOWN in args:
+                return UNKNOWN
+            haystack, needle = (str(a or "").lower() for a in args)
+            if value == "startsWith":
+                return haystack.startswith(needle)
+            if value == "contains":
+                return needle in haystack
+            raise ValueError(f"function {value!r} is not in the subset")
+        literals = {"true": True, "false": False, "null": None}
+        if value in literals:
+            return literals[value]
+        return context.get(value, UNKNOWN)
+
+    result = parse_or()
+    take("")
+    return _truth(result)
+
+
+def declared_events(workflow: dict) -> list[str]:
+    on = workflow.get("on", workflow.get(True))
+    if isinstance(on, str):
+        return [on]
+    return list(on)
+
+
+def concierge_leaks(workflow: dict, guarded_ifs: dict[str, str]) -> list[str]:
+    """Each guarded job and event under which the concierge App could still
+    start the job: its ``if:`` is not False with the App as the actor and
+    every other context value unknown."""
+    events = declared_events(workflow)
+    leaks = []
+    for job_id, condition in guarded_ifs.items():
+        for event in events:
+            bots = [{"github.triggering_actor": CONCIERGE_BOT}]
+            if event == "workflow_run" and CONCIERGE_RUN_GUARD in condition:
+                # auto-fix also refuses a run whose upstream run the App
+                # triggered; check that guard on its own.
+                bots.append(
+                    {"github.event.workflow_run.triggering_actor.login": CONCIERGE_BOT}
+                )
+            for bot in bots:
+                context = {"github.event_name": event, **bot}
+                if evaluate_if(condition, context) is not False:
+                    leaks.append(f"{job_id} on {event} with {bot}")
+    return leaks
+
 
 class ConciergeGuardTest(unittest.TestCase):
     def test_every_job_is_guarded_or_needs_a_guarded_job(self):
@@ -790,10 +966,99 @@ class ConciergeGuardTest(unittest.TestCase):
 
     def test_auto_fix_also_skips_runs_the_app_triggered_elsewhere(self):
         condition = str(load("auto-fix.yml")["jobs"]["gather-context"]["if"])
-        self.assertIn(
-            f"github.event.workflow_run.triggering_actor.login != '{CONCIERGE_BOT}'",
-            condition,
+        self.assertIn(CONCIERGE_RUN_GUARD, condition)
+
+    @staticmethod
+    def guarded_ifs(workflow: dict) -> dict[str, str]:
+        return {
+            j: str(job["if"])
+            for j, job in workflow["jobs"].items()
+            if CONCIERGE_GUARD in str(job.get("if", ""))
+        }
+
+    def test_no_guarded_if_admits_the_app(self):
+        # The text match above passes a guard ANDed with one alternative of an
+        # `||`; evaluating the condition does not (#1251).
+        for name in CONCIERGE_GUARDED:
+            with self.subTest(workflow=name):
+                workflow = load(name)
+                self.assertEqual(
+                    concierge_leaks(workflow, self.guarded_ifs(workflow)), []
+                )
+
+    def test_a_human_actor_passes_a_guarded_if(self):
+        # Control: the evaluator does not answer False to everything. Each
+        # context is one the workflow is meant to run for.
+        admitting = {
+            "auto-fix.yml": {
+                "github.event_name": "workflow_run",
+                "github.event.workflow_run.actor.type": "User",
+                "github.event.workflow_run.actor.login": "laurigates",
+                "github.event.workflow_run.conclusion": "failure",
+                "github.event.workflow_run.head_commit.message": "feat: x",
+            },
+            "auto-resolve-conflicts.yml": {"github.event_name": "push"},
+            "claude.yml": {
+                "github.event_name": "issue_comment",
+                "github.event.sender.type": "User",
+                "github.event.comment.body": "@Claude please look",
+            },
+            "build-firmware.yml": {"github.event_name": "release"},
+        }
+        self.assertEqual(set(admitting), set(CONCIERGE_GUARDED))
+        for name, context in admitting.items():
+            with self.subTest(workflow=name):
+                human = {
+                    **context,
+                    "github.triggering_actor": "laurigates",
+                    "github.event.workflow_run.triggering_actor.login": "laurigates",
+                }
+                results = [
+                    evaluate_if(c, human) for c in self.guarded_ifs(load(name)).values()
+                ]
+                self.assertIn(True, results)
+
+    def test_a_guard_on_one_alternative_is_caught(self):
+        # Mutation check: the draft of gather-context's condition from #1241,
+        # with its parentheses balanced. Precedence makes it
+        # (guard && guard2 && dispatch) || workflow_run.
+        main = str(load("auto-fix.yml")["jobs"]["gather-context"]["if"])
+        draft = main.replace("&& ((github.event_name", "&& (github.event_name", 1)
+        self.assertTrue(draft.rstrip().endswith("))"))
+        draft = draft.rstrip()[:-1]
+        self.assertNotEqual(draft, main)
+        workflow = load("auto-fix.yml")
+        self.assertEqual(concierge_leaks(workflow, {"gather-context": main}), [])
+        self.assertEqual(
+            concierge_leaks(workflow, {"gather-context": draft}),
+            [
+                f"gather-context on workflow_run with {bot}"
+                for bot in (
+                    {"github.triggering_actor": CONCIERGE_BOT},
+                    {"github.event.workflow_run.triggering_actor.login": CONCIERGE_BOT},
+                )
+            ],
         )
+
+    def test_the_evaluator_reads_the_subset(self):
+        ctx = {"a": "X", "b": None, "github.event_name": "push"}
+        cases = {
+            "a == 'x'": True,
+            "a != 'x'": False,
+            "b == null": True,
+            "!b": True,
+            "a == 'x' && b": False,
+            "a == 'y' || github.event_name == 'push'": True,
+            "unknown == 'z'": UNKNOWN,
+            "unknown == 'z' && a == 'y'": False,
+            "unknown == 'z' || a == 'x'": True,
+            "!(unknown == 'z')": UNKNOWN,
+            "startsWith(a, 'x') && contains('abc', 'B')": True,
+            "${{ (a == 'x') && (b != 'it''s') }}": True,
+        }
+        for expression, expected in cases.items():
+            with self.subTest(expression=expression):
+                self.assertIs(evaluate_if(expression, ctx), expected)
 
 
 class ClaudeCallersTest(unittest.TestCase):
