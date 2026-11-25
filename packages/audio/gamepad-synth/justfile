@@ -31,19 +31,17 @@ fetch-deps:
     # Keep the symlink RELATIVE so it resolves inside the container's
     # /workspace bind mount (see .claude/rules/containerized-builds.md).
     # xbox-switch-bridge lives under packages/input-gaming/ since the re-org.
-    XBOX_SRC="$(dirname "{{bp32_ext}}")/../../../input-gaming/xbox-switch-bridge/external/bluepad32"
+    # XBOX_SRC is built from this justfile's directory, not through external/,
+    # which a fresh clone does not have yet (#1175).
+    XBOX_SRC="{{source_directory()}}/../../input-gaming/xbox-switch-bridge/external/bluepad32"
     XBOX_REL="../../../input-gaming/xbox-switch-bridge/external/bluepad32"
-    if [ -d "$XBOX_SRC/src" ]; then
-        mkdir -p "$(dirname "{{bp32_ext}}")"
-        ln -sfn "$XBOX_REL" "{{bp32_ext}}"
-        echo "Symlinked bluepad32 from xbox-switch-bridge"
-    else
+    if [ ! -d "$XBOX_SRC/src" ]; then
         echo "xbox-switch-bridge deps not found — fetching for xbox-switch-bridge first..."
-        just xbox::fetch-deps
-        mkdir -p "$(dirname "{{bp32_ext}}")"
-        ln -sfn "$XBOX_REL" "{{bp32_ext}}"
-        echo "Symlinked bluepad32 from xbox-switch-bridge"
+        "{{tools_dir}}/fetch-bluepad32.sh" "$XBOX_SRC"
     fi
+    mkdir -p "$(dirname "{{bp32_ext}}")"
+    ln -sfn "$XBOX_REL" "{{bp32_ext}}"
+    echo "Symlinked bluepad32 from xbox-switch-bridge"
 
 # Regenerate voicing-announcement TTS clips via Gemini (needs GEMINI_API_KEY)
 [group: "setup"]

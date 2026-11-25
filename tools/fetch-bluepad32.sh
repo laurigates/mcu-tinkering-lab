@@ -4,10 +4,11 @@
 #   tools/fetch-bluepad32.sh <dest>      clone into <dest>, e.g. external/bluepad32
 #   tools/fetch-bluepad32.sh --version   print the pinned tag
 #
-# Callers: xbox-switch-bridge's `fetch-deps` recipe (gamepad-synth reaches the
-# checkout through that recipe or a relative symlink to it) and the bluepad32
-# step of .github/workflows/_ci-build-esp32.yml. build-firmware.yml keeps its
-# own copy of the step, so a release build does not depend on this file at the
+# Callers: xbox-switch-bridge's `fetch-deps` recipe, gamepad-synth's
+# `fetch-deps` (which clones into xbox-switch-bridge's external/ and links to
+# it with a relative symlink) and the bluepad32 step of
+# .github/workflows/_ci-build-esp32.yml. build-firmware.yml keeps its own copy
+# of the step, so a release build does not depend on this file at the
 # tag; tools/test_workflows.py (BluepadTagTest) fails when its tag differs from
 # BP32_TAG below, or when it clones or copies something else than this script
 # does (#1082).
