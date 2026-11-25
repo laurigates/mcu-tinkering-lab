@@ -10,6 +10,7 @@
       "bump-patch-for-minor-pre-major": true,
       "exclude-paths": [
         "packages/robotics/robocar/bringup",
+        "packages/robotics/robocar/head",
         "packages/robotics/robocar/integrated",
         "packages/robotics/robocar/simulation",
         "packages/robotics/robocar/twin"

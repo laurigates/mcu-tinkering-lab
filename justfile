@@ -3,6 +3,7 @@
 
 mod robocar 'packages/robotics/robocar'
 mod robocar-integrated 'packages/robotics/robocar/integrated'
+mod robocar-head 'packages/robotics/robocar/head'
 mod robocar-bringup 'packages/robotics/robocar/bringup'
 mod robocar-twin 'packages/robotics/robocar/twin'
 mod sim 'packages/robotics/robocar/simulation'

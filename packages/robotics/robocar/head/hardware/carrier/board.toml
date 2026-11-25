@@ -1,0 +1,188 @@
+# Head panel PCB layout for tools/kicad: everything the netlist does not say.
+# The parts and nets are the head side of ../../../hardware.toml's [[cables]]
+# entry (the XIAO sockets, the ribbon headers and the cable's head_parts);
+# kicad.netlist reads that file through [project] join and keeps side "head".
+# The main board is ../../../hardware/carrier/, side "main".
+#
+# Three head boards in a column, each a different way of mounting the ribbon
+# header (Lauri, 2026-10-16), 3 mm or wider copper-free bands under
+# silkscreen saw lines between them. They sat on the right of the main board's
+# panel until #1280 (Lauri, 2026-11-25), where the main board needed the room
+# for the power switch, soft latch and USB charger; the layout is that column's,
+# moved 70.5 mm left, so x = 0 here was x = 70.5 there. JLCPCB sees one
+# rectangular design with no V-cuts, tabs or mouse bites; Lauri saws the heads
+# apart after delivery. Every cut runs straight across the panel.
+#
+# Every dimension below is Claude's proposal, not a measurement; correct it,
+# then re-run `just robocar-head::carrier-board` and
+# `just robocar-head::carrier-check`.
+#
+# Coordinates: millimetres from the outline's top-left corner, x right, y down.
+
+[project]
+name = "robocar-head"
+side = "head"
+join = ".."
+
+# Each head is a 29.5 x 29.5 mm square after sawing, 0.25 mm per side inside
+# the cradle's 30.0 x 30.0 mm (Lauri, 2026-10-15). Head k's square starts at
+# y 0, 35.25 or 70.5. The
+# waste strips between heads (y 29.5-35.25 and 64.75-70.5) take the saw kerf.
+# The left edge is milled now, not sawn, so copper comes to 0.5 mm of it
+# (x 0.5), 1 mm closer than beside the old panel's vertical cut: with the 2x8
+# headers the 1.5 mm strip left HEAD2_I2S_DIN and HEAD3_I2S_LRCLK unrouted in
+# 5 attempts of 5.
+[outline]
+origin = [100.0, 100.0]
+size = [29.5, 100.0]
+
+# The saw bands: no copper of any kind (rule areas). Head 2's top band reaches 1 mm past its cut
+# (#810). Head 3's stops 0.5 mm past the y 70.5 cut, the .kicad_pro
+# copper-to-edge clearance: at 0.75 mm or more Freerouting could not route
+# HEAD3_PIEZO past J17 (8 attempts out of 8).
+[[keepouts]]
+name = "head 1 / head 2 cut band"
+rect = [0.5, 28.0, 29.0, 36.25]
+
+[[keepouts]]
+name = "head 2 / head 3 cut band"
+rect = [0.5, 63.25, 29.0, 71.0]
+
+[[keepouts]]
+name = "head 3 bottom band"
+rect = [0.5, 98.5, 29.0, 100.0]
+
+# KiCad's copper-to-edge clearance (0.5 mm, .kicad_pro) as rule areas:
+# Freerouting keeps only its class clearance from the board boundary.
+[[keepouts]]
+name = "edge clearance, top"
+rect = [0.0, 0.0, 29.5, 0.5]
+
+[[keepouts]]
+name = "edge clearance, left"
+rect = [0.0, 0.0, 0.5, 100.0]
+
+[[keepouts]]
+name = "edge clearance, right"
+rect = [29.0, 0.0, 29.5, 100.0]
+
+# ref = [x_mm, y_mm, rotation_deg], or [..., "back"] for the back face
+# (rotation as seen from the top; a back-face header's pads run toward -x at
+# rotation 90). All three heads: the XIAO socket with its USB-C toward the
+# head's top edge (the camera then faces forward), and two M2 holes in the top
+# corners 22.5 mm apart (#799, Lauri, 2026-10-16). The holes' ISO 7380
+# footprint leaves 18.4 mm between their courtyards, so the XIAO (17.88 mm)
+# fits between them; fit M2 button heads. Drill the cradle to match. The 2x8
+# ribbon headers (ADR-038) are 2 mm longer than the 2x7 ones they replace, at
+# the same pin 1.
+[placement]
+# Head 1: the ribbon header on the back face at the bottom, the XIAO above it.
+U1 = [15.25, 12.7, 90]
+J2 = [21.25, 26.0, 90, "back"]
+H5 = [4.0, 3.05, 0]
+H6 = [26.5, 3.05, 0]
+# Head 2: the header on the front face at the bottom, the XIAO above it. J16
+# sits 1 mm left of the old column's position, which the milled left edge
+# allows.
+U3 = [15.25, 47.6, 90]
+J16 = [8.25, 61.65, 90]
+H7 = [4.0, 38.3, 0]
+H8 = [26.5, 38.3, 0]
+# Head 3: the header on the back face at the top, between the M2 holes; the
+# XIAO below it.
+U4 = [15.25, 88.0, 90]
+J17 = [22.25, 75.0, 90, "back"]
+H9 = [4.0, 73.55, 0]
+H10 = [26.5, 73.55, 0]
+
+[silk]
+# The 0.8 mm HEAD 3 label does not fit at JLCPCB's standard 1.0 mm, so the order
+# selects high-precision silkscreen; carrier-fab prints the reminder.
+high_precision = true
+hidden_refs = ["H5", "H6", "H7", "H8", "H9", "H10"]
+# Seeed's reference text is below KiCad's minimum silkscreen height.
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0 }
+# Clear of J16's pads, which now reach x 22.95.
+ref_positions = { J16 = [25.5, 61.0] }
+# The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
+# so each runs in the direction that puts the label in the waste.
+cut_lines = [
+    [29.0, 29.5, 0.5, 29.5],
+    [0.5, 35.25, 29.0, 35.25],
+    [29.0, 64.75, 0.5, 64.75],
+    [0.5, 70.5, 29.0, 70.5],
+]
+texts = [
+    { text = "HEAD 1", at = [3.4, 26.0], size = 1.0 },
+    { text = "HEAD 2", at = [3.9, 59.4], size = 1.0 },
+    { text = "HEAD 3", at = [3.9, 96.0], size = 0.8 },
+]
+
+# Head 3's ground on both layers of the head's outer ring (pre-fab review
+# N-1). Routed tracks fence the XIAO socket's pads in, and the fill's island
+# removal deleted whatever outer pour no HEAD3_GND pad touched. A B.Cu track
+# round the right, bottom and left of the ring, from U4's GND pin to J17:15,
+# keeps the B.Cu outer fill joined to a pad, and an F.Cu track down the right
+# side from J17:2 to U4's GND pin does the same for the F.Cu fill there;
+# [pour] stitch joins the layers. The same ring on F.Cu as well left
+# HEAD3_PIEZO, HEAD3_UART0_TX and HEAD3_I2S_LRCLK unrouted in 8 attempts of 8.
+[[tracks]]
+name = "head 3 GND ring, B.Cu"
+net = "HEAD3_GND"
+layer = "B.Cu"
+width_mm = 0.5
+points = [
+    [22.87, 82.92], [26.1, 82.92], [26.1, 97.4], [4.7, 97.4], [4.7, 77.2],
+    [6.9, 75.0], [8.25, 75.0],
+]
+
+[[tracks]]
+name = "head 3 GND, F.Cu right side"
+net = "HEAD3_GND"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[22.25, 73.0], [24.5, 73.0], [24.5, 81.3], [22.87, 82.92]]
+
+# The heads' rails: the XIAO and its camera draw well under 1 A, and 1 mm
+# tracks do not fit between the 28 mm head's pads.
+[[net_classes]]
+name = "logic_power"
+nets = ["HEAD*_XIAO_5V", "HEAD*_GND"]
+track_um = 500
+clearance_um = 250
+via_um = [800, 400]
+
+# Every net not in a class above, at 0.2 mm, the .kicad_pro minimum: the 2x8
+# headers' 1.35 mm pads at 2.0 mm pitch leave 0.65 mm between pins, where a
+# 0.2 mm track passes with 0.2 mm clearance each side and a 0.3 mm one does
+# not. At 0.3 mm head 2 left one or two signals unrouted in 25 attempts. 200 um
+# clearance, the .kicad_pro Default's, because Freerouting left sub-minimum
+# necking between 2.54 mm-pitch pads at 250 (#793).
+[signal]
+track_um = 200
+clearance_um = 200
+via_um = [600, 300]
+
+# A copper pour on both layers after routing, one region per head's ground
+# (HEAD_GND, HEAD2_GND, HEAD3_GND), each stopping 1 mm short of the cut lines.
+[pour]
+layers = ["F.Cu", "B.Cu"]
+regions = [
+    { net = "HEAD_GND", rect = [0.0, 0.0, 29.5, 28.0] },
+    { net = "HEAD2_GND", rect = [0.0, 36.25, 29.5, 63.25] },
+    { net = "HEAD3_GND", rect = [0.0, 71.5, 29.5, 98.5] },
+]
+clearance_mm = 0.4
+min_thickness_mm = 0.25
+thermal_gap_mm = 0.3
+spoke_mm = 0.35
+# A via of each ground at each 5 mm grid point where both layers' fill holds
+# one (pcb/stitch.py): joins the F.Cu and B.Cu pours on the heads' outer rings.
+stitch = { pitch_mm = 5.0, via_um = [600, 300] }
+
+# Where carrier-fab writes `<sha7> <pcb8>` on F.SilkS (kicad.provenance): in
+# the waste strip between heads 1 and 2, so it is on the delivered panel and
+# goes with the sawdust.
+[fab]
+provenance_at = [14.75, 32.4]
+provenance_size = 1.0
