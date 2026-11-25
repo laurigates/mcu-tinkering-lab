@@ -41,6 +41,32 @@ when replayed one by one, even if a merge of `main` resolved the same
 conflict: on #1149 the replay stopped at the commit that deleted a file `main`
 had edited.
 
+## A rebase merge can release a package its commits never touched
+
+Release PR #1199 released esp32-cam-webserver, gamepad-synth and
+switch-usb-proxy with one entry each: 4797d8c, `docs(tools)`, which changes
+only `tools/esp32.just`. It was the top commit of #1162, rebase-merged, whose
+other commits changed those packages' justfiles (#1202). The reported cause,
+reproduced offline but not traced in release-please's source here:
+release-please takes each commit's files from GitHub's GraphQL history and can
+credit a rebase-merged PR's whole file list to its top commit when no other
+commit of the PR falls in the same page of 10. Whether it happens depends on
+the paging, so two runs on the same base gave the release PR 29 and 35 files.
+
+For a PR whose commits touch more than one release-please package:
+
+- **Squash** when one type for every package is right: the squash commit's
+  files are the PR's files, so the attribution is exact. It costs what the
+  #1149 example above shows.
+- **Rebase** when the packages need different types, and make the last commit
+  one whose type releases nothing (`test`, `ci`, `build`, `style`,
+  `refactor`; only `feat`, `fix`, `perf`, `docs` and `chore` are visible in
+  `release-please-config.json`). Crediting it with the PR's files then adds
+  no release. This follows from the reported cause and has not been seen on a
+  release PR.
+- **After the merge**, read the release PR's component list for a package
+  none of the PR's releasing commits touched.
+
 ## Before the force-push
 
 Rewriting a pushed branch needs Lauri's go-ahead. Then:

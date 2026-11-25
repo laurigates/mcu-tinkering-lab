@@ -21,6 +21,11 @@ difference. For one that spans components it decides what gets released.
   `git show --format= --name-only <commit>` against the component's path and
   its `exclude-paths`.
 
+A rebase merge can still credit the PR's whole file list to its last commit
+(#1202). For a PR that spans packages, choose: squash when one type fits every
+package, or rebase with a last commit of a type that releases nothing; the
+skill has the details.
+
 The merge-method rules (what turns a PR to squash), the force-push procedure
 and the check for a red check inherited from `main` are in the `pr-landing`
 skill (`.claude/skills/pr-landing/`).
