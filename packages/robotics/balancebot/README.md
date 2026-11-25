@@ -109,7 +109,7 @@ at most), and refuse rather than print `OK` when core 1 would ignore them:
   If the IMU is not responding, holding upright cannot clear the FAULT, so the
   refusal offers only `disarm`.
 - `arm` that core 1 takes but faults on in the same tick, because the robot
-  lies past the 45° tilt cutoff or the IMU does not read:
+  lies past the 30° tilt cutoff or the IMU does not read:
   `ERR: armed, then FAULT — …` instead of `OK`.
 - `mount` and `load` while armed: `ERR: disarm first …`. Core 1 keeps the
   mount while armed. If the hold-upright gesture arms it before a `mount` (or
@@ -365,7 +365,7 @@ wheels and the 40 000 steps/s² clamp.
 
 - DRV8825 nENABLE has an external 10 kΩ pull-up: drivers are **disabled**
   while the MCU boots, resets, or sits in BOOTSEL.
-- Tilt cutoff: |pitch| > 45° disables the drivers (FAULT, fast LED blink);
+- Tilt cutoff: |pitch| > 30° disables the drivers (FAULT, fast LED blink);
   clears after 2 s upright.
 - Low-pack cutoff (carrier PCB only): core 0 reads the pack through the divider
   on D0 (`stat` line `pack:`) ten times a second. Below 3.5 V per cell (10.5 V
