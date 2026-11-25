@@ -1607,6 +1607,36 @@ class ClangFormatPinTest(unittest.TestCase):
         self.assertIn(".pre-commit-config.yaml", c_code)
 
 
+class SimulationCoverageTest(unittest.TestCase):
+    """The plant's tests are held by their own coverage floor, and the
+    Python Suites job has a time limit (#1191). Deleting the plant's tests
+    left the whole-package total (41 %) above its 25 % floor at 31 %, with
+    plant.py at 36 %."""
+
+    def setUp(self):
+        self.jobs = load("test.yml")["jobs"]
+
+    def test_plant_and_arena_have_their_own_floor(self):
+        runs = [
+            str(s.get("run", "")) for s in self.jobs["test-python-simulation"]["steps"]
+        ]
+        (report,) = [r for r in runs if "coverage report" in r]
+        include = re.search(r"--include[= ]'?([^'\s]+)", report)
+        self.assertIsNotNone(include, report)
+        self.assertEqual(
+            set(include.group(1).split(",")),
+            {"src/robocar_sim/plant.py", "src/robocar_sim/arena.py"},
+        )
+        floor = re.search(r"--fail-under[= ](\d+)", report)
+        self.assertIsNotNone(floor, report)
+        self.assertGreaterEqual(int(floor.group(1)), 90)
+
+    def test_python_suites_job_has_a_timeout(self):
+        timeout = self.jobs["python-suites"].get("timeout-minutes")
+        self.assertIsInstance(timeout, int)
+        self.assertLessEqual(timeout, 60)
+
+
 def drift_step() -> str:
     (step,) = [
         s
