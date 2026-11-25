@@ -33,6 +33,14 @@ joined pad for pad by `HEAD<k>_<name>`, k = 2, 3, ... in file order. The main
 board keeps one end, `main_ref`; the spare heads reach it only by moving the
 ribbon. `head_no_connect` and the power-pad rule apply to every MCU copy.
 
+A carrier split into two PCBs names its half in board.toml: `[project] side`
+"main" keeps every part but the heads, "head" keeps the MCU copies, the head
+connectors and the cable's `head_parts`, each with its own nets and
+no-connects. The head project has no hardware.toml of its own: `[project]
+join` names the directory whose hardware.toml it reads, relative to the
+project. A net with nodes on both PCBs raises: the cable is the only way
+between them.
+
 Every symbol pin must then be on a net or allowed to float: listed under the
 entry's `no_connect`, or a spare GPIO pad of a `pin_numbers` part. Anything
 else raises, so a dropped wire cannot become a quietly open pin. A power pad
@@ -126,14 +134,34 @@ class _Placed:
     by_name: dict[str, tuple[str, ...]]  # hardware.toml pin name -> symbol pin numbers
 
 
+def side_and_join(project_dir: Path) -> tuple[str, Path]:
+    """The project's board.toml `side` ("" if none) and the directory to join.
+
+    The directory is the project's own unless `[project] join` names another;
+    a project with no board.toml (a test fixture) is one PCB, joined in place.
+    """
+    if not (paths.carrier_dir(project_dir) / paths.BOARD_TOML).is_file():
+        return "", project_dir
+    cfg = paths.load_board_config(project_dir)
+    if cfg.join is None:
+        return cfg.side, project_dir
+    source = project_dir / cfg.join
+    if not (source / "hardware.toml").is_file():
+        raise KicadError(
+            f"{cfg.path}: [project] join = {cfg.join!r}: no hardware.toml in {source}"
+        )
+    return cfg.side, source
+
+
 def build(
     project_dir: Path,
     repo_root: Path = REPO_ROOT,
     vendored: Path = library.VENDORED,
 ) -> Netlist:
     """The carrier netlist of `project_dir`; raises KicadError naming the input."""
+    side, source = side_and_join(project_dir)
     try:
-        model = join(project_dir, repo_root, view=CARRIER)
+        model = join(source, repo_root, view=CARRIER)
     except HardwareError as e:
         raise KicadError(str(e)) from None
     sidecar = model.project_dir / "hardware.toml"
@@ -153,6 +181,11 @@ def build(
     placed: dict[str, _Placed] = {}
     entries = [(MCU, model.mcu_part, model.mcu_ref, "", "", model.mcu, model.board)]
     cable = model.cables[0] if model.cables else None
+    if side and cable is None:
+        raise KicadError(
+            f"{paths.carrier_dir(project_dir) / paths.BOARD_TOML}: side = {side!r} "
+            f"splits the carrier at a [[cables]] entry, and {sidecar} has none"
+        )
     # (net prefix, MCU copy key, head connector key) for each head board.
     heads: list[tuple[str, str, str]] = []
     if cable is not None:
@@ -359,11 +392,44 @@ def build(
                 )
 
     comps = sorted((p.comp for p in placed.values()), key=lambda c: ref_key(c.ref))
-    return Netlist(
-        project=model.project_dir,
+    whole = Netlist(
+        project=project_dir if side else model.project_dir,
         comps=tuple(comps),
         nets=nets,
         no_connect=tuple(sorted(no_connect, key=node_key)),
+    )
+    if not side or cable is None:
+        return whole
+    head_keys = mcu_copies | {k for _, _, k in heads}
+    head_refs = {placed[k].comp.ref for k in head_keys}
+    head_refs |= {model.parts[k].ref for k in cable.head_parts}
+    return _side(whole, side == paths.SIDE_HEAD, head_refs)
+
+
+def _side(whole: Netlist, head: bool, head_refs: set[str]) -> Netlist:
+    """The head PCB's (`head`) or the main PCB's part of `whole`."""
+
+    def keep(ref: str) -> bool:
+        return (ref in head_refs) == head
+
+    nets = {}
+    for name, members in whole.nets.items():
+        on_head = sorted({r for r, _ in members if r in head_refs}, key=ref_key)
+        on_main = sorted({r for r, _ in members if r not in head_refs}, key=ref_key)
+        if on_head and on_main:
+            raise KicadError(
+                f"{whole.project}: net {name!r} joins the head board "
+                f"({', '.join(on_head)}) and the main board ({', '.join(on_main)}); "
+                "only the cable joins the two PCBs, so take the part off the "
+                "cable's head_parts or put the net through the cable"
+            )
+        if keep(members[0][0]):
+            nets[name] = members
+    return Netlist(
+        project=whole.project,
+        comps=tuple(c for c in whole.comps if keep(c.ref)),
+        nets=nets,
+        no_connect=tuple(n for n in whole.no_connect if keep(n[0])),
     )
 
 

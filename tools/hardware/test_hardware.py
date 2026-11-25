@@ -1379,6 +1379,52 @@ class CableTest(unittest.TestCase):
         with self.assertRaisesRegex(HardwareError, "mcu_ref 'U-3' does not match"):
             self.spares('spare_heads = [{ mcu_ref = "U-3", head_ref = "J16" }]\n')
 
+    # head_parts: the parts soldered to the head boards besides the MCU and
+    # the head connector (mounting holes), so a carrier split into a main and
+    # a head PCB knows which board each part is on.
+    HOLE = (
+        '\n[parts.hole]\nname = "Hole"\nkind = "mounting-hole"\n'
+        'build = "carrier"\nref = "H1"\n'
+    )
+
+    def head_parts(self, head_parts: str, extra: str = HOLE):
+        return self.cables(lambda s: s + head_parts + extra)
+
+    def test_head_parts_are_read_in_order(self):
+        extra = self.HOLE + self.HOLE.replace("hole]", "hole2]").replace("H1", "H2")
+        (cable,) = self.head_parts('head_parts = ["hole2", "hole"]\n', extra).cables
+        self.assertEqual(cable.head_parts, ("hole2", "hole"))
+
+    def test_head_parts_are_optional(self):
+        self.assertEqual(self.cables().cables[0].head_parts, ())
+
+    def test_a_head_part_must_be_declared(self):
+        with self.assertRaisesRegex(
+            HardwareError, r"head_parts: part 'nope' is not declared under \[parts\]"
+        ):
+            self.head_parts('head_parts = ["nope"]\n')
+
+    def test_a_head_part_must_be_on_the_carrier(self):
+        harness = self.HOLE.replace('build = "carrier"', 'build = "harness"')
+        with self.assertRaisesRegex(
+            HardwareError, r"head_parts: part 'hole' is build = 'harness'"
+        ):
+            self.head_parts('head_parts = ["hole"]\n', harness)
+
+    def test_head_parts_must_be_a_list_of_part_keys(self):
+        for bad in ('"hole"', "[1]", '[""]'):
+            with (
+                self.subTest(bad=bad),
+                self.assertRaisesRegex(HardwareError, "head_parts must be a list"),
+            ):
+                self.head_parts(f"head_parts = {bad}\n")
+
+    def test_a_head_part_is_listed_once(self):
+        with self.assertRaisesRegex(
+            HardwareError, r"head_parts lists \['hole'\] twice"
+        ):
+            self.head_parts('head_parts = ["hole", "hole"]\n')
+
     def test_a_spare_head_ref_cannot_repeat_any_ref(self):
         for spares, ref in (
             ('[{ mcu_ref = "U3", head_ref = "J1" }]', "J1"),  # the first head

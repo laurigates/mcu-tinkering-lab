@@ -425,7 +425,7 @@ def parse_item(path: Path, data: dict, orders: dict[str, str] | None = None) -> 
 def needs(project: Path, repo_root: Path = REPO_ROOT) -> list[Need]:
     """The carrier's BOM lines; instance value/lcsc/buy over the registry's."""
     try:
-        model = join(project, repo_root, view=CARRIER)
+        model = join(netlist.side_and_join(project)[1], repo_root, view=CARRIER)
     except HardwareError as e:
         raise KicadError(str(e)) from None
     rows = []

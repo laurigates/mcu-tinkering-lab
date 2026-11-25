@@ -58,7 +58,7 @@ def classify(rows: list[Row]) -> Report:
 def rows(project: Path, repo_root: Path = REPO_ROOT) -> list[Row]:
     """One row per carrier component, `buy` from the instance, else its entry."""
     try:
-        model = join(project, repo_root, view=CARRIER)
+        model = join(netlist.side_and_join(project)[1], repo_root, view=CARRIER)
     except HardwareError as e:
         raise KicadError(str(e)) from None
     out = []

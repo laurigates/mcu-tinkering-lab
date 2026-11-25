@@ -928,6 +928,101 @@ class CableTests(unittest.TestCase):
         for ref in ("U1", "U3", "U4"):
             self.assertIn((ref, "12"), nl.no_connect)  # 3V3
 
+    # A carrier split into two PCBs: board.toml [project] side = "main" holds
+    # every part but the heads; a second project, side = "head" with `join`
+    # naming the first project's directory, holds the MCU copies, the head
+    # connectors and the cable's head_parts.
+    HOLE_SLUG = "m2-mounting-hole"
+
+    def split(self, head_parts: str = '["hole"]') -> Path:
+        """Add a head hole, a main board.toml and a head project; return the latter."""
+        rel = f"docs/reference/parts/{self.HOLE_SLUG}.toml"
+        (self.root / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+        self.edit(
+            self.toml,
+            'build = "carrier"\n',
+            f'head_parts = {head_parts}\nbuild = "carrier"\n',
+        )
+        with self.toml.open("a", encoding="utf-8") as f:
+            f.write(
+                '\n[parts.hole]\nname = "Head hole"\nkind = "mounting-hole"\n'
+                f'build = "carrier"\npart = "{self.HOLE_SLUG}"\nref = "H1"\n'
+            )
+        self.board_toml(self.project, 'name = "main"\nside = "main"\n')
+        head = self.project / "head"
+        self.board_toml(head, 'name = "head"\nside = "head"\njoin = ".."\n')
+        return head
+
+    def board_toml(self, project: Path, body: str) -> None:
+        path = project / "hardware/carrier/board.toml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"[project]\n{body}", encoding="utf-8")
+
+    def whole(self) -> netlist.Netlist:
+        """The unsplit netlist of the current hardware.toml."""
+        board = self.project / "hardware/carrier/board.toml"
+        saved = board.read_text(encoding="utf-8")
+        board.unlink()
+        try:
+            return self.build()
+        finally:
+            board.write_text(saved, encoding="utf-8")
+
+    def test_the_main_side_leaves_out_the_heads(self):
+        self.add_spares()
+        self.split()
+        nl = self.build()
+        self.assertEqual([c.ref for c in nl.comps], ["J2", "J3", "J4"])
+        self.assertFalse([n for n in nl.nets if n.startswith("HEAD")])
+        self.assertFalse([r for r, _ in nl.no_connect if r not in {"J2", "J3", "J4"}])
+
+    def test_the_head_side_holds_the_heads_and_their_parts(self):
+        self.add_spares()
+        head = self.split()
+        nl = netlist.build(head, self.root)
+        self.assertEqual(
+            [c.ref for c in nl.comps], ["H1", "J1", "J16", "J17", "U1", "U3", "U4"]
+        )
+        self.assertTrue(all(n.startswith("HEAD") for n in nl.nets), list(nl.nets))
+        self.assertIn(("U1", "12"), nl.no_connect)
+        self.assertEqual(nl.project, head)
+
+    def test_the_two_sides_together_are_the_whole_carrier(self):
+        self.add_spares()
+        head = self.split()
+        main, heads, whole = self.build(), netlist.build(head, self.root), self.whole()
+        self.assertEqual(
+            sorted(c.ref for c in main.comps + heads.comps),
+            sorted(c.ref for c in whole.comps),
+        )
+        self.assertEqual({**main.nets, **heads.nets}, whole.nets)
+        self.assertEqual(
+            sorted(main.no_connect + heads.no_connect), sorted(whole.no_connect)
+        )
+
+    def test_a_net_cannot_span_both_boards(self):
+        # The I2C sensor named as a head part puts I2C_SDA_PIN on both PCBs.
+        self.split('["hole", "sensor"]')
+        self.fails(r"net 'I2C_SCL_PIN' joins the head board \(J3\) and the main board")
+
+    def test_a_side_needs_a_cable(self):
+        text = self.toml.read_text(encoding="utf-8")
+        self.toml.write_text(text[: text.index("[[cables]]")], encoding="utf-8")
+        self.board_toml(self.project, 'name = "main"\nside = "main"\n')
+        self.fails(r"side = 'main' splits the carrier at a \[\[cables\]\] entry")
+
+    def test_side_takes_main_or_head(self):
+        self.board_toml(self.project, 'name = "main"\nside = "left"\n')
+        self.fails(r"\[project\] side must be one of \['main', 'head'\]")
+
+    def test_join_names_a_project_with_a_hardware_toml(self):
+        head = self.split()
+        self.board_toml(head, 'name = "head"\nside = "head"\njoin = "../nowhere"\n')
+        with self.assertRaisesRegex(
+            KicadError, r"join = '../nowhere': no hardware.toml"
+        ):
+            netlist.build(head, self.root)
+
 
 # --- Board pages on carrier parts (#750 step 2) -----------------------------------
 # robocar's breakouts name a `board` page that documents a module's
