@@ -142,9 +142,20 @@ static void test_save(void)
           "count unchanged: not run, whatever save_ok says from an earlier save");
 }
 
+// `rate` and `cal`: core 1 applies CMD_OPEN_LOOP_RATE and CMD_CALIBRATE only
+// in IDLE, so RUN and FAULT are refused rather than reported as done (#1128).
+static void test_bench(void)
+{
+    check(cli_gate_bench(true, BAL_STATE_IDLE) == CLI_GATE_SEND, "bench idle: sent");
+    check(cli_gate_bench(true, BAL_STATE_RUN) == CLI_GATE_NOT_IDLE, "bench in run: refused");
+    check(cli_gate_bench(true, BAL_STATE_FAULT) == CLI_GATE_NOT_IDLE, "bench in fault: refused");
+    check(cli_gate_bench(false, BAL_STATE_IDLE) == CLI_GATE_BUSY, "bench stale: busy");
+}
+
 int main(void)
 {
     test_save();
+    test_bench();
     test_arm_stale_snapshot_not_judged();
     test_arm_needs_idle();
     test_arm_fault_without_imu();

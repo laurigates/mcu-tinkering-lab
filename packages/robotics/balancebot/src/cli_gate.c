@@ -40,6 +40,17 @@ cli_gate_t cli_gate_save(bool synced, uint8_t state)
     return cli_gate_mount(synced, state);
 }
 
+cli_gate_t cli_gate_bench(bool synced, uint8_t state)
+{
+    if (!synced) {
+        return CLI_GATE_BUSY;
+    }
+    if (state != BAL_STATE_IDLE) {
+        return CLI_GATE_NOT_IDLE;
+    }
+    return CLI_GATE_SEND;
+}
+
 cli_save_outcome_t cli_save_outcome(uint32_t count_before, uint32_t count_now, bool save_ok)
 {
     if (count_now == count_before) {
