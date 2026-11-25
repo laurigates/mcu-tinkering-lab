@@ -34,10 +34,15 @@ static const char *TAG = "servo_controller";
  * inheritance keeps the executor from waiting behind a preempted lower-priority
  * holder. The wait is bounded so a wedged bus surfaces as ESP_ERR_TIMEOUT.
  *
- * Created by servo_controller_init(). Before that only the boot task runs and
- * the only callers are servo_set_limits() and servo_set_pwm_frequency(), so a
- * NULL handle skips the lock. Held across one write sequence and never across
- * a delay: servo_move_smooth() and servo_exercise() take it once per step. */
+ * Created by servo_controller_init(); a NULL handle skips the lock. The handle
+ * is NULL before init, and for the whole boot when the PCA9685 is absent and
+ * init never runs, so the console task can then call servo_set_limits() and
+ * servo_set_pwm_frequency() unlocked. That is safe because nothing writes a
+ * servo output while `initialized` is false: the angle, enable and disable
+ * paths refuse, set_limits_locked() only stores the limits, and
+ * set_pwm_frequency_locked() writes only the prescaler, under i2c_bus's own
+ * bus lock. Held across one write sequence and never across a delay:
+ * servo_move_smooth() and servo_exercise() take it once per step. */
 #define SERVO_LOCK_TIMEOUT_MS 100u
 
 static SemaphoreHandle_t s_lock;
