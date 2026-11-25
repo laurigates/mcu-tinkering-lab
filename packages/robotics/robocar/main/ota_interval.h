@@ -62,16 +62,31 @@ bool ota_interval_ticks_from_minutes(uint32_t minutes, uint32_t tick_rate_hz, ui
 #define OTA_FIRST_CHECK_DELAY_MS 15000U
 
 /**
+ * Wait before retrying a first check that could not fetch the manifest
+ * (issue #1126): DNS not ready, a fetch timeout. Without it the next attempt
+ * came OTA_CHECK_INTERVAL_MIN later, or after the next reset.
+ */
+#define OTA_FIRST_CHECK_RETRY_MS 60000U
+
+/** Retries of a first check that could not fetch the manifest, after which
+ *  the task falls back to OTA_CHECK_INTERVAL_MIN (issue #1126). */
+#define OTA_FIRST_CHECK_MAX_RETRIES 5U
+
+/**
  * Ticks the OTA task waits before its next manifest check: @p first_delay_ticks
- * before the boot's first check, @p interval_ticks before every later one. The
- * first wait is capped at @p interval_ticks, so it is never longer than a
- * later one (a short bench interval, or the overflow fallback).
+ * before the boot's first check; @p retry_ticks after a check while no check
+ * this boot has fetched the manifest, for up to OTA_FIRST_CHECK_MAX_RETRIES
+ * retries; @p interval_ticks otherwise. No wait is longer than
+ * @p interval_ticks (a short bench interval, or the overflow fallback).
  *
- * @param checked_yet        True once the task has run a check this boot.
+ * @param checks_run         Checks the task has run this boot.
+ * @param fetched_yet        True once a check this boot fetched the manifest.
  * @param first_delay_ticks  OTA_FIRST_CHECK_DELAY_MS in ticks.
+ * @param retry_ticks        OTA_FIRST_CHECK_RETRY_MS in ticks.
  * @param interval_ticks     OTA_CHECK_INTERVAL_MIN in ticks.
  */
-uint32_t ota_interval_next_wait_ticks(bool checked_yet, uint32_t first_delay_ticks,
+uint32_t ota_interval_next_wait_ticks(uint32_t checks_run, bool fetched_yet,
+                                      uint32_t first_delay_ticks, uint32_t retry_ticks,
                                       uint32_t interval_ticks);
 
 #ifdef __cplusplus

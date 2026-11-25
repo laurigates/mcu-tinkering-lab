@@ -27,11 +27,15 @@ bool ota_interval_ticks_from_minutes(uint32_t minutes, uint32_t tick_rate_hz, ui
     return true;
 }
 
-uint32_t ota_interval_next_wait_ticks(bool checked_yet, uint32_t first_delay_ticks,
+uint32_t ota_interval_next_wait_ticks(uint32_t checks_run, bool fetched_yet,
+                                      uint32_t first_delay_ticks, uint32_t retry_ticks,
                                       uint32_t interval_ticks)
 {
-    if (checked_yet || first_delay_ticks > interval_ticks) {
-        return interval_ticks;
+    uint32_t wait = interval_ticks;
+    if (checks_run == 0u) {
+        wait = first_delay_ticks;
+    } else if (!fetched_yet && checks_run <= OTA_FIRST_CHECK_MAX_RETRIES) {
+        wait = retry_ticks;
     }
-    return first_delay_ticks;
+    return (wait < interval_ticks) ? wait : interval_ticks;
 }

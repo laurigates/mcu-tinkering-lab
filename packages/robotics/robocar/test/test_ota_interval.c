@@ -21,6 +21,7 @@
 #include "ota_interval.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 
 static int test_count = 0;
@@ -96,22 +97,60 @@ static void test_null_out_ticks_fails_closed(void)
 
 /* Issue #1055: the task's first check came a whole interval (360 min) after
  * it started, so a robot reset more often than that never checked. The first
- * wait is the short first-check delay; every later one is the interval. */
+ * wait is the short first-check delay; once a manifest has been fetched every
+ * later one is the interval. */
 static void test_first_check_waits_short_delay_then_interval(void)
 {
     const uint32_t interval = 21600000u; /* 360 min at 1000 Hz */
     const uint32_t first = 15000u;
+    const uint32_t retry = 60000u;
 
-    ASSERT(ota_interval_next_wait_ticks(false, first, interval) == first);
-    ASSERT(ota_interval_next_wait_ticks(true, first, interval) == interval);
+    ASSERT(ota_interval_next_wait_ticks(0u, false, first, retry, interval) == first);
+    ASSERT(ota_interval_next_wait_ticks(1u, true, first, retry, interval) == interval);
 }
 
-/* The first check never waits longer than a later one: with a short interval
- * (the overflow fallback, or a bench build) the interval wins. */
+/* No wait is longer than the interval: with a short interval (the overflow
+ * fallback, or a bench build) the interval wins. */
 static void test_first_wait_capped_at_interval(void)
 {
-    ASSERT(ota_interval_next_wait_ticks(false, 15000u, 5000u) == 5000u);
-    ASSERT(ota_interval_next_wait_ticks(true, 15000u, 5000u) == 5000u);
+    ASSERT(ota_interval_next_wait_ticks(0u, false, 15000u, 60000u, 5000u) == 5000u);
+    ASSERT(ota_interval_next_wait_ticks(1u, false, 15000u, 60000u, 5000u) == 5000u);
+    ASSERT(ota_interval_next_wait_ticks(1u, true, 15000u, 60000u, 5000u) == 5000u);
+}
+
+/* Issue #1126: a first check that could not fetch the manifest (DNS not ready,
+ * a fetch timeout) used to be followed by the whole interval. It is retried
+ * after the short retry wait, up to OTA_FIRST_CHECK_MAX_RETRIES times, and the
+ * first successful fetch ends the retries. */
+static void test_failed_first_fetch_is_retried_within_minutes(void)
+{
+    const uint32_t interval = 21600000u;
+    const uint32_t first = 15000u;
+    const uint32_t retry = 60000u;
+
+    for (uint32_t run = 1u; run <= OTA_FIRST_CHECK_MAX_RETRIES; run++) {
+        ASSERT(ota_interval_next_wait_ticks(run, false, first, retry, interval) == retry);
+        ASSERT(ota_interval_next_wait_ticks(run, true, first, retry, interval) == interval);
+    }
+}
+
+/* The retries are bounded: a robot with no route to the manifest falls back to
+ * the interval instead of fetching every minute all day. */
+static void test_retries_are_bounded(void)
+{
+    const uint32_t interval = 21600000u;
+    const uint32_t run = OTA_FIRST_CHECK_MAX_RETRIES + 1u;
+
+    ASSERT(ota_interval_next_wait_ticks(run, false, 15000u, 60000u, interval) == interval);
+    ASSERT(ota_interval_next_wait_ticks(UINT32_MAX, false, 15000u, 60000u, interval) == interval);
+}
+
+/* Acceptance for #1126: "retried within minutes". */
+static void test_retry_wait_within_minutes(void)
+{
+    ASSERT(OTA_FIRST_CHECK_RETRY_MS > OTA_FIRST_CHECK_DELAY_MS);
+    ASSERT(OTA_FIRST_CHECK_RETRY_MS <= 5u * 60000u);
+    ASSERT(OTA_FIRST_CHECK_MAX_RETRIES >= 1u);
 }
 
 /* Acceptance for #1055: a newer release is seen within a minute of link-up
@@ -135,6 +174,10 @@ int main(void)
              test_first_check_waits_short_delay_then_interval);
     test_run("first_wait_capped_at_interval", test_first_wait_capped_at_interval);
     test_run("first_check_delay_within_a_minute", test_first_check_delay_within_a_minute);
+    test_run("failed_first_fetch_is_retried_within_minutes",
+             test_failed_first_fetch_is_retried_within_minutes);
+    test_run("retries_are_bounded", test_retries_are_bounded);
+    test_run("retry_wait_within_minutes", test_retry_wait_within_minutes);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);
