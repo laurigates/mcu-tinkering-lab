@@ -874,17 +874,18 @@ add_test(NAME ota_interval COMMAND test_ota_interval)
 # -----------------------------------------------------------------------------
 # improv_wifi transport and protocol (issues #644, #1056)
 #
-# Compiles the shared component from packages/components/improv-wifi unmodified.
-# Its two ESP-IDF-only hooks are replaced in the test: the UART0 default writer
-# (improv_wifi_uart.c) by a recorder, so the suite can assert which transport a
-# reply took — UART0 by default (brainbox), the injected writer once one is set
-# (robocar's USB-Serial-JTAG console) — and improv_wifi_device_info()
-# (improv_wifi_device_info.c) by fixed strings. The protocol tests check the
-# bytes against the Improv Serial spec and its reference client, sdk-serial-js.
+# Compiles the shared component from packages/components/improv-wifi unmodified;
+# test_improv_wifi.c #includes improv_wifi.c so it can reach the static
+# handlers (issue #1182). Its two ESP-IDF-only hooks are replaced in the test:
+# the UART0 default writer (improv_wifi_uart.c) by a recorder, so the suite can
+# assert which transport a reply took — UART0 by default (brainbox), the
+# injected writer once one is set (robocar's USB-Serial-JTAG console) — and
+# improv_wifi_device_info() (improv_wifi_device_info.c) by strings a test can
+# replace. The protocol tests check the bytes against the Improv Serial spec and
+# its reference client, sdk-serial-js.
 # -----------------------------------------------------------------------------
 set(IMPROV_WIFI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/improv-wifi")
 add_executable(test_improv_wifi
-    "${IMPROV_WIFI_DIR}/improv_wifi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_wifi.c"
 )
 target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")

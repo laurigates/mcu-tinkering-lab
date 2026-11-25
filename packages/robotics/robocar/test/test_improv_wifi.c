@@ -21,14 +21,18 @@
  *   - RPC 0x02 is Request current state, 0x03 Request device info;
  *   - error 0x03 is Unable to connect.
  *
- * improv_wifi.c is compiled unmodified from packages/components/improv-wifi.
- * The two ESP-IDF-only hooks it calls are replaced here:
+ * improv_wifi.c is included unmodified from packages/components/improv-wifi,
+ * so a test can also call its static handlers directly (issue #1182). The two
+ * ESP-IDF-only hooks it calls are replaced here:
  * improv_wifi_uart0_write() (improv_wifi_uart.c) by a recorder, so a test can
  * tell which transport a reply took, and improv_wifi_device_info()
- * (improv_wifi_device_info.c) by fixed strings.
+ * (improv_wifi_device_info.c) by strings a test can replace.
  */
 
 #include "improv_wifi.h"
+
+/* The unit under test, included so its static handlers are reachable. */
+#include "improv_wifi.c"
 
 #include <assert.h>
 #include <stdio.h>
@@ -82,13 +86,15 @@ void improv_wifi_uart0_write(const uint8_t *data, size_t len)
     record(&s_uart, data, len);
 }
 
+/* What improv_wifi_device_info() returns; a test may replace it, and
+ * reset_recorders() restores it. */
+static const improv_device_info_t DEFAULT_INFO = {"RoboCar", "1.2.3", "ESP32-S3", "robocar"};
+static improv_device_info_t s_info;
+
 /* Stands in for the ESP-IDF definition in improv_wifi_device_info.c. */
 void improv_wifi_device_info(improv_device_info_t *out)
 {
-    out->firmware_name = "RoboCar";
-    out->firmware_version = "1.2.3";
-    out->chip = "ESP32-S3";
-    out->device_name = "robocar";
+    *out = s_info;
 }
 
 static void custom_writer(const uint8_t *data, size_t len)
@@ -101,6 +107,7 @@ static void reset_recorders(void)
     memset(&s_uart, 0, sizeof(s_uart));
     memset(&s_custom, 0, sizeof(s_custom));
     improv_wifi_set_writer(NULL);
+    s_info = DEFAULT_INFO;
 }
 
 /* --- Credentials callback ------------------------------------------------- */
@@ -700,6 +707,122 @@ static void test_parser_idle_covers_a_partial_header(void)
     TEST_ASSERT(improv_wifi_parser_idle());
 }
 
+/* --- Untested paths (issue #1182) ----------------------------------------- */
+
+/* An empty Send-WiFi-Settings payload is an invalid RPC, and the credentials
+ * callback does not run. */
+static void test_empty_send_wifi_settings_is_invalid(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    s_creds_calls = 0;
+
+    feed_rpc(0x01, NULL, 0);
+
+    TEST_ASSERT(s_creds_calls == 0);
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 2);
+    TEST_ASSERT(pkts[0].type == TYPE_ERROR_STATE && pkts[0].data[0] == 0x00);
+    TEST_ASSERT(pkts[1].type == TYPE_ERROR_STATE);
+    TEST_ASSERT(pkts[1].data[0] == IMPROV_ERROR_INVALID_RPC);
+}
+
+/* The reply alone cannot tell the empty-payload guard from its absence: the
+ * SSID length check after it rejects any byte read past an empty payload, and
+ * through the parser that byte is still inside the packet buffer. So the
+ * handler is called with no payload memory at all: without the guard it reads
+ * payload[0] and the suite crashes (the tests build at -O0, so the read is
+ * not optimised away). */
+static void test_empty_payload_is_rejected_before_any_read(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    s_creds_calls = 0;
+
+    handle_send_wifi_creds(NULL, 0);
+
+    TEST_ASSERT(s_creds_calls == 0);
+    packet_t pkts[2];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 2) == 1);
+    TEST_ASSERT(pkts[0].type == TYPE_ERROR_STATE);
+    TEST_ASSERT(pkts[0].data[0] == IMPROV_ERROR_INVALID_RPC);
+}
+
+/* Fill buf with len copies of c and terminate it. */
+static const char *repeat(char *buf, char c, size_t len)
+{
+    memset(buf, c, len);
+    buf[len] = '\0';
+    return buf;
+}
+
+/* A string longer than the room left in an RPC result is cut to fit, and the
+ * strings after it, with no room left, are dropped. The result fills the
+ * 255-byte packet data: command, data length, then 200 + 1 and 51 + 1 bytes. */
+static void test_rpc_result_truncates_a_string_that_does_not_fit(void)
+{
+    static char name[201];
+    static char version[101];
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    s_info.firmware_name = repeat(name, 'n', 200);
+    s_info.firmware_version = repeat(version, 'v', 100);
+
+    feed_rpc(0x03, NULL, 0);
+
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 2);
+    const packet_t *r = &pkts[1];
+    TEST_ASSERT(r->type == TYPE_RPC_RESULT);
+    TEST_ASSERT(r->len == 255);
+    TEST_ASSERT(r->data[0] == 0x03);
+    TEST_ASSERT(r->data[1] == 253);
+    TEST_ASSERT(r->data[2] == 200);
+    TEST_ASSERT(memcmp(r->data + 3, name, 200) == 0);
+    TEST_ASSERT(r->data[203] == 51);
+    TEST_ASSERT(memcmp(r->data + 204, version, 51) == 0);
+}
+
+/* A single string longer than the whole result is cut to the 252 bytes left
+ * after the command, data length and its own length byte. */
+static void test_rpc_result_truncates_an_oversized_first_string(void)
+{
+    static char name[301];
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    s_info.firmware_name = repeat(name, 'n', 300);
+
+    feed_rpc(0x03, NULL, 0);
+
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 2);
+    TEST_ASSERT(pkts[1].len == 255);
+    TEST_ASSERT(pkts[1].data[1] == 253);
+    TEST_ASSERT(pkts[1].data[2] == 252);
+    TEST_ASSERT(memcmp(pkts[1].data + 3, name, 252) == 0);
+}
+
+/* With one byte left, no string fits even empty-cut ("result full"): the
+ * result stops, and its data length still matches what was written. Here
+ * 2 + (1 + 251) = 254 bytes leave one. */
+static void test_rpc_result_full_drops_the_remaining_strings(void)
+{
+    static char name[252];
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    s_info.firmware_name = repeat(name, 'n', 251);
+
+    feed_rpc(0x03, NULL, 0);
+
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 2);
+    TEST_ASSERT(pkts[1].type == TYPE_RPC_RESULT);
+    TEST_ASSERT(pkts[1].len == 254);
+    TEST_ASSERT(pkts[1].data[1] == 252);
+    TEST_ASSERT(pkts[1].data[2] == 251);
+    TEST_ASSERT(memcmp(pkts[1].data + 3, name, 251) == 0);
+}
+
 int main(void)
 {
     printf("improv_wifi tests\n");
@@ -727,6 +850,11 @@ int main(void)
     RUN_TEST(test_process_byte_claims_exactly_the_packet);
     RUN_TEST(test_reset_parser_drops_a_half_read_packet);
     RUN_TEST(test_parser_idle_covers_a_partial_header);
+    RUN_TEST(test_empty_send_wifi_settings_is_invalid);
+    RUN_TEST(test_empty_payload_is_rejected_before_any_read);
+    RUN_TEST(test_rpc_result_truncates_a_string_that_does_not_fit);
+    RUN_TEST(test_rpc_result_truncates_an_oversized_first_string);
+    RUN_TEST(test_rpc_result_full_drops_the_remaining_strings);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }
