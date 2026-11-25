@@ -34,7 +34,7 @@ from .robot_model import DifferentialDriveRobot, RobotState
 # _ensure_genesis(), called lazily by methods that dereference these globals.
 # Typed Any so static type checkers (ty) accept attribute access after the
 # lazy import populates them; without this they infer `None` and flag every
-# gs.*/trimesh.*/SE3(...) dereference as unresolved-attribute.
+# gs.*/trimesh.*/SE3(...) dereference as missing-attribute.
 gs: Any = None
 trimesh: Any = None
 SE3: Any = None
@@ -537,8 +537,8 @@ class RobotVisualizer:
             # Wheel world orientation = chassis rotation * local wheel rotation
             wheel_world_quat = _quat_mul(robot_quat, local_quat)
 
-            wheel.set_pos((world_x, world_y, world_z))  # ty: ignore[unresolved-attribute]
-            wheel.set_quat(wheel_world_quat)  # ty: ignore[unresolved-attribute]
+            wheel.set_pos((world_x, world_y, world_z))  # ty: ignore[missing-attribute]
+            wheel.set_quat(wheel_world_quat)  # ty: ignore[missing-attribute]
 
         # Update camera with pan angle
         if self.camera_entity:
@@ -688,7 +688,7 @@ class RobotVisualizer:
     def _create_simple_robot_visualization(self):
         """Create a simple robot visualization for testing"""
         _ensure_genesis()
-        if not self.env:  # ty: ignore[unresolved-attribute]
+        if not self.env:  # ty: ignore[missing-attribute]
             return
 
         # Simple robot representation
@@ -698,14 +698,14 @@ class RobotVisualizer:
         )
         robot_box.visual.face_colors = [100, 150, 200, 255]  # Blue
         self.robot_mesh = robot_box
-        self.env.add(self.robot_mesh)  # ty: ignore[unresolved-attribute]
+        self.env.add(self.robot_mesh)  # ty: ignore[missing-attribute]
 
         # Add a direction indicator (arrow)
         arrow = trimesh.primitives.Cylinder(
             radius=0.01, height=0.08, transform=SE3(0.06, 0, 0.03) * SE3.Ry(np.pi / 2).A
         )
         arrow.visual.face_colors = [255, 0, 0, 255]  # Red arrow
-        self.env.add(arrow)  # ty: ignore[unresolved-attribute]
+        self.env.add(arrow)  # ty: ignore[missing-attribute]
 
         print("✓ Simple robot visualization created")
 
