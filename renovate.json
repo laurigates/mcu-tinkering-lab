@@ -33,6 +33,12 @@
       "groupName": "just"
     },
     {
+      "description": "Give ty its own PR. It is pinned (==0.0.x) because its rules are renamed and added between releases, so each bump can need ignore-comment edits in the simulation sources (#1228: unresolved-attribute became missing-attribute). Every 0.0.x bump counts as patch, which put it in the grouped non-major PR, where its failure blocked every other update and the fix had to be pushed to a bot branch that auto-resolve-conflicts deletes on conflict.",
+      "matchFileNames": ["packages/robotics/robocar/simulation/**"],
+      "matchPackageNames": ["ty"],
+      "groupName": "ty"
+    },
+    {
       "description": "Hold sphinx below 9.2 in the robocar simulation: sphinx 9.2 requires Python >=3.13 while the simulation's requires-python floor is 3.12, so uv cannot resolve. Drop once the simulation floor moves to 3.13.",
       "matchFileNames": ["packages/robotics/robocar/simulation/**"],
       "matchPackageNames": ["/^sphinx$/i"],
