@@ -498,9 +498,11 @@ typedef struct {
     uint16_t buf[ULTRASONIC_SMOOTH_N]; /**< Front readings, running mean.   */
     uint8_t idx;
     bool full;
-    uint16_t front_cm;      /**< Smoothed front distance; releases the reflex. */
-    uint16_t front_last_cm; /**< Latest front reading (error = max); trips it. */
+    uint16_t front_cm;      /**< Mean of good front readings; releases the reflex. */
+    uint16_t front_last_cm; /**< Latest good front reading; trips the reflex.     */
     uint16_t rear_cm;       /**< Latest rear reading, or ULTRASONIC_DIST_ERROR.  */
+    uint16_t rear_last_cm;  /**< Latest good rear reading; holds a reverse.      */
+    bool front_seen;        /**< A good front reading has arrived since reset.  */
     uint32_t streak[ULTRASONIC_COUNT];
     bool failed[ULTRASONIC_COUNT];
 } rangers_t;
@@ -511,20 +513,17 @@ static rangers_t s_rangers;
 static void rangers_reset(rangers_t *r)
 {
     memset(r, 0, sizeof(*r));
-    /* Before the first reading the path reads as clear, the same value a
-     * failed reading feeds the filter. */
+    /* Before the first good reading the path reads as clear. */
     r->front_cm = ULTRASONIC_MAX_RANGE_CM;
     r->front_last_cm = ULTRASONIC_MAX_RANGE_CM;
     r->rear_cm = ULTRASONIC_DIST_ERROR;
+    r->rear_last_cm = ULTRASONIC_MAX_RANGE_CM;
 }
 
-static uint16_t rangers_smooth(rangers_t *r, uint16_t raw)
+/** Add a good reading to the running mean; a failed read never enters it. */
+static uint16_t rangers_smooth(rangers_t *r, uint16_t cm)
 {
-    /* Treat error values as max range so a single bad reading does not
-     * erroneously trigger the reflex. */
-    const uint16_t clamped = (raw == ULTRASONIC_DIST_ERROR) ? ULTRASONIC_MAX_RANGE_CM : raw;
-
-    r->buf[r->idx] = clamped;
+    r->buf[r->idx] = cm;
     r->idx = (uint8_t)((r->idx + 1u) % ULTRASONIC_SMOOTH_N);
     if (r->idx == 0u) {
         r->full = true;
@@ -543,8 +542,10 @@ static uint16_t rangers_smooth(rangers_t *r, uint16_t raw)
  * Trips on the latest front reading alone, so the reflex fires on the first
  * reading that sees the obstacle instead of waiting ULTRASONIC_SMOOTH_N
  * readings for the mean to follow. Releases only when the mean agrees, so a
- * close reading still in the filter keeps the brake on. A failed read counts as
- * max range in both, so it can neither trip nor hold the reflex.
+ * close reading still in the filter keeps the brake on. A failed read changes
+ * neither, so it can neither trip nor release the reflex (#1185); that holds
+ * after ULTRASONIC_FAIL_STREAK too, so a sensor that dies while the reflex is
+ * latched keeps forward motion held until it reads clear again.
  */
 static bool rangers_reflex(const rangers_t *r)
 {
@@ -554,10 +555,10 @@ static bool rangers_reflex(const rangers_t *r)
 /**
  * Poll both sensors once.
  *
- * A single failed read is deliberately treated as "max range" by the filter,
- * so one bad reading cannot trip the reflex. That hides *sustained* failure,
- * though: a dead sensor then reads as a permanently clear path. The streak
- * makes it visible in telemetry.
+ * A failed read leaves the last good reading standing, so it can neither trip
+ * nor release a rangefinder hold (#1185). That hides *sustained* failure,
+ * though: a sensor that dies on a clear path reads as a permanently clear
+ * path. The streak makes it visible in telemetry.
  *
  * @return Bitmask, bit (1 << id) set for each sensor whose failed flag changed
  *         on this call, so the caller can log the transition once.
@@ -573,10 +574,16 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
         }
         const bool ok = (res == ULTRASONIC_READY);
         if (i == ULTRASONIC_FRONT) {
-            r->front_cm = rangers_smooth(r, ok ? cm : ULTRASONIC_DIST_ERROR);
-            r->front_last_cm = ok ? cm : ULTRASONIC_MAX_RANGE_CM;
+            if (ok) {
+                r->front_cm = rangers_smooth(r, cm);
+                r->front_last_cm = cm;
+                r->front_seen = true;
+            }
         } else {
             r->rear_cm = ok ? cm : ULTRASONIC_DIST_ERROR;
+            if (ok) {
+                r->rear_last_cm = cm;
+            }
         }
 
         const bool was_failed = r->failed[i];
@@ -649,11 +656,13 @@ static bool cliff_allows(cliff_motion_t m)
     return !s_cliff_armed || cliff_permits(&s_cliff, m);
 }
 
-/** Whether something is too close behind to reverse into. A failed or absent
- *  rear sensor reads as clear: reversing then is blind, as it always was. */
+/** Whether something is too close behind to reverse into, by the latest good
+ *  rear reading: a failed read does not release a held reverse (#1185). An
+ *  absent rear sensor reads as clear: reversing then is blind, as it always
+ *  was. */
 static bool rangers_rear_blocked(const rangers_t *r)
 {
-    return r->rear_cm != ULTRASONIC_DIST_ERROR && r->rear_cm < STOP_THRESHOLD_CM;
+    return r->rear_last_cm < STOP_THRESHOLD_CM;
 }
 
 /* -------------------------------------------------------------------------
@@ -864,6 +873,7 @@ static volatile bool s_running = false;
 static portMUX_TYPE s_telem_mux = portMUX_INITIALIZER_UNLOCKED;
 static reactive_telemetry_t s_telemetry = {
     .distance_cm = ULTRASONIC_DIST_ERROR,
+    .distance_valid = false,
     .reflex_active = false,
     .loop_hz = 0,
     .stack_high_water = 0,
@@ -1069,6 +1079,7 @@ static void reactive_task(void *arg)
 
         portENTER_CRITICAL(&s_telem_mux);
         s_telemetry.distance_cm = dist;
+        s_telemetry.distance_valid = s_rangers.front_seen;
         if (reflex && !s_telemetry.reflex_active) {
             s_telemetry.reflex_trips++;
         }
@@ -1485,6 +1496,7 @@ void reactive_controller_tick_for_test(void)
     (void)apply_wheels(&layers, &goal, fresh, head_mode, body, &braked, &cliff_refused);
 
     s_telemetry.distance_cm = dist;
+    s_telemetry.distance_valid = s_rangers.front_seen;
     if (reflex && !s_telemetry.reflex_active) {
         s_telemetry.reflex_trips++;
     }

@@ -121,7 +121,8 @@ static void test_no_open_heading_gives_up_after_max_steps(void)
 
 static void test_a_failed_front_sensor_stays_put(void)
 {
-    /* A failed sensor reads as max range; it must not count as open floor. */
+    /* A failed sensor holds a stale reading, here max range; it must not count
+     * as open floor. */
     const uint16_t front[] = {400, 400, 400, 400, 400};
     const room_t room = {front, 100, true, 0};
     ota_park_t p;

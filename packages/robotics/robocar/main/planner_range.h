@@ -7,9 +7,9 @@
  * the chassis, where anything near fills the frame, and the model reported
  * obstacles as closer than they were. The clause states what the front and rear
  * RCWL-1601s measured, and says "unavailable" for a sensor that stopped
- * answering: a failed read counts as max range in the executor's filter, so
- * reporting the number would tell the model the path is clear when nothing was
- * measured (stateless-model-gating.md §4).
+ * answering: the executor then holds its last good mean, so reporting the
+ * number would tell the model a distance nothing measured
+ * (stateless-model-gating.md §4).
  */
 #ifndef PLANNER_RANGE_H
 #define PLANNER_RANGE_H

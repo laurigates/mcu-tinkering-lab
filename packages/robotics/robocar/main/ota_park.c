@@ -36,7 +36,7 @@ ota_park_cmd_t ota_park_step(ota_park_t *p, uint32_t now_ms, uint16_t front_cm, 
             if (elapsed < p->cfg.settle_ms) {
                 return OTA_PARK_CMD_STOP;
             }
-            /* A failed sensor reads as max range: never take that as open. */
+            /* A failed sensor holds a stale reading: never take that as open. */
             if (!front_ok) {
                 finish(p, OTA_PARK_RESULT_NO_SENSOR, now_ms);
                 return OTA_PARK_CMD_STOP;

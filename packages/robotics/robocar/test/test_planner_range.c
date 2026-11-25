@@ -51,8 +51,8 @@ static void test_reflex_names_what_it_holds(void)
     ASSERT(strstr(out, "holding forward motion") != NULL);
 }
 
-/* The filter maps a failed read to max range; the clause must not pass that
- * on as a clear path. */
+/* A failed sensor holds its last good mean, which can be max range; the clause
+ * must not pass that on as a measured distance or a clear path. */
 static void test_failed_sensor_is_unavailable_not_clear(void)
 {
     planner_range_t r = k_clear;
