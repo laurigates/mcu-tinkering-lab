@@ -40,3 +40,27 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # release-please prints the literal ", closes" before every footer
+      # reference in the notes, `Refs #N` included (conventional-changelog's
+      # commit template), and GitHub reads ", closes [#N](url)" in the
+      # release PR body as a closing keyword: merging #1199 closed three
+      # issues its commits only referenced (#1200). This rewrites the body
+      # the action just wrote to ", refs". The CHANGELOG.md files keep
+      # "closes", which GitHub does not act on. release-please 17.10.4 and
+      # later print "refs" themselves; the action's v5.0.0 bundles 17.6.0.
+      # Drop this step once the pinned action bundles 17.10.4 or later.
+      - name: Keep the release PR from closing issues
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$GH_REPO" --head release-please--branches--main \
+            --state open --json number --jq '.[0].number // empty')
+          [ -n "$pr" ] || exit 0
+          gh api "repos/$GH_REPO/pulls/$pr" --jq '.body // ""' > "$RUNNER_TEMP/body.md"
+          grep -q ', closes \[#' "$RUNNER_TEMP/body.md" || exit 0
+          sed -E 's/, closes (\[#[0-9]+\]\()/, refs \1/g' "$RUNNER_TEMP/body.md" > "$RUNNER_TEMP/new.md"
+          gh api --method PATCH "repos/$GH_REPO/pulls/$pr" -F "body=@$RUNNER_TEMP/new.md" --silent

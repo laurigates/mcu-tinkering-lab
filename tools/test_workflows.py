@@ -38,6 +38,10 @@ What the tests hold:
   other job and runs on ``failure()``. Its step, run here with a stub ``gh``,
   opens an issue naming the tag, the failed jobs and the run, or comments on
   the open issue with the same title (issue #1181).
+- release-please.yml rewrites ``, closes [#N](`` to ``, refs [#N](`` in the
+  release PR body after the action writes it, so merging the release PR does
+  not close issues its commits only referenced (issue #1200). The step runs
+  here with a stub ``gh``.
 - build.yml's discovery step, run here against the repo's own
   project-matrix.json, does not select the robocar firmware for a change
   inside one of the four projects nested in its directory (bringup,
@@ -631,6 +635,94 @@ class ReleaseFailureReportTest(unittest.TestCase):
         self.assertEqual(comment[2], "9")
         self.assertIn("Build robocar", comment[comment.index("--body-file") + 1])
         self.assertFalse([c for c in calls if c[:2] == ["issue", "create"]])
+
+
+class ReleasePrBodyTest(unittest.TestCase):
+    """release-please-action v5.0.0 bundles release-please 17.6.0, which
+    prints ``, closes [#N](url)`` for every footer reference, ``Refs #N``
+    included, so merging the release PR closed issues the commits only
+    referenced (#1200). The step after the action rewrites those to
+    ``, refs``; it runs here with a stub ``gh``."""
+
+    STEP = "Keep the release PR from closing issues"
+    BODY = (
+        "## robocar: 0.3.1\n\n"
+        "* **robocar:** fix a thing ([abc1234](https://x/c/abc1234)), "
+        "closes [#1079](https://x/issues/1079) [#1081](https://x/issues/1081)\n"
+        "* **robocar:** fix another, closes [#1103](https://x/issues/1103)\n"
+        "* fixed, closes the gap ([def5678](https://x/c/def5678))\n"
+    )
+
+    def setUp(self):
+        steps = load("release-please.yml")["jobs"]["release-please"]["steps"]
+        names = [s.get("name") for s in steps]
+        self.assertIn(self.STEP, names)
+        # It reads the body the action just wrote.
+        action = [
+            i
+            for i, s in enumerate(steps)
+            if str(s.get("uses", "")).startswith("googleapis/release-please-action@")
+        ]
+        self.assertEqual(len(action), 1)
+        self.assertGreater(names.index(self.STEP), action[0])
+        self.step = steps[names.index(self.STEP)]
+        self.assertIn("cancelled()", str(self.step.get("if")))
+
+    def run_step(self, pr: str, body: str) -> list[list[str]]:
+        with tempfile.TemporaryDirectory() as scratch:
+            bin_dir = Path(scratch) / "bin"
+            bin_dir.mkdir()
+            log = Path(scratch) / "calls.jsonl"
+            stub = bin_dir / "gh"
+            stub.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "args = sys.argv[1:]\n"
+                "args = [open(a[6:]).read() if a.startswith('body=@') else a\n"
+                "        for a in args]\n"
+                "open(os.environ['STUB_LOG'], 'a').write(json.dumps(args) + '\\n')\n"
+                "if args[:2] == ['pr', 'list']:\n"
+                "    print(os.environ['STUB_PR'])\n"
+                "elif args[:1] == ['api'] and '--method' not in args:\n"
+                "    sys.stdout.write(os.environ['STUB_BODY'])\n"
+            )
+            stub.chmod(0o755)
+            env = {
+                **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                "GH_REPO": "o/r",
+                "RUNNER_TEMP": scratch,
+                "STUB_LOG": str(log),
+                "STUB_PR": pr,
+                "STUB_BODY": body,
+            }
+            proc = subprocess.run(
+                ["bash", "-c", self.step["run"]],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            return [json.loads(line) for line in log.read_text().splitlines()]
+
+    def test_closes_becomes_refs(self):
+        calls = self.run_step("1199", self.BODY)
+        (patch,) = [c for c in calls if "PATCH" in c]
+        self.assertIn("repos/o/r/pulls/1199", patch)
+        (body,) = [a for a in patch if a.startswith("## robocar")]
+        self.assertEqual(
+            body.strip(),
+            self.BODY.replace(", closes [#", ", refs [#").strip(),
+        )
+        self.assertIn(", closes the gap", body)
+
+    def test_a_body_without_closes_is_left_alone(self):
+        calls = self.run_step("1199", self.BODY.replace(", closes [#", ", refs [#"))
+        self.assertFalse([c for c in calls if "PATCH" in c])
+
+    def test_no_open_release_pr_does_nothing(self):
+        calls = self.run_step("", self.BODY)
+        self.assertEqual([c[:2] for c in calls], [["pr", "list"]])
 
 
 @unittest.skipUnless(shutil.which("jq"), "the discovery step needs jq")
