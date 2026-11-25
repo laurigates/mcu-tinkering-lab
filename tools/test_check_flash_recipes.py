@@ -1344,6 +1344,22 @@ class SharedRecipeTests(TempRepo):
         self.consumer(sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n')
         self.assertEqual(self.findings(), ["FLASH_SIZE"])
 
+    def test_an_8mb_part_in_the_bool_form_is_a_mismatch(self):
+        # #1177: ESP-IDF's menuconfig writes the choice as a bool.
+        self.consumer(sdkconfig="CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y\n")
+        self.assertEqual(self.findings(), ["FLASH_SIZE"])
+
+    def test_a_4mb_part_in_the_bool_form_fits(self):
+        self.consumer(sdkconfig="CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y\n")
+        self.assertEqual(self.findings(), [])
+        self.assertEqual(cfr.collect()[0].flash_size, "4MB")
+
+    def test_the_two_forms_disagreeing_is_a_finding(self):
+        self.consumer(
+            sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="4MB"\nCONFIG_ESPTOOLPY_FLASHSIZE_8MB=y\n'
+        )
+        self.assertIn("FLASH_SIZE_CONFLICT", self.findings())
+
     def test_an_8mb_part_on_the_esp32_recipe_is_fine(self):
         # _esp32-flash passes `--flash-size detect`, so any size fits.
         self.consumer(

@@ -112,6 +112,7 @@ class Project:
     shared: str
     target: str | None = None
     flash_size: str | None = None
+    flash_size_conflict: str | None = None
     partition_source: str = "(idf default)"
     app_offset: int | None = None
     has_otadata: bool = False
@@ -133,6 +134,30 @@ def parse_sdkconfig(path: Path) -> dict[str, str]:
         key, _, raw = line.partition("=")
         values[key.strip()] = raw.strip().strip('"')
     return values
+
+
+FLASHSIZE_KEY = "CONFIG_ESPTOOLPY_FLASHSIZE"
+
+
+def declared_flash_size(cfg: dict[str, str]) -> tuple[str | None, str | None]:
+    """The flash size sdkconfig.defaults declares, and a conflict if any (#1177).
+
+    ESP-IDF's choice is usually written as the bool `..._FLASHSIZE_8MB=y`;
+    the string `..._FLASHSIZE="8MB"` is read too. Returns (size, conflict),
+    where conflict describes forms that disagree.
+    """
+    sizes = {
+        key[len(FLASHSIZE_KEY) + 1 :]
+        for key, value in cfg.items()
+        if key.startswith(FLASHSIZE_KEY + "_") and value == "y"
+    }
+    if FLASHSIZE_KEY in cfg:
+        sizes.add(cfg[FLASHSIZE_KEY])
+    if len(sizes) > 1:
+        return max(sizes, key=lambda s: SIZE_TO_BYTES.get(s, 0)), ", ".join(
+            sorted(sizes)
+        )
+    return next(iter(sizes), None), None
 
 
 ATTRIBUTE_HINT = (
@@ -812,7 +837,7 @@ def collect() -> list[Project]:
             proj.target = target_match.group("target") if target_match else None
 
             cfg = parse_sdkconfig(justfile.parent / "sdkconfig.defaults")
-            proj.flash_size = cfg.get("CONFIG_ESPTOOLPY_FLASHSIZE")
+            proj.flash_size, proj.flash_size_conflict = declared_flash_size(cfg)
 
             # The table the build uses, from the predicate the release path and
             # the dry-run audit read, built-in presets included (issue #684).
@@ -844,6 +869,15 @@ def audit(proj: Project) -> None:
     # 2. Flash size is written into the bootloader header by esptool. Declaring
     #    more than the recipe writes means the header understates the part, and
     #    any partition past the header size is unreachable.
+    if proj.flash_size_conflict:
+        proj.findings.append(
+            Finding(
+                proj.name,
+                "FLASH_SIZE_CONFLICT",
+                f"sdkconfig.defaults declares more than one flash size "
+                f"({proj.flash_size_conflict}); keep one",
+            )
+        )
     want = spec["flash_size"]
     if want and proj.flash_size:
         declared = SIZE_TO_BYTES.get(proj.flash_size)
