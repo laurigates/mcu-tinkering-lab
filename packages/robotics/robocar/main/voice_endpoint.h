@@ -66,6 +66,15 @@ extern "C" {
  *  than the 3.5 s window this module replaced. */
 #define VOICE_ENDPOINT_MARGIN_DB_DEFAULT 6u
 
+/** Least speech frames (64 ms each) recorded after the cue for a hands-free
+ *  clip to be sent (issue #949). On 2026-11-05 a clip with 4 got a confident
+ *  reply that fitted nothing said, and clips with 16-31 got on-topic ones; 8
+ *  (~0.5 s of speech) sits between. A starting point to check on the bench,
+ *  not a measured constant. The pre-roll is not counted (it holds the trigger
+ *  sound on every turn, a false one included), so a short question said
+ *  wholly before the beep is dropped too: the bench must check for that. */
+#define VOICE_ENDPOINT_MIN_SPEECH_FRAMES 8u
+
 typedef struct {
     uint32_t min_ms;     /**< Least recording before silence may end it. */
     uint32_t max_ms;     /**< Hard ceiling; the memory bound. */
@@ -104,6 +113,14 @@ void voice_endpoint_begin(voice_endpoint_t *ep, const voice_endpoint_cfg_t *cfg,
  */
 voice_endpoint_verdict_t voice_endpoint_update(voice_endpoint_t *ep, int16_t level_db,
                                                int16_t floor_db, uint32_t now_ms);
+
+/**
+ * @brief Whether the recording heard enough speech to be worth a request.
+ *
+ * False below VOICE_ENDPOINT_MIN_SPEECH_FRAMES: the clip is then mostly
+ * pre-roll and silence, and the model answers a fragment it filled in itself.
+ */
+bool voice_endpoint_enough_speech(const voice_endpoint_t *ep);
 
 /** @brief Short name for a verdict, for the log line. */
 const char *voice_endpoint_verdict_name(voice_endpoint_verdict_t v);

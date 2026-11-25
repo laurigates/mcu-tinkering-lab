@@ -166,6 +166,10 @@ void voice_budget_note_ignored(bool vad);
 /** @brief Count a hands-free trigger the ration refused. */
 void voice_budget_note_refused(void);
 
+/** @brief Count a hands-free clip not sent for too little speech (#949). Like
+ *         an ignored turn it is a false wake, but no request was made. */
+void voice_budget_note_dropped(void);
+
 /** @brief Clear the trip and zero the counters. The operator's `voice resume`.
  *         The ration window is cleared too, so a resumed board starts fresh. */
 void voice_budget_resume(void);
@@ -193,6 +197,9 @@ uint32_t voice_budget_ignored_listen(void);
 
 /** @brief Hands-free triggers refused by the ration. */
 uint32_t voice_budget_refused(void);
+
+/** @brief Hands-free clips not sent for too little speech (#949). */
+uint32_t voice_budget_dropped(void);
 
 #ifdef __cplusplus
 }

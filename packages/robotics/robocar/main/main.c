@@ -640,6 +640,8 @@ static void handle_periph_cmd(const char *buf)
  * Shared by `voice`, `voice turns` and a refused `listen`, so all three say the
  * same thing. The ignored count sits beside the hands-free count on purpose:
  * the two close together is the sign that `voice trigger` is too permissive.
+ * "not sent" (#949) is hands-free wakes with too little speech to upload: false
+ * wakes too, but outside the request count, so read it beside both.
  */
 static void print_voice_turn_budget(const char *indent, uint32_t now_ms)
 {
@@ -653,9 +655,10 @@ static void print_voice_turn_budget(const char *indent, uint32_t now_ms)
     if (ceiling) {
         printf("/%u", (unsigned)ceiling);
     }
-    printf(" requests (hands-free %u, ignored %u; listen %u, ignored %u)%s\n", (unsigned)vad,
-           (unsigned)voice_budget_ignored_vad(), (unsigned)listen,
-           (unsigned)voice_budget_ignored_listen(), ceiling ? "" : " — NO CEILING");
+    printf(" requests (hands-free %u, ignored %u, not sent %u; listen %u, ignored %u)%s\n",
+           (unsigned)vad, (unsigned)voice_budget_ignored_vad(), (unsigned)voice_budget_dropped(),
+           (unsigned)listen, (unsigned)voice_budget_ignored_listen(),
+           ceiling ? "" : " — NO CEILING");
 
     uint8_t ration_max = 0;
     uint32_t ration_window_ms = 0;

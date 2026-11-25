@@ -29,6 +29,7 @@ static uint32_t s_vad_requests;
 static uint32_t s_ignored_vad;
 static uint32_t s_ignored_listen;
 static uint32_t s_refused;
+static uint32_t s_dropped;
 
 /** Saturating increment. A wrapped request counter reads as a fresh boot and
  *  would silently un-trip the ceiling — plan_budget.c's reasoning, same fuse. */
@@ -49,6 +50,7 @@ static void clear_counters(void)
     s_ignored_vad = 0u;
     s_ignored_listen = 0u;
     s_refused = 0u;
+    s_dropped = 0u;
 }
 
 void voice_budget_init(void)
@@ -168,6 +170,11 @@ void voice_budget_note_refused(void)
     bump(&s_refused);
 }
 
+void voice_budget_note_dropped(void)
+{
+    bump(&s_dropped);
+}
+
 void voice_budget_resume(void)
 {
     clear_counters();
@@ -196,4 +203,9 @@ uint32_t voice_budget_ignored_listen(void)
 uint32_t voice_budget_refused(void)
 {
     return s_refused;
+}
+
+uint32_t voice_budget_dropped(void)
+{
+    return s_dropped;
 }

@@ -171,6 +171,35 @@ static void test_survives_the_uint32_wrap(void)
     ASSERT(voice_endpoint_update(&ep, SPEECH, FLOOR, start + 6000u) == VOICE_ENDPOINT_END_MAX);
 }
 
+/* Issue #949: a 2524 ms clip with 4 speech frames after the cue got a
+ * confident reply that fitted nothing said; clips with 16-31 frames got
+ * on-topic ones. A clip that thin is not uploaded. */
+static void test_a_clip_with_too_little_speech_is_not_sent(void)
+{
+    const voice_endpoint_cfg_t c = cfg();
+    voice_endpoint_t ep;
+    voice_endpoint_begin(&ep, &c, 0u);
+    ASSERT(!voice_endpoint_enough_speech(&ep)); /* begin() alone is not a frame */
+
+    uint32_t t = 0u;
+    for (uint32_t i = 0; i < 4u; i++) {
+        t += 64u;
+        (void)voice_endpoint_update(&ep, SPEECH, FLOOR, t);
+    }
+    ASSERT(ep.speech_frames == 4u);
+    ASSERT(!voice_endpoint_enough_speech(&ep)); /* the misheard clip */
+
+    while (ep.speech_frames < VOICE_ENDPOINT_MIN_SPEECH_FRAMES) {
+        t += 64u;
+        (void)voice_endpoint_update(&ep, SPEECH, FLOOR, t);
+    }
+    ASSERT(voice_endpoint_enough_speech(&ep));
+
+    /* Between the 4 that misfired and the 16 that worked. */
+    ASSERT(VOICE_ENDPOINT_MIN_SPEECH_FRAMES > 4u && VOICE_ENDPOINT_MIN_SPEECH_FRAMES < 16u);
+    ASSERT(!voice_endpoint_enough_speech(NULL));
+}
+
 static void test_verdicts_have_names(void)
 {
     ASSERT(voice_endpoint_verdict_name(VOICE_ENDPOINT_END_SILENCE)[0] == 's');
@@ -193,6 +222,8 @@ int main(void)
              test_the_ceiling_ends_a_turn_that_never_goes_quiet);
     test_run("margin 0 runs to the ceiling", test_margin_zero_runs_to_the_ceiling);
     test_run("survives the uint32 wrap", test_survives_the_uint32_wrap);
+    test_run("a clip with too little speech is not sent",
+             test_a_clip_with_too_little_speech_is_not_sent);
     test_run("verdicts have names", test_verdicts_have_names);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
