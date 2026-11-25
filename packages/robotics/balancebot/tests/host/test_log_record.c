@@ -24,12 +24,21 @@ static void test_csv_matches_stream_format(void)
                    .setpoint_deg = 0.5f,
                    .rate_sps = -3999.96f,
                    .loop_us = 87.25f,
-                   .pos_m = 0.012345f};
+                   .pos_m = 0.012345f,
+                   .pack_cv = 1260};
     char buf[LOG_CSV_LINE_MAX];
     size_t n = log_row_format_csv(&r, buf, sizeof buf);
-    const char *want = "123456,1,-1.235,12.35,0.500,-4000.0,87.2,1,0.0123\n";
+    const char *want = "123456,1,-1.235,12.35,0.500,-4000.0,87.2,1,0.0123,12.60\n";
     assert(n == strlen(want));
     assert(strcmp(buf, want) == 0);
+    // No pack on D0 (pack_cv 0) is `nan`: analyze_capture.py reads every
+    // column as a float, and 0.00 would pass for a flat pack.
+    r.pack_cv = 0;
+    n = log_row_format_csv(&r, buf, sizeof buf);
+    const char *want_absent = "123456,1,-1.235,12.35,0.500,-4000.0,87.2,1,0.0123,nan\n";
+    assert(n == strlen(want_absent));
+    assert(strcmp(buf, want_absent) == 0);
+    r.pack_cv = 1260;
     // The header has as many columns as a row.
     int commas_header = 0, commas_row = 0;
     for (const char *p = LOG_CSV_HEADER; *p; p++) {
@@ -53,7 +62,8 @@ static void test_csv_widest_row_fits(void)
                    .setpoint_deg = -1e30f,
                    .rate_sps = -1e30f,
                    .loop_us = -1e30f,
-                   .pos_m = -1e30f};
+                   .pos_m = -1e30f,
+                   .pack_cv = 65535};
     char buf[512];
     size_t n = log_row_format_csv(&r, buf, sizeof buf);
     assert(n > 0);
@@ -66,7 +76,8 @@ static void test_csv_widest_row_fits(void)
                            .setpoint_deg = -180.0f,
                            .rate_sps = -100000.0f,
                            .loop_us = 100000.0f,
-                           .pos_m = -1000.0f};
+                           .pos_m = -1000.0f,
+                           .pack_cv = 65535};
     char small[LOG_CSV_LINE_MAX];
     assert(log_row_format_csv(&plausible, small, sizeof small) > 0);
 }
@@ -83,12 +94,13 @@ static void test_row_from_snapshot(void)
     s.rate_cmd_sps = 1200.0f;
     s.loop_us = 90.0f;
     s.pos_m = 0.3f;
-    log_row_t r = log_row_from_snapshot(&s, 777u);
+    log_row_t r = log_row_from_snapshot(&s, 777u, 1050u);
     assert(r.t_ms == 777u);
     assert(r.state == BAL_STATE_FAULT && r.ctrl == CTRL_PID);
     assert(r.angle_deg == 46.0f && r.gyro_dps == -3.0f && r.setpoint_deg == 0.25f);
     assert(r.rate_sps == 1200.0f && r.loop_us == 90.0f && r.pos_m == 0.3f);
-    assert(r.reserved == 0);
+    assert(r.pack_cv == 1050u);
+    assert(log_row_from_snapshot(&s, 778u, 0u).pack_cv == 0u);
 }
 
 static void test_ring_order_and_wrap(void)

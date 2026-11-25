@@ -7,6 +7,7 @@
 #include "config.h"
 #include "hardware/gpio.h"
 #include "log.h"
+#include "pack.h"
 #include "param_store.h"
 #include "pico/flash.h"
 #include "pico/multicore.h"
@@ -55,6 +56,7 @@ int main(void)
 
     while (true) {
         cli_poll();
+        pack_poll();
         telemetry_poll();
         log_poll();
 

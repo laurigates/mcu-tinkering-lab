@@ -46,12 +46,16 @@ typedef struct {
     // ---- v4 (PARAM_VERSION 4): pitch trim. The v3 fields above stay a
     // prefix; a v3 record migrates with pitch_trim_deg = 0.
     float pitch_trim_deg;  // pitch read at the balance point; subtracted from every sample
+    // ---- v5 (PARAM_VERSION 5): pack sense (#747). The v4 fields above stay a
+    // prefix; a v4 record migrates with the delivered boards' divider and 3S.
+    float pack_r_low_kohm;  // R3 of the D0 pack divider (R2 is 100 kOhm): 27 delivered, 22 rev3
+    float pack_cells;       // cell count the low-pack warning and cutoff scale with
 } balance_params_t;
 
 typedef enum {
     BAL_STATE_IDLE = 0,   // disarmed, waiting for arm gesture or CLI
     BAL_STATE_RUN = 1,    // balancing
-    BAL_STATE_FAULT = 2,  // tilt cutoff tripped; clears after upright hold
+    BAL_STATE_FAULT = 2,  // tilt or low-pack cutoff tripped; clears after upright hold
 } balance_state_t;
 
 typedef enum {
@@ -66,6 +70,7 @@ typedef enum {
     CMD_SET_IMU_MOUNT = 8,   // imu_mount (imu_mount_t); refused in RUN
     CMD_HOLD_OFF_ARM = 9,    // value = seconds the auto-arm gesture is ignored
     CMD_DRIVE = 10,          // drive (drive.h); RUN only, cleared on any state change
+    CMD_SET_PACK_LOW = 11,   // value != 0: pack cutoff latched (FAULT in RUN, no arming)
 } command_id_t;
 
 typedef enum {
@@ -85,6 +90,8 @@ typedef enum {
     PARAM_Q_DX,
     PARAM_R,
     PARAM_PITCH_TRIM,
+    PARAM_PACK_R_LOW,
+    PARAM_PACK_CELLS,
     PARAM_COUNT,
 } param_id_t;
 
@@ -92,7 +99,7 @@ typedef struct {
     uint8_t cmd;       // command_id_t
     uint8_t param_id;  // param_id_t or motor index
     union {
-        float value;         // CMD_SET_PARAM, CMD_OPEN_LOOP_RATE
+        float value;         // CMD_SET_PARAM, CMD_OPEN_LOOP_RATE, CMD_SET_PACK_LOW
         float lqr_K[LQR_N];  // CMD_SET_LQR_GAINS, u = -(K . s) in m/s^2
         uint8_t ctrl_mode;   // CMD_SET_CONTROLLER (ctrl_mode_t)
         uint8_t imu_mount;   // CMD_SET_IMU_MOUNT (imu_mount_t)
@@ -146,6 +153,8 @@ typedef struct {
     uint32_t imu_bus_recoveries;
     // Ticks left of the auto-arm hold-off (0 when the gesture can arm).
     uint32_t arm_holdoff_ticks;
+    // The pack cutoff core 0 handed over (CMD_SET_PACK_LOW) is in force.
+    bool pack_low;
     // True while core 1 is still in its startup (IMU init and the boot gyro
     // calibration, up to IMU_CAL_BOOT_TRIES s), before its loop's first tick.
     bool core1_starting;

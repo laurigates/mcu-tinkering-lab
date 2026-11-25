@@ -119,6 +119,21 @@ add_executable(test_cliff_core
 add_test(NAME cliff_core COMMAND test_cliff_core)
 
 # -----------------------------------------------------------------------------
+# Pack cutoff and power button (ADR-038, issue #1271)
+#
+# power_core.c compiled unmodified: the divider ratio, the low-pack threshold
+# with its hysteresis band and minimum duration (a motor-start sag must not
+# trip it, issue #991), a missing pack and failed reads never tripping it, and
+# the long press that switches the robot off, which ignores the press that
+# switched it on.
+# -----------------------------------------------------------------------------
+add_executable(test_power_core
+    "${MAIN_SRC_DIR}/power_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_power_core.c"
+)
+add_test(NAME power_core COMMAND test_power_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller

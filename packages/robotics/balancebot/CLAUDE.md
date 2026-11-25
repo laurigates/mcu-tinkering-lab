@@ -46,11 +46,11 @@ before the battery). The procedure itself is in README "Tuning loop".
 
 ```bash
 just balancebot::build   # containerized, → build/balancebot.uf2
-just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal, drive, log_record
+just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate, imu_cal, drive, log_record, pack_sense
 ```
 
 `pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c`, `param_record.c`, `arm_gate.c`,
-`cli_gate.c`, `imu_cal.c`, `drive.c` and `log_record.c` are **pure C with no SDK includes** so the host tests can compile
+`cli_gate.c`, `imu_cal.c`, `drive.c`, `log_record.c` and `pack_sense.c` are **pure C with no SDK includes** so the host tests can compile
 them — keep them that way. The gyro calibration's stillness judgement and
 `trim capture`'s average live in `imu_cal.c`; keep `mpu6050_calibrate_gyro()`
 and `cmd_trim()` calling it. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live
@@ -58,7 +58,10 @@ in `arm_gate.c` for that reason; keep `handle_command()` calling it. The CLI's
 `arm`, `mount` and `load` refusals, and what `arm` and a sent mount report
 once core 1 drained them, live in `cli_gate.c`; keep `cmd_arm()`, `cmd_mount()`,
 `adopt_mount()` and the `load` branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
-The untethered run log (ADR-037) follows the same split: `log_record.c` holds
+The carrier's pack-voltage sense (#747) follows the same split: `pack_sense.c`
+holds the divider scale, the absent judgement and the warning and cutoff
+monitor, `pack.c` reads D0 on core 0 and sends core 1 `CMD_SET_PACK_LOW`, and
+core 1 FAULTs in RUN and refuses to arm while it is set. The untethered run log (ADR-037) follows the same split: `log_record.c` holds
 the row format, ring, session and header, `log_store.c` only moves its bytes,
 and `log.c` samples on core 0. `stream` formats its rows with
 `log_row_format_csv()`, so `log dump` and a USB capture stay identical.

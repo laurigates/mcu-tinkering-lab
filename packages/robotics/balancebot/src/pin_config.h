@@ -24,9 +24,11 @@
 #define PIN_RGB_DATA 22         // RGB LED data (WS2812-type, via a level shifter); PIO1
 #define PIN_RGB_POWER 23        // RGB LED 5 V load switch enable (NEO_PWR), active high
 
-// Carrier PCB only: pack voltage through a 100k/22k divider (ratio 0.1803:
-// 12.6 V, a full 3S pack, reads 2.27 V; 16.8 V, a full 4S pack, 3.03 V). The
-// hand-wired harness leaves D0 free; firmware does not read it yet (#747).
+// Carrier PCB only: pack voltage through a 100k/R3 divider: R3 = 27k on the
+// delivered boards (12.6 V, a full 3S pack, reads 2.68 V) and 22k on rev3 (2.27 V;
+// 16.8 V, a full 4S pack, 3.03 V). Core 0 reads it (pack.c) with R3 from the
+// `pack_r_kohm` parameter. The hand-wired harness leaves D0 free; it then reads
+// as absent (#747).
 #define PIN_PACK_SENSE 26  // XIAO D0, ADC0
 
 // Carrier PCB only (rev3): the expansion header J6 (5V, GND, D2, D1), each

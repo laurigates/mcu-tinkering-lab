@@ -4,7 +4,8 @@
 #
 # Connect: SW to pack-input-pfet-switched's SW; BTN to a momentary button whose
 # other side is GND (a tact switch, or a chassis button on a connector); HOLD
-# and SENSE to two MCU GPIOs.
+# and SENSE to two MCU GPIOs. HOLD_PD is the pull-down's end of the same net:
+# tie it to the HOLD GPIO too (a net takes one pin, so it is a port of its own).
 #
 # Off: SW sits at the pack's voltage (the switched block's gate pull-up), HOLD
 # is low (hold_pd), the FET is off, nothing conducts.
@@ -44,7 +45,8 @@ note = "firmware must drive HOLD high at boot and low to power off"
 SW = ["d_sw.A", "hold.D"]
 BTN = ["d_sw.K", "d_sense.K"]
 SENSE = ["d_sense.A"]
-HOLD = ["hold.G", "hold_pd.A"]
+HOLD = ["hold.G"]
+HOLD_PD = ["hold_pd.A"]
 GND = ["hold.S", "hold_pd.B"]
 
 [parts.hold]

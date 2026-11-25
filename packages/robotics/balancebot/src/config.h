@@ -46,6 +46,12 @@
 #define DEFAULT_Q_DX LQR_DEFAULT_Q_DX
 #define DEFAULT_R LQR_DEFAULT_R
 
+// Pack sense (#747, pack_sense.h): the carrier's D0 divider. The delivered boards
+// (8d18cd8d layout) have R3 = 27 kOhm and are 3S only; rev3 has 22 kOhm.
+#define DEFAULT_PACK_R_LOW_KOHM 27.0f
+#define DEFAULT_PACK_CELLS 3.0f
+#define PACK_POLL_MS 100  // one pack reading per poll; the cutoff clock counts these
+
 // Fixed limits (not runtime-tunable)
 #define MAX_ACCEL_SPS2 40000.0f      // acceleration clamp (steps/s^2)
 #define MIN_RATE_SPS 30.0f           // below this the PIO SM is parked
@@ -69,7 +75,8 @@
 #define DRIVE_MAX_S 30.0f         // longest duration accepted
 #define DRIVE_X_LEAD_MAX_M 0.05f  // LQR position reference kept this close to the wheels
 
-// Safety
+// Safety. A low pack (pack_sense.h) stops the motors with a FAULT as well, and
+// arming is refused while its cutoff is latched.
 #define TILT_CUTOFF_DEG 45.0f  // beyond this: motors off, FAULT
 // ±3 deg (was ±1 until 2026-11-23, too narrow to hold by hand). With the trim
 // set, the LQR at r = 10 catches far more than this: its angle gain alone

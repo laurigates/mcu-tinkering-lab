@@ -16,6 +16,7 @@
 #include "ota_manager.h"
 #include "plan_activity.h"
 #include "plan_budget.h"
+#include "power_manager.h"
 #include "reactive_controller.h"
 #include "servo_controller.h"
 #include "ultrasonic_core.h"
@@ -55,6 +56,8 @@ static void collect(oled_status_t *s)
     s->plan_fused = !plan_budget_allows();
     s->plan_requests = plan_budget_requests();
     plan_budget_get(&s->plan_max_requests, NULL);
+
+    s->pack_mv = power_manager_pack_mv();
 
     reactive_telemetry_t tele;
     if (reactive_controller_get_telemetry(&tele) == ESP_OK) {

@@ -50,7 +50,9 @@
 #let PIEZO_PIN = 2
 // ── UART0 header pads ──
 #let UART0_TX_PIN = 43
-#let UART0_RX_PIN = 44
+// ── Power latch and pack monitor ──
+#let POWER_HOLD_PIN = 44
+#let PACK_SENSE_PIN = 4
 // ── MAX98357A I2S Audio ──
 #let I2S_BCLK_PIN = 7
 #let I2S_LRCLK_PIN = 8

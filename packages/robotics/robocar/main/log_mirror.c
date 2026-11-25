@@ -134,8 +134,9 @@ static esp_err_t uart_setup(void)
     }
     err = uart_param_config(LOG_MIRROR_UART, &cfg);
     if (err == ESP_OK) {
-        /* TX only. RX stays where it is (UART_PIN_NO_CHANGE): D7 is not wired
-         * on the carrier, and nothing here claims GPIO44. */
+        /* TX only. RX stays where it is (UART_PIN_NO_CHANGE): nothing here
+         * claims GPIO44, which is the power latch's HOLD output
+         * (POWER_HOLD_PIN) on the socketed carrier. */
         err = uart_set_pin(LOG_MIRROR_UART, UART0_TX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
                            UART_PIN_NO_CHANGE);
     }

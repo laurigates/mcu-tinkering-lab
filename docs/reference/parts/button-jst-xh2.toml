@@ -1,0 +1,14 @@
+# A momentary push button, off-board, on a JST-XH 2-pin lead (the robocar power
+# button, ADR-038 / #1270). A switch has no polarity: pin 1 is the carrier's
+# BTN node and pin 2 is GND by this repo's convention, and a reversed lead
+# works the same.
+[part]
+name = "Push button on JST-XH 2"
+source = "this repo's cable convention (#750), as dc-motor-jst-xh2: pin 1 of the connector on the signal, pin 2 on ground; symbol and footprint as dc-motor-jst-xh2 (KiCad 10.0.6 Connector_Generic:Conn_01x02, Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+buy = "aliexpress:1005009919435223"  # JST-XH set: header, housing, crimps (the button itself is not on the BOM)
+
+[pins]
+"1" = 1
+"2" = 2

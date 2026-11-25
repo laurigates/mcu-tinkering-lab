@@ -80,7 +80,7 @@ just balancebot::monitor        # watch output only; it sends nothing you type
 
 ```
 help                 # command list
-stat                 # firmware, state, gains, maxrate, model, calibration, angle, battery, loop time
+stat                 # firmware, state, gains, maxrate, model, calibration, angle, battery, pack, loop time
 stream on 50         # CSV telemetry at 50 Hz (plot with any serial plotter)
 log                  # run log: on/off, rate, last save, the run stored in flash (see "Untethered run log")
 log dump             # print the stored run as CSV (disarmed only)
@@ -97,6 +97,8 @@ rate l 800           # open-loop motor bench test (disarmed only)
 cal                  # gyro bias calibration (keep the robot still); reports ok or moved
 save                 # persist gains to flash (survives power cycle)
 load                 # reload the saved params, gains and mount from flash (disarmed only)
+set pack_r_kohm 22   # carrier divider R3: 27 (delivered boards, the default) or 22 (rev3); then `save`
+set pack_cells 4     # cell count the pack warning and cutoff scale with (default 3)
 ```
 
 `arm`, `mount` and `load` judge the state after the commands typed before them
@@ -116,8 +118,9 @@ at most), and refuse rather than print `OK` when core 1 would ignore them:
 - Any of them while core 1 is still busy with earlier commands (a `save`
   stalls it ~45 ms): `ERR: core 1 busy …`; nothing is sent, so repeat it.
 
-CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m`
-(`ctrl` 0 = PID, 1 = LQR; `pos_m` = commanded wheel travel since arming).
+CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m,pack_v`
+(`ctrl` 0 = PID, 1 = LQR; `pos_m` = commanded wheel travel since arming;
+`pack_v` = pack voltage in volts, `nan` with no pack on D0).
 Columns are only ever appended, so plots that index by position keep working.
 
 ### Fitting `l_eff_m` from a capture
@@ -364,6 +367,17 @@ wheels and the 40 000 steps/s² clamp.
   while the MCU boots, resets, or sits in BOOTSEL.
 - Tilt cutoff: |pitch| > 45° disables the drivers (FAULT, fast LED blink);
   clears after 2 s upright.
+- Low-pack cutoff (carrier PCB only): core 0 reads the pack through the divider
+  on D0 (`stat` line `pack:`) ten times a second. Below 3.5 V per cell (10.5 V
+  for 3S) it warns; below 3.0 V per cell (9.0 V for 3S) for 1 s it latches, and
+  core 1 stops the motors with a FAULT, the same as the tilt cutoff, and
+  refuses `arm` and the auto-arm gesture. The latch releases once the pack
+  reads 0.3 V per cell above the cutoff (9.9 V for 3S). The FAULT also saves
+  the run log (ADR-037). Set `pack_r_kohm` to the board's R3 (27 for the
+  delivered boards, 22 for rev3) and `pack_cells` to the pack; a wrong
+  `pack_r_kohm` reads about 18 % off. With nothing on D0 (the hand-wired
+  harness) `stat` says `pack: absent`, the CSV column `pack_v` is `nan`, and
+  nothing is stopped. The BMS cutoff stays the backup (ADR-038).
 - Hardware watchdog (100 ms) fed only by the control loop, enabled at
   first arm — a wedged loop reboots into motors-off.
 - Motors arm only via `arm` or the deliberate hold-upright-3 s gesture.

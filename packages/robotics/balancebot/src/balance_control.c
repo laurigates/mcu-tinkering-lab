@@ -10,6 +10,7 @@
 #include "imu_filter.h"
 #include "lqr.h"
 #include "mpu6050.h"
+#include "pack_sense.h"
 #include "param_record.h"
 #include "param_store.h"
 #include "pico/flash.h"
@@ -49,6 +50,7 @@ static drive_t drive;              // speed/turn references; zeroed on every sta
 static float open_loop_sps[STEPPER_COUNT];
 static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
 static arm_gate_t arm_gate;     // last raw sample and CMD_ARM's gravity gate
+static bool pack_low;           // core 0's pack cutoff latch (CMD_SET_PACK_LOW)
 static bool save_ok;
 static uint32_t save_count;
 static bool watchdog_started;
@@ -169,6 +171,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.imu_bus_recoveries = mpu6050_bus_recoveries();
     snapshot.arm_holdoff_ticks =
         arm_gesture_held_off(tick, arm_holdoff_until) ? arm_holdoff_until - tick : 0u;
+    snapshot.pack_low = pack_low;
     snapshot.core1_starting = core1_starting;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
@@ -269,6 +272,18 @@ static void handle_command(const balance_cmd_t *cmd)
                         params.pitch_trim_deg = cmd->value;
                     }
                     break;
+                // Core 0 reads and judges the pack; core 1 keeps these only so
+                // CMD_SAVE writes the whole record.
+                case PARAM_PACK_R_LOW:
+                    if (pack_r_low_valid(cmd->value)) {
+                        params.pack_r_low_kohm = cmd->value;
+                    }
+                    break;
+                case PARAM_PACK_CELLS:
+                    if (pack_cells_valid(cmd->value)) {
+                        params.pack_cells = cmd->value;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -280,7 +295,8 @@ static void handle_command(const balance_cmd_t *cmd)
             // in the snapshot for core 0 to report. arm_gate_allows() takes
             // the mount as it stands now, so a CMD_SET_IMU_MOUNT drained just
             // ahead in this tick counts.
-            if (state == BAL_STATE_IDLE && arm_gate_allows(&arm_gate, params.imu_mount)) {
+            if (state == BAL_STATE_IDLE && !pack_low &&
+                arm_gate_allows(&arm_gate, params.imu_mount)) {
                 enter_state(BAL_STATE_RUN);
             }
             break;
@@ -288,6 +304,10 @@ static void handle_command(const balance_cmd_t *cmd)
             enter_state(BAL_STATE_IDLE);
             // Disarmed while held upright, the gesture would re-arm it 3 s on.
             hold_off_arm(ARM_HOLDOFF_AFTER_DISARM_S);
+            break;
+        case CMD_SET_PACK_LOW:
+            // The cutoff itself is checked in the RUN branch each tick.
+            pack_low = cmd->value != 0.0f;
             break;
         case CMD_HOLD_OFF_ARM:
             hold_off_arm(cmd->value);
@@ -453,7 +473,7 @@ void balance_control_core1_main(void)
 
         switch (state) {
             case BAL_STATE_RUN:
-                if (!imu_ok || fabsf(pitch) > TILT_CUTOFF_DEG) {
+                if (!imu_ok || fabsf(pitch) > TILT_CUTOFF_DEG || pack_low) {
                     enter_state(BAL_STATE_FAULT);
                     break;
                 }
@@ -542,7 +562,7 @@ void balance_control_core1_main(void)
                 // Arm gesture: held upright for ARM_GESTURE_S, unless held
                 // off (after `disarm` or `trim capture`).
                 if (imu_ok && fabsf(pitch) < ARM_GESTURE_DEG && !stepper_is_enabled() &&
-                    !arm_gesture_held_off(tick, arm_holdoff_until)) {
+                    !pack_low && !arm_gesture_held_off(tick, arm_holdoff_until)) {
                     gesture_ticks++;
                     if (gesture_ticks >= (uint32_t)(ARM_GESTURE_S * CONTROL_LOOP_HZ)) {
                         enter_state(BAL_STATE_RUN);

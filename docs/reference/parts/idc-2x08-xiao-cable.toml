@@ -1,0 +1,57 @@
+# 16-way IDC ribbon between the socketed robocar carrier's head board (the
+# XIAO ESP32-S3) and its main board: idc-2x07-xiao-cable plus two conductors
+# for the power latch (ADR-038, #1270). One entry serves both ends ([[cables]],
+# ADR-021), every head variant included.
+#
+# Why two more. The switched input and the latch sit on the main board, in
+# series with the pack, and the MCU sits on the head: the latch's HOLD output
+# and the pack divider's ADC input have to cross the ribbon, and the 14-way
+# cable had one free conductor (pin 9). The socketed carrier's only spare XIAO
+# pads are D3 (GPIO4, ADC1_CH3) and D7 (GPIO44, UART0 RX, no ADC); both are now
+# used, so the pack-voltage input is D3 and HOLD is D7. A third signal, the
+# button's SENSE, does not cross: it goes to the MCP23017 on the main board.
+# 2.0 mm 2x8 is 16 x 4 mm, 2 mm longer than the 2x7, and still fits across the
+# head's 28 mm edge (Lauri's pan-tilt cradle constraint, see the 2x7 entry).
+#
+# Reversal-safe, as the 2x7 entry (Lauri, 2026-10-16): an unshrouded header
+# takes the plug rotated 180 degrees, which takes pin n to pin 17 - n. The
+# pairs (n, 17 - n) are
+#   (1, 16)  5V    / 5V        (2, 15)  GND   / GND
+#   (3, 14)  BCLK  / LRC       (4, 13)  STBY  / MUX_RST
+#   (5, 12)  SCL   / SDA       (6, 11)  U0TX  / HOLD
+#   (7, 10)  DIN   / PIEZO     (8, 9)   PACK_SENSE / NC
+# so the supplies land on themselves, every other signal except I2C is a XIAO
+# output driving a main-board input and swaps with another such pair, I2C
+# swaps with itself, and the one XIAO input (D3, the divider's mid-point)
+# lands on the unconnected pin 9. Reversed, UART0 TX drives the latch's HOLD
+# gate through a 100 kOhm pull-down and HOLD drives the J15 test header; the
+# robot does not work and nothing is damaged. D7 (GPIO44) is a XIAO output
+# here, never an input from the main board.
+#
+# Pin 6 carries D6 (UART0 TX, GPIO43) to the main board's J15 test header, as
+# in the 2x7 entry. Pin 9 is unconnected at both ends.
+[part]
+name = "IDC 2x8 cable, XIAO ESP32-S3 head to main board (with power latch)"
+source = "KiCad 10.0.6 library PinHeader_2x08_P2.00mm_Vertical (odd pins in one row, even in the other, pad 1 square; fetched from kicad-footprints 10.0.6) and Connector_Generic:Conn_02x08_Odd_Even (kicad-symbols 10.0.6), for a 2.0 mm 2x8 IDC plug on 1.0 mm-pitch ribbon; pin order: idc-2x07-xiao-cable's reversal-safe convention extended to 16 ways (ADR-038, #1270); pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robotics/robocar/main/pin_config.h"
+symbol = "Connector_Generic:Conn_02x08_Odd_Even"
+footprint = "Connector_PinHeader_2.00mm:PinHeader_2x08_P2.00mm_Vertical"
+value = "IDC 2x8 head cable"
+buy = "aliexpress:1005004439103901"  # 2.0 mm 2x20 male header, cut to 2x8
+no_connect = ["NC"]
+
+# XIAO pad -> IDC pin; the comment is the robocar signal on that pad.
+[pins]
+"5V" = [1, 16]
+GND = [2, 15]
+D8 = 3   # I2S BCLK
+D0 = 4   # TB6612FNG STBY
+D5 = 5   # I2C SCL
+D6 = 6   # UART0 TX
+D10 = 7  # I2S DIN
+D3 = 8   # pack-voltage divider into ADC1_CH3 (PACK_SENSE_PIN)
+NC = 9   # no connection at either end
+D1 = 10  # piezo
+D7 = 11  # power latch HOLD (POWER_HOLD_PIN)
+D4 = 12  # I2C SDA
+D2 = 13  # TCA9548A RST (MUX_RST)
+D9 = 14  # I2S LRC

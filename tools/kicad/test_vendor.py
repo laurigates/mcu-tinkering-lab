@@ -55,7 +55,7 @@ class CommittedSubtreeTests(unittest.TestCase):
         self.assertEqual(have.symbols, want.symbols)
         self.assertEqual(have.footprints, want.footprints)
         self.assertIn("power:PWR_FLAG", have.symbols)
-        self.assertEqual((len(have.symbols), len(have.footprints)), (38, 40))
+        self.assertEqual((len(have.symbols), len(have.footprints)), (41, 45))
 
     def test_licence_and_readme(self):
         self.assertEqual(vendor.sha256(STOCK / "LICENSE.md"), UPSTREAM_LICENSE_SHA256)
@@ -87,7 +87,7 @@ class CommittedSubtreeTests(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(vendor.main(["--check"]), 0)
-        self.assertIn("38 symbols, 40 footprints, 53 files pinned", out.getvalue())
+        self.assertIn("41 symbols, 45 footprints, 60 files pinned", out.getvalue())
         self.assertIn(
             "seeed-xiao: 6 files pinned at OSHW-XIAO-Series cc7f3bb", out.getvalue()
         )

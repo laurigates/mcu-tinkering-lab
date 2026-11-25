@@ -58,6 +58,7 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 | [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
 | [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, sound clips (`[horn]`, the `sound` tool, the reflex horn), push-to-talk and VAD voice turns, voice budget, memory peak |
 | [cliff-sensors.md](docs/firmware/cliff-sensors.md) | Front and rear floor sensors on the MCP23017, the cliff reflex (brake, back off, refuse motion toward an edge), wiring, `cliff on\|off`, bench checks |
+| [power.md](docs/firmware/power.md) | The carrier's soft latch (HOLD at boot), the pack divider, the low-pack cutoff and long-press shutdown, `FEATURE_POWER_LATCH_ENABLED`, the pack voltage on the OLED, MQTT and GlitchTip |
 | [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, the network supervisor (nothing waits on WiFi), where the Gemini key comes from, OTA manifest polling, the build-SHA install decision |
 
 ## Build & flash

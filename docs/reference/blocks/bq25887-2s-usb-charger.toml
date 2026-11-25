@@ -1,0 +1,531 @@
+# 2S Li-ion charger from a 5 V USB-C port, with cell balancing: TI BQ25887, run
+# on its power-on defaults with no host (no I2C). Designed for the robocar's
+# 2S 18650 pack (ADR-038, #1272). It is in the robocar socketed carrier's
+# netlist and schematic (packages/robotics/robocar/hardware.toml), but on no
+# board yet: it has passed structure checks (hardware::test,
+# test_blocks_registry), the numbers in tools/hardware/test_charger_block.py and
+# the netlist tests, never ERC, DRC or a layout.
+#
+# ---------------------------------------------------------------------------
+# Why the BQ25887 (candidates read 2026-11-24, datasheets, not listings)
+# ---------------------------------------------------------------------------
+# TI BQ25887, SLUSD89B (Nov 2019), against MPS MP2672A, Rev 1.0 (11/10/2020),
+# and the three BQ2588x siblings in SLUSD89B's own device comparison table.
+#
+#   input current limit   BQ25887: a resistor on ILIM (IINMAX = KILIM / RILIM,
+#                         KILIM 1110 typ, 1276 max, §7.5/§8.3.7), plus PSEL and
+#                         an input-current optimizer on by default (§8.3.3).
+#                         MP2672A: no input current limit at all, only an input
+#                         VOLTAGE limit set by a divider on VLIM
+#                         (Minimum Input Voltage Limit): a strong source is not
+#                         capped, a weak one is backed off.
+#   charge current        BQ25887: 100-2200 mA, default 1.5 A. MP2672A: up to
+#                         2 A, set by RISET (ICC = 12 kohm / RISET).
+#   balancing current     BQ25887: through an external CBSET resistor, 400 mA
+#                         maximum recommended (§8.3.4.3). MP2672A: an internal
+#                         2.1 / 1.3 ohm FET plus an external resistor.
+#   balancing, no host    BQ25887: on by default (CB_AUTO_EN = 1, REG0x2A reset
+#                         81h, Table 4). MP2672A: on whenever MID is wired
+#                         (tying MID to AGND disables it, pin 9).
+#   thermal regulation    BQ25887: TREG 120 degC by default, 60-120 degC
+#                         selectable, theta-JA 32.4 degC/W (§7.4, §8.3.9).
+#                         MP2672A: thermal regulation, theta-JA 70 degC/W.
+#   power path            BQ25887: none ("No power path", SLUSD89B §5 and the
+#                         revision B change list). MP2672A: NVDC, SYS rated up
+#                         to 2 A ("ISYS up to 2A", Recommended Operating
+#                         Conditions), which is less than the robot's own load,
+#                         so its power path could not carry the robot anyway
+#                         and the load would sit on BATT as it does here.
+#   package               BQ25887: VQFN-24 4 x 4 mm, 0.5 mm pitch, exposed pad.
+#                         MP2672A: QFN-18 2 x 3 mm, 0.4 mm pitch. Neither is
+#                         hand-solderable without a hot-air station; both are
+#                         JLCPCB-placed parts.
+#   required externals    BQ25887: 1 uH inductor, caps on VBUS/PMID/SNS/BAT/
+#                         REGN, bootstrap cap, TS divider, ILIM and CBSET
+#                         resistors. MP2672A: 1.5 uH inductor, caps, NTC
+#                         divider, ISET, CV and VLIM resistors.
+#   LCSC, 2026-11-24      BQ25887RGER C2761614, extended, 401 in stock.
+#                         MP2672AGD-0000-Z C6674645, extended, 651 in stock.
+#                         Both are JLCPCB extended parts (loading fee per part).
+#   siblings              BQ25882, BQ25883, BQ25886: no cell balancing
+#                         (SLUSD89B §5, Device Comparison Table). Dropped.
+#
+# BQ25887 chosen: the ILIM resistor is a hardware cap on what the port can be
+# asked for, which the MP2672A lacks, the whole charge runs in hardware, its
+# thermal resistance is less than half the MP2672A's, and the part's own
+# datasheet characterises the 1 uH inductor used here. Not evaluated: other
+# vendors' 2S USB chargers (the IP2368 named in ADR-038 is a 3S/4S PD design
+# for balancebot, #1273); no datasheet for any of them was read.
+#
+# Cost of the choice: no power path (below), a 4 x 4 mm QFN that only JLCPCB can
+# place, and 25 parts. If the IC cannot be bought, the MP2672A needs a new
+# block, not a substitution: different inductor, charge-current resistor,
+# no ILIM, and a VLIM divider.
+#
+# ---------------------------------------------------------------------------
+# No host: the default charging cycle (SLUSD89B §8.3.4.1, §8.4.1, Table 2)
+# ---------------------------------------------------------------------------
+# After power-on reset the part is in default mode and charges on its own:
+# 4.20 V per cell (+-0.5 %), 1.5 A fast charge, 150 mA precharge, 150 mA
+# termination, JEITA profile, 12 hour safety timer, EN_CHG = 1, CD low through
+# an internal 900 kohm pull-down, auto balancing on. This block relies on that
+# and never writes a register, so the SDA and SCL pull-ups below only keep the
+# pins from floating. A host can still take over (address 0x6B in §8.4.1; the
+# same datasheet says 0x6A in §8.3.11, a contradiction not resolved here), but
+# the I2C bus then needs its own pull-ups at the host's voltage: these go to
+# REGN, 4.8 V, and an ESP32-S3 GPIO is not 5 V tolerant.
+#
+# Termination needs the charge current to fall below ITERM, and the current the
+# part measures is the current out of SNS: with no power path the robot's load
+# is on BAT, so with the robot running the part cannot see the pack's current
+# fall. See "Power path" below.
+#
+# ---------------------------------------------------------------------------
+# Input current and charge current (the "10 W" estimate, redone)
+# ---------------------------------------------------------------------------
+# RILIM = 820 ohm: IINMAX = 1110 / 820 = 1.35 A typical, 1276 / 820 = 1.56 A at
+# KILIM's maximum. That is the datasheet's own worked example (§8.3.7: 820 ohm,
+# 1.55 A). A port advertising 1.5 A (Rp 22 kohm) or more is not asked for more
+# than about 1.5 A; one advertising 3 A is held to the same figure. Nothing
+# here reads the source's CC advertisement. A 0.5 / 0.9 A source (a PC port)
+# is handled by the input current optimizer (on by default, Table 1, PSEL low)
+# and by VINDPM (default 4.3 V), which back the draw off until VBUS holds;
+# neither is a guarantee against a source that cannot hold its voltage.
+#
+# Charge current: 0.934 efficiency (the datasheet's front-page figure: 5 V in,
+# 7.6 V battery, 1 A charge; at other battery voltages it differs) x 5 V x
+# 1.35 A / 7.6 V = 0.83 A typical, 0.96 A at the 1.56 A maximum. The default
+# ICHG of 1.5 A is above that, so the part sits in input current regulation
+# throughout fast charge: termination is held off while it does, and the 12
+# hour timer runs at half rate (§8.3.4.2, §8.3.4.6), so a cycle can take 24
+# hours of timer. The 10 W / 1 A estimate in ADR-038 assumed 2 A of input; this
+# block takes 1.35 A. For 2 x 18650 of 2500-3500 mAh that is about 0.25-0.33 C
+# and 3-4.5 hours (an estimate, not a measurement). Lowering RILIM to 560 ohm
+# gives 2 A typical but 2.28 A at the maximum, over a 2 A source's rating.
+#
+# Heat: input 5 V x 1.35 A = 6.8 W; at 0.934 efficiency 0.45 W is lost, 0.51 W
+# at the 1.56 A maximum. At theta-JA 32.4 degC/W (JEDEC board, §7.4, so a floor
+# for our board) that is a 16 degC rise at the die. The inductor adds
+# DCR x I^2 = 0.040 ohm x 1.56^2 = 0.10 W (DCR from the LCSC listing). TREG
+# defaults to 120 degC (§8.3.9): above it the part reduces charge current, so
+# a hot case slows the charge instead of damaging the part. The exposed pad
+# (pin 25) needs a ground pour and vias, §11.1 item 6. Whether the case adds
+# or removes heat is not assessed: no enclosure exists for the carrier.
+#
+# ---------------------------------------------------------------------------
+# The USB-C port's job: charge only
+# ---------------------------------------------------------------------------
+# CC1 and CC2 each get 5.1 kohm to GND (rd1, rd2): a sink that asks for 5 V and
+# negotiates nothing. No PD, no data. VBUS operating range is 3.9-6.2 V and the
+# overvoltage threshold 6.2-6.6 V (§7.5); by the USB Type-C rules (not read
+# for this block) a source gives a sink that negotiates nothing its default 5 V.
+# The XIAO's own USB-C stays the data port.
+#
+# VBUS is a port to the receptacle's VBUS pins and to nothing else (see
+# test_charger_block.py): the XIAO's 5V pin is its VBUS (#1252), so tying this
+# net to the 5 V rail would back-feed it. The carrier keeps this net separate
+# from the 5 V rail. Not checked here: that nothing on the BQ25887 conducts from
+# BAT to VBUS when no adapter is present. SLUSD89B has a blocking FET (QBLK,
+# Q1) between VBUS and PMID and states no BAT-to-VBUS path, but does not say
+# "VBUS stays at 0 V on battery power". Measure it on the first board before
+# the receptacle's VBUS is anywhere a person can touch it.
+#
+# No TVS on VBUS: the datasheet's absolute maximum is 20 V (§7.1), and a 5 V
+# source's hot-plug ring (about twice the source) is inside it. VBUS is 1 uF
+# and PMID 2 x 10 uF.
+#
+# ---------------------------------------------------------------------------
+# Power path: there is none
+# ---------------------------------------------------------------------------
+# BQ25887 has no power path (§5 table). Its output (SNS, through an internal
+# sense resistor, to BAT) goes to the pack, and the robot loads the pack. So:
+# - BAT joins the carrier's pack node, on the pack side of the input stage (at
+#   or before pack-input-pfet-switched's IN port), so the pack charges with the
+#   robot switched off. Charge current
+#   reaches the pack through the XT30's + wire and the pack's BMS, and does not
+#   go through the PTC fuse or the switched input's FETs.
+# - Charging with the robot ON: the part's charge current (<= 0.96 A) is shared
+#   with the load. Whatever the robot draws comes out of that current first, so
+#   the pack charges at the difference, or discharges if the load is higher,
+#   with the part at its input limit. And in the constant-voltage phase the
+#   part cannot see the pack's current fall below ITERM (150 mA) while the
+#   robot draws more than that, so it holds 4.20 V per cell until the 12 hour
+#   timer ends the cycle. Holding 4.2 V is not unsafe. Charge with the robot
+#   off for an unattended full charge.
+# - Off, with the pack connected: BAT draws 12 uA typical, 14 uA maximum at
+#   25 degC (§7.5, IBAT, no VBUS, ADC off), which the switched input's "draws
+#   nothing" claim does not include. About 0.1 Ah a year, a few percent of a
+#   3 Ah pack. This is the datasheet figure for the bare part, not a measurement
+#   of this block.
+# - The MID pin's bias current is up to 15 uA (IMID_BIAS, §7.5). The datasheet
+#   does not say whether it flows with no VBUS, or which way. If it does, it
+#   unbalances the cells slowly in storage. Not checked; the MID lead is a
+#   separate connector and can be unplugged for storage.
+#
+# ---------------------------------------------------------------------------
+# Pack interface and the pack's BMS (ADR-038: the BMS stays on the pack)
+# ---------------------------------------------------------------------------
+# The BMS sits in the pack's negative lead (typical 2S protection boards;
+# which one the robocar's pack carries is not recorded in the repo). Charging
+# goes through it: BAT is the pack's + after the BMS and GND the pack's - after
+# it, so the BMS's over-charge, over-current and short-circuit cutoffs still
+# act on this charger. This block adds ONE wire to the pack: the cells'
+# midpoint (the BMS's B1 tap, or the balance lead's middle pin) to port MID.
+# The balance lead's end pins are the pack's + and -, which the XT30 already
+# carries, so they stay unconnected. The carrier needs a keyed connector for
+# MID; the pack's current two-wire XT30 lead is not enough.
+#
+# MID reaches the part through 300 ohm (rmid), as SLUSD89B §6 (pin 9) asks, so
+# a bottom cell plugged in reversed does not conduct through the IC. The
+# balance resistors rcb1..rcb4 go from CBSET to the same MID port, not through
+# rmid: the balance current must not flow in the sense path.
+#
+# Charger balancing (CBSET): 4 x 200 ohm in parallel = 50 ohm. ICB = 4.2 V /
+# (50 + 1.2 ohm RDSON max) = 82 mA (§8.3.4.3: ICB_LIM = VCELLREG / (RCBSET +
+# RDSON_QCBX)), well under the 400 mA maximum. Each 200 ohm carries 20 mA,
+# 0.084 W, 67 % of an 0805's 0.125 W. One resistor would run at 0.34 W, which
+# an 0805 does not survive. 82 mA moves about 0.08 Ah per hour off the high
+# cell. The part balances only when a cell is above 3.7 V and the cells differ
+# by 80 mV, and stops at 40 mV (VDIFF_START 80 mV, offset 40 mV, Table 4). The
+# default settings measure for about a second every 2 minutes with charging
+# paused (CB_CHG_DIS, TSETTLE, Table 4). SLUSD89B §7.5 gates balancing on
+# "REG0x2A[0] = 1", which the register map (§8.5.43) makes CB_OC_STAT, a status
+# bit; Table 4 and the 81h reset are what this block relies on. Check on the
+# first board that auto balancing really starts.
+#
+# Coexisting with the pack's BMS balancing: both circuits only ever discharge
+# the cell that is HIGHER, so they cannot fight over opposite cells. Typical
+# BMS balancers work near the end of charge at tens of milliamps (the
+# repo does not say which this pack has; unverified): the charger takes the
+# large differences earlier and its 40 mV exit leaves the BMS the last few
+# millivolts. The two currents on one cell add (82 mA plus a BMS's), which is
+# fine for a cell and needs no coordination. What must be checked on the pack:
+# the BMS's over-charge cutoff must sit above the charger's regulation, 4.20 V
+# +0.5 % = 4.221 V (§7.5), or the BMS would cut an ordinary charge. The part's
+# own cell over-voltage threshold is 102.5-105 % of 4.20 V, 4.31-4.41 V, so a
+# BMS that cuts first leaves the charger the backup. Over-charge cutoffs of
+# 4.25-4.30 V are common but unverified for this pack: read its BMS datasheet.
+# What the charger does when the BMS opens its charge FET mid-charge is not
+# described in SLUSD89B; BAT's absolute maximum is 12 V.
+#
+# ---------------------------------------------------------------------------
+# Temperature: no thermistor on the pack
+# ---------------------------------------------------------------------------
+# TS must sit between the JEITA thresholds or charging suspends (§8.3.4.5).
+# The datasheet's divider for a 103AT NTC is 5.23 kohm (rt1, REGN to TS) over
+# 30.1 kohm (rt2) in parallel with the NTC (§8.3.4.5.1 gives 5.24 / 30.31 kohm
+# for 0-60 degC; these are the nearest E96 values and the ones in the
+# datasheet's Figure 69). The pack carries no NTC, so rts is a 10 kohm resistor
+# in its place (the NTC's value at 25 degC): TS reads 5.23 : (30.1 || 10 =
+# 7.51) -> 59 % of REGN, between VT3 (44.75 %) and VT2 (68.25 %). The charge
+# is then always "normal", with NO temperature protection on the cells: only
+# the pack's BMS (if it has an NTC input) and the part's own thermal
+# regulation. A carrier that adds a 103AT on or beside the pack replaces rts
+# with it (parts.<prefix>_rts override: the part, the value, and the lcsc).
+#
+# ---------------------------------------------------------------------------
+# Inductor and capacitors (SLUSD89B §9.2)
+# ---------------------------------------------------------------------------
+# L = 1 uH, Murata DFE252012F-1R0M=P2 (C435392): the part the datasheet's own
+# plots use (§7.7), and the only inductance the datasheet characterises. The
+# loop is internally compensated, so a different inductance is not checked.
+# Ripple at 5 V in, 8.4 V out, 1.5 MHz: dI = Vin x D / (L x f) with D = 1 -
+# 5 / 8.4 = 0.405 -> 1.35 A peak to peak (1.5 A at the minimum 1.35 MHz).
+# Peak = 1.56 A + 0.75 A = 2.3 A, against Isat 4.7 A (§9.2.2.1 rule: Isat
+# above input current plus half the ripple). Isat, Irms 3.3 A and DCR 40 mohm
+# are from the LCSC listing; Murata's datasheet was not obtained. The ripple is
+# large, 87 % of the input current, as in the datasheet's own circuit.
+#
+# VBUS 1 uF (min 1 uF, §6 pin 23); PMID 2 x 10 uF 25 V (total on VBUS and PMID
+# at least 10 uF after derating; TI recommends 44 uF for best performance).
+# SNS 3 x 22 uF 25 V (44 uF minimum suggested for 2.2 A; ripple scales with
+# charge current, which is here under half that). BAT 2 x 10 uF (10 uF minimum
+# after derating). REGN 4.7 uF, BTST to SW 47 nF, each as in §6. The three
+# 22 uF are C45783, whose DC-bias curve is unread: the "keeps about half at
+# 5 V" in tps563208-5v.toml is the same rule of thumb. SNS runs to 8.4 V, so
+# the three may land near 35 uF effective, under 44. Bench-check SNS ripple and
+# the first-board PMID/SNS capacitance before relying on it.
+#
+# Layout (not checked by the block; §11.1, in the datasheet's priority order):
+# 1 SNS capacitors at the SNS and GND pins; 2 PMID capacitors at PMID and GND;
+# 3 inductor at SW, with a small copper area; 4 decoupling on the IC's side;
+# 5 analog ground (REGN, TS, ILIM, MID returns) tied to power ground at the
+# thermal pad; 6 exposed pad soldered to ground, with vias; 8 MID routed away
+# from SW. The ILIM, TS and MID nodes carry microamps and are sensitive.
+#
+# Sourcing, 2026-11-24 (kicad.lcsc, JLCPCB): C2761614 BQ25887RGER extended,
+# 401 in stock (low: a board of 1 uses 1, a run of 100 does not fit; the other
+# part is C2862617 BQ25887RGET, tape-and-reel 250, 0 in stock). C435392
+# inductor extended, 68074. C17739 5.23 k extended, 860. C21841 30.1 k
+# extended, 10736. C107154 47 nF extended, 428133. The rest are basic or
+# preferred: C28323 1 uF, C1779 4.7 uF, C15850 10 uF, C45783 22 uF, C17414
+# 10 k, C17540 200 R, C17617 300 R, C27834 5.1 k, C17837 820 R (preferred).
+# Five extended lines in all: the IC, the inductor and three passives.
+# AliExpress was not checked: a VQFN-24 is placed by JLCPCB, not by hand.
+
+[block]
+name = "BQ25887 2S USB charger with cell balancing, no host"
+source = "TI BQ25887 SLUSD89B (Nov 2019) §5-§9; MPS MP2672A Rev 1.0 (11/10/2020); LCSC/JLCPCB listings 2026-11-24; ADR-038, #1272"
+note = "5 V USB-C in, charge only; BAT to the pack's + on the pack side of the input stage, MID to the cells' midpoint, VBUS never to the 5 V rail"
+
+[ports]
+VBUS = ["ic.VBUS", "cvbus.A"]
+CC1 = ["rd1.A"]
+CC2 = ["rd2.A"]
+BAT = ["ic.BAT", "cbat1.A", "cbat2.A"]
+MID = ["rmid.B", "rcb1.B", "rcb2.B", "rcb3.B", "rcb4.B"]
+GND = [
+    "ic.GND",
+    "ic.PSEL",
+    "cvbus.B",
+    "cpmid1.B",
+    "cpmid2.B",
+    "csns1.B",
+    "csns2.B",
+    "csns3.B",
+    "cbat1.B",
+    "cbat2.B",
+    "cregn.B",
+    "rilim.B",
+    "rt2.B",
+    "rts.B",
+    "rd1.B",
+    "rd2.B",
+]
+
+[parts.ic]
+name = "BQ25887 2S boost charger with cell balancing"
+kind = "charger"
+part = "bq25887-vqfn24"
+
+# 1 uH, the datasheet's own inductor: see the header for ripple and Isat.
+[parts.l]
+name = "1 uH power inductor, boost"
+kind = "inductor"
+part = "inductor-1008"
+value = "1uH"
+
+[parts.cvbus]
+name = "1 uF VBUS decoupling"
+kind = "capacitor"
+part = "c0805"
+value = "1uF 50V"
+lcsc = "C28323"
+
+[parts.cpmid1]
+name = "10 uF PMID"
+kind = "capacitor"
+part = "c0805"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.cpmid2]
+name = "10 uF PMID"
+kind = "capacitor"
+part = "c0805"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.csns1]
+name = "22 uF SNS (boost output)"
+kind = "capacitor"
+part = "c0805"
+value = "22uF 25V"
+lcsc = "C45783"
+
+[parts.csns2]
+name = "22 uF SNS (boost output)"
+kind = "capacitor"
+part = "c0805"
+value = "22uF 25V"
+lcsc = "C45783"
+
+[parts.csns3]
+name = "22 uF SNS (boost output)"
+kind = "capacitor"
+part = "c0805"
+value = "22uF 25V"
+lcsc = "C45783"
+
+[parts.cbat1]
+name = "10 uF BAT"
+kind = "capacitor"
+part = "c0805"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.cbat2]
+name = "10 uF BAT"
+kind = "capacitor"
+part = "c0805"
+value = "10uF 25V"
+lcsc = "C15850"
+
+[parts.cregn]
+name = "4.7 uF REGN"
+kind = "capacitor"
+part = "c0805"
+value = "4.7uF 25V"
+lcsc = "C1779"
+
+# 47 nF from SW to BTST, as §6 (pin 12) asks.
+[parts.cboot]
+name = "47 nF bootstrap, BTST to SW"
+kind = "capacitor"
+part = "c0805"
+value = "47nF 50V"
+lcsc = "C107154"
+
+# 1110 / 820 = 1.35 A typical, 1276 / 820 = 1.56 A maximum.
+[parts.rilim]
+name = "820 ohm input current limit, ILIM to GND"
+kind = "resistor"
+part = "r0805"
+value = "820"
+lcsc = "C17837"
+
+# 300 ohm in series with MID, §6 pin 9.
+[parts.rmid]
+name = "300 ohm MID sense, reverse-plug protection"
+kind = "resistor"
+part = "r0805"
+value = "300"
+lcsc = "C17617"
+
+# Four 200 ohm in parallel = 50 ohm, 82 mA at 4.2 V: see the header.
+[parts.rcb1]
+name = "200 ohm cell-balance current limit, 1 of 4"
+kind = "resistor"
+part = "r0805"
+value = "200"
+lcsc = "C17540"
+
+[parts.rcb2]
+name = "200 ohm cell-balance current limit, 2 of 4"
+kind = "resistor"
+part = "r0805"
+value = "200"
+lcsc = "C17540"
+
+[parts.rcb3]
+name = "200 ohm cell-balance current limit, 3 of 4"
+kind = "resistor"
+part = "r0805"
+value = "200"
+lcsc = "C17540"
+
+[parts.rcb4]
+name = "200 ohm cell-balance current limit, 4 of 4"
+kind = "resistor"
+part = "r0805"
+value = "200"
+lcsc = "C17540"
+
+# TS divider: REGN - rt1 - TS - (rt2 || rts) - GND.
+[parts.rt1]
+name = "5.23 kohm TS divider, REGN to TS"
+kind = "resistor"
+part = "r0805"
+value = "5.23k"
+lcsc = "C17739"
+
+[parts.rt2]
+name = "30.1 kohm TS divider, TS to GND"
+kind = "resistor"
+part = "r0805"
+value = "30.1k"
+lcsc = "C21841"
+
+# The NTC's 25 degC value, standing in for a thermistor the pack does not carry.
+[parts.rts]
+name = "10 kohm fixed stand-in for the pack NTC at 25 degC"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+# Pull-ups to REGN, so the unused I2C pins do not float. REGN is 4.7-5.15 V and
+# SDA/SCL tolerate 6 V (§7.1): fine here, wrong for a 3.3 V host bus.
+[parts.sda_pu]
+name = "10 kohm SDA pull-up to REGN"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+[parts.scl_pu]
+name = "10 kohm SCL pull-up to REGN"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+[parts.rd1]
+name = "5.1 kohm USB-C CC1 pull-down (Rd)"
+kind = "resistor"
+part = "r0805"
+value = "5.1k"
+lcsc = "C27834"
+
+[parts.rd2]
+name = "5.1 kohm USB-C CC2 pull-down (Rd)"
+kind = "resistor"
+part = "r0805"
+value = "5.1k"
+lcsc = "C27834"
+
+# Boost: VBUS -> (QBLK) -> PMID -> L -> SW; the output is SNS, then BAT.
+[[rails]]
+name = "PMID"
+from = "ic.PMID"
+to = ["l.2", "cpmid1.A", "cpmid2.A"]
+
+[[rails]]
+name = "SW"
+from = "ic.SW"
+to = ["l.1", "cboot.B"]
+
+[[rails]]
+name = "BTST"
+from = "ic.BTST"
+to = ["cboot.A"]
+
+[[rails]]
+name = "SNS"
+from = "ic.SNS"
+to = ["csns1.A", "csns2.A", "csns3.A"]
+
+[[rails]]
+name = "REGN"
+from = "ic.REGN"
+to = ["cregn.A", "rt1.A", "sda_pu.A", "scl_pu.A"]
+
+[[rails]]
+name = "TS"
+from = "ic.TS"
+to = ["rt1.B", "rt2.A", "rts.A"]
+
+[[rails]]
+name = "ILIM"
+from = "ic.ILIM"
+to = ["rilim.A"]
+
+[[rails]]
+name = "MIDSENSE"
+from = "ic.MID"
+to = ["rmid.A"]
+
+[[rails]]
+name = "CBSET"
+from = "ic.CBSET"
+to = ["rcb1.A", "rcb2.A", "rcb3.A", "rcb4.A"]
+
+[[rails]]
+name = "SDA"
+from = "ic.SDA"
+to = ["sda_pu.B"]
+
+[[rails]]
+name = "SCL"
+from = "ic.SCL"
+to = ["scl_pu.B"]

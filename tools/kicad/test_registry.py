@@ -233,6 +233,33 @@ class CommittedRegistryTests(unittest.TestCase):
         for wired in ("RST", "SD0", "SC0", "SD1", "SC1", "SD3", "SC3", "SD4", "SC4"):
             self.assertNotIn(wired, mux.no_connect)
 
+    def test_the_2x8_cable_is_reversal_safe_and_carries_the_power_latch(self):
+        # The 16-way cable of the socketed carrier (ADR-038, #1270). A plug
+        # rotated 180 degrees takes pin n to 17 - n; each such pair is one
+        # supply, two XIAO outputs, I2C, or the one XIAO input (D3, the pack
+        # divider) against the unconnected pin.
+        idc = registry.load("idc-2x08-xiao-cable")
+        self.assertEqual(idc.pins["5V"], ("1", "16"))
+        self.assertEqual(idc.pins["GND"], ("2", "15"))
+        self.assertEqual(idc.no_connect, ("NC",))
+        by_pin = {n: name for name, nums in idc.pins.items() for n in nums}
+        self.assertEqual(sorted(by_pin, key=int), [str(n) for n in range(1, 17)])
+        outputs = {"D0", "D1", "D2", "D6", "D7", "D8", "D9", "D10"}
+        for n in range(1, 9):
+            pair = {by_pin[str(n)], by_pin[str(17 - n)]}
+            with self.subTest(pins=(n, 17 - n)):
+                self.assertTrue(
+                    len(pair) == 1
+                    or pair <= outputs
+                    or pair == {"D4", "D5"}
+                    or pair == {"D3", "NC"},
+                    pair,
+                )
+        # Every XIAO pad the 2x7 cable carries is still carried.
+        old = registry.load("idc-2x07-xiao-cable")
+        self.assertLessEqual(set(old.pins), set(idc.pins))
+        self.assertEqual(set(idc.pins) - set(old.pins), {"D3", "D7"})
+
     def test_every_entry_says_where_its_pin_order_came_from(self):
         for spec in registry.load_all():
             with self.subTest(slug=spec.slug):

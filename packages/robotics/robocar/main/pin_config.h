@@ -7,16 +7,17 @@
  *   D0 (GPIO1)       = TB6612FNG STBY (motor enable)
  *   D1 (GPIO2)       = Piezo buzzer
  *   D2 (GPIO3)       = TCA9548A RESET (active low)
- *   D3 (GPIO4)       = unused (the rangefinders moved to I2C)
+ *   D3 (GPIO4)       = pack-voltage divider, ADC1_CH3 (socketed carrier, ADR-038)
  *   D6 (GPIO43)      = UART0 TX: log mirror to carrier J15 (console is USB-C)
- *   D7 (GPIO44)      = UART0 RX, unused
+ *   D7 (GPIO44)      = power latch HOLD (socketed carrier, ADR-038)
  *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
  *
- * Two spare pads remain: D3 (GPIO4) and D7 (GPIO44, UART0 RX). D6 (GPIO43)
+ * No pad is spare any more. D3 and D7 were the two that were: the power switch's
+ * HOLD output and the pack divider's ADC input took them (#1270). D6 (GPIO43)
  * carries the ROM bootloader's boot log at every reset and, from app_main on,
  * a copy of every ESP_LOG line (log_mirror.c, issue #798), so it is an output
  * now and not free for a peripheral. Beyond those, digital I/O goes through the
- * MCP23017 on TCA9548A ch2.
+ * MCP23017 on TCA9548A ch2; the power button's SENSE input is one of them.
  *
  * Camera uses internal GPIOs on the Sense module — no conflict with D0-D10.
  */
@@ -188,18 +189,49 @@
 // #798). The carrier's ribbon takes it to test header J15. Console input,
 // command replies and Improv packets stay on USB.
 //
-// D7 is UART0 RX and is not used: log_mirror.c leaves it unclaimed
-// (UART_PIN_NO_CHANGE) with the RX interrupt off, and the carrier does not
-// wire it. Both are defined so the hardware join (tools/hardware/, ADR-021)
-// and the documents generated from it name these pads from the header rather
-// than from a hand-typed GPIO number.
+// D7 is UART0 RX by default and nothing reads it: log_mirror.c leaves it
+// unclaimed (UART_PIN_NO_CHANGE) with the RX interrupt off. On the socketed
+// carrier D7 is the power latch's HOLD output (POWER_HOLD_PIN below), so it
+// has no UART0 RX define any more. UART0_TX_PIN is defined so the hardware join
+// (tools/hardware/, ADR-021) and the documents generated from it name this pad
+// from the header rather than from a hand-typed GPIO number.
 //
 // The improv-wifi component's default writer is UART_NUM_0 too (issue #644);
 // main.c always hands it improv_console_write() instead, so Improv replies
 // never reach D6.
 // ========================================
 #define UART0_TX_PIN GPIO_NUM_43  // XIAO D6
-#define UART0_RX_PIN GPIO_NUM_44  // XIAO D7
+
+// ========================================
+// Power switch and pack monitor (ADR-038, #1270; socketed carrier)
+//
+// POWER_HOLD_PIN is the soft latch's HOLD output (docs/reference/blocks/
+// soft-latch.toml): drive it HIGH as early in app_main as possible, because the
+// button that switched the robot on has to stay pressed until then; drive it
+// LOW to switch off. D7 is GPIO44 (UART0 RX by default, not a strapping pin).
+// The carrier's 100 kOhm pull-down holds it LOW while the MCU is unpowered or
+// in reset. Firmware must claim GPIO44 as a plain output (this releases it from
+// UART0 RX; log_mirror.c does not use RX). The pad's level during the ROM and
+// bootloader stages, and its internal pull state out of reset, are not
+// recorded in this repo's ESP32-S3 notes and are unmeasured.
+//
+// PACK_SENSE_PIN is the divider's mid-point: 100 kOhm from the switched pack
+// rail (VBAT) over 22 kOhm to GND, so a full 2S pack (8.4 V) reads 1.51 V and
+// 6.0 V reads 1.08 V, with 100 nF at the pad. D3 is GPIO4, ADC1_CH3 (ADC2 is
+// unusable while Wi-Fi runs, and this is ADC1). Same ratio as balancebot's rev3
+// divider (0.1803). The source impedance is 18 kOhm, above the 10 kOhm the
+// ADC's sample-and-hold is usually quoted for, which the 100 nF absorbs; check
+// the reading against a meter on the first board.
+//
+// POWER_BUTTON_EXPANDER_PIN is the button's SENSE input: MCP23017 GPB0 (pin 8
+// of PORTB, see the MCP23017 section above), the internal pull-up enabled.
+// Low = button pressed. It is not a native GPIO, so a robot without the
+// expander fitted cannot switch itself off from the button; the pack-voltage
+// cutoff does not need it.
+// ========================================
+#define POWER_HOLD_PIN GPIO_NUM_44   // XIAO D7
+#define PACK_SENSE_PIN GPIO_NUM_4    // XIAO D3, ADC1_CH3
+#define POWER_BUTTON_EXPANDER_PIN 8  // GPB0
 
 // ========================================
 // MAX98357A I2S Class-D Amplifier (voice output)

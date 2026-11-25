@@ -1,0 +1,40 @@
+# USB Type-C receptacle, USB 2.0 16-pin, HRO TYPE-C-31-M-12, as the charge-only
+# port of the robocar carrier (docs/reference/blocks/bq25887-2s-usb-charger.toml,
+# ADR-038, #1272).
+#
+# Pin numbers and names: KiCad 10.0.6 symbol Connector:USB_C_Receptacle_USB2.0_16P,
+# whose pins are the footprint's pads (A1, A4, A5, A6, A7, A8, A9, A12 and the B
+# row, plus SH for the four shield pads). Each VBUS and GND name is the four
+# package pins the connector joins on its own contact set, so all four go on the
+# net. CC1 is A5 and CC2 is B5; the block gives each its own 5.1 kohm pull-down.
+# D+ and D- are two pins each (A6/B6, A7/B7) and SBU1/SBU2 one each; a
+# charge-only port leaves them open, and the footprint has no through-hole pads
+# for them. The footprint's two unnamed pads are the receptacle's plastic
+# locating posts (non-plated), which carry no net.
+#
+# Footprint and LCSC number match: kicad.lcsc reports C165948 as TYPE-C-31-M-12,
+# extended, in stock (2026-11-24). The footprint's own descr names the HRO
+# datasheet.
+[part]
+name = "USB-C receptacle, USB 2.0 16P (HRO TYPE-C-31-M-12)"
+source = "KiCad 10.0.6 Connector:USB_C_Receptacle_USB2.0_16P and Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12; LCSC C165948 = TYPE-C-31-M-12 (kicad.lcsc, 2026-11-24)"
+symbol = "Connector:USB_C_Receptacle_USB2.0_16P"
+footprint = "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+value = "TYPE-C-31-M-12"
+lcsc = "C165948"
+# Data and sideband pins of a charge-only port: nothing connects to them.
+no_connect = ["DP", "DN", "SBU1", "SBU2"]
+
+[stock]
+mpn = "TYPE-C-31-M-12"  # LCSC C165948
+
+[pins]
+GND = ["A1", "A12", "B1", "B12"]
+VBUS = ["A4", "A9", "B4", "B9"]
+CC1 = "A5"
+CC2 = "B5"
+DP = ["A6", "B6"]
+DN = ["A7", "B7"]
+SBU1 = "A8"
+SBU2 = "B8"
+SHIELD = "SH"

@@ -114,7 +114,10 @@ ROBOCAR_EXTRACT = [
 
     # ── UART0 header pads (nothing wired; the console is USB-Serial-JTAG) ──
     ("UART0 header pads", "UART0_TX_PIN", "UART0_TX_PIN", None),
-    ("UART0 header pads", "UART0_RX_PIN", "UART0_RX_PIN", None),
+
+    # ── Power latch and pack divider (socketed carrier, ADR-038) ──
+    ("Power latch and pack monitor", "POWER_HOLD_PIN", "POWER_HOLD_PIN", None),
+    ("Power latch and pack monitor", "PACK_SENSE_PIN", "PACK_SENSE_PIN", None),
 
     # ── MAX98357A I2S Audio ──
     ("MAX98357A I2S Audio", "I2S_BCLK_PIN",         "I2S_BCLK_PIN", None),

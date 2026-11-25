@@ -700,7 +700,7 @@ role = "UART0_TX_PIN"
 why = "stays on the head"
 
 [[undrawn]]
-role = "UART0_RX_PIN"
+role = "POWER_HOLD_PIN"
 why = "stays on the head"
 
 [[rails]]
@@ -736,7 +736,7 @@ class CableTests(unittest.TestCase):
         (self.project / "main").mkdir(parents=True)
         # The real header's I2C and UART0 macros, extracted, not retyped.
         wanted = re.compile(
-            r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|UART0_RX_PIN) "
+            r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|POWER_HOLD_PIN) "
         )
         text = ROBOCAR_HEADER.read_text(encoding="utf-8")
         lines = [line for line in text.splitlines() if wanted.match(line)]
@@ -980,6 +980,116 @@ class BoardPageTests(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(netlist.main([str(self.project)], self.root), 1)
         self.assertRegex(out.getvalue(), rf"(?m)^FAIL: .*{msg}")
+
+
+class RobocarPowerSwitchTests(unittest.TestCase):
+    """The socketed robocar carrier's power switch, latch and divider (ADR-038, #1270).
+
+    Reads the committed hardware.toml and the registry: the pin numbers below
+    are the cable's (idc-2x08-xiao-cable: pin 11 is D7, pin 8 is D3) and the
+    expander mirror header's (J18 pin 6 is GPB0).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.nets = netlist.build(
+            REPO_ROOT / "packages/robotics/robocar", REPO_ROOT
+        ).nets
+
+    def test_hold_reaches_the_latch_through_the_cable(self):
+        # HOLD: the cable's pin 11 (main end J1), the hold FET's gate and its
+        # pull-down, and nothing else.
+        self.assertEqual(
+            set(self.nets["PWR_HOLD"]), {("J1", "11"), ("Q3", "1"), ("R16", "1")}
+        )
+
+    def test_the_divider_reads_the_switched_rail_into_the_cable(self):
+        self.assertEqual(
+            set(self.nets["PACK_SENSE"]),
+            {("J1", "8"), ("R17", "2"), ("R18", "1"), ("C9", "1")},
+        )
+        # R17 is on VBAT, after the switch and the fuse, so it draws nothing
+        # while the robot is off.
+        self.assertIn(("R17", "1"), self.nets["VBAT"])
+        self.assertIn(("F1", "2"), self.nets["VBAT"])
+
+    def test_the_input_stage_is_the_switched_block(self):
+        # XT30 + -> reverse-polarity FET Q1; the switch FET Q2 and the fuse
+        # follow; the latch drives the switch's gate net through D2.
+        # The charger's BAT pins (U5 13 and 14) and its two BAT capacitors
+        # join the pack side of the input stage (#1272).
+        self.assertEqual(
+            set(self.nets["PACK_IN"]),
+            {
+                ("J3", "2"),
+                ("Q1", "5"),
+                ("U5", "13"),
+                ("U5", "14"),
+                ("C16", "1"),
+                ("C17", "1"),
+            },
+        )
+        self.assertIn(("D2", "2"), self.nets["PWR_SW"])
+        self.assertIn(("R15", "2"), self.nets["PWR_SW"])
+
+    def test_the_button_sense_is_on_the_expander_not_the_mcu(self):
+        # No MCU pad is left for it: SENSE is the MCP23017's GPB0 (A5) and the
+        # mirror header's matching pin.
+        self.assertEqual(
+            set(self.nets["PWR_SENSE"]), {("A5", "13"), ("D3", "2"), ("J18", "6")}
+        )
+        self.assertNotIn("J1", {ref for ref, _ in self.nets["PWR_SENSE"]})
+
+
+class RobocarChargerTests(unittest.TestCase):
+    """The socketed robocar carrier's USB-C charger (ADR-038, #1272).
+
+    The USB-C receptacle is J20 (HRO TYPE-C-31-M-12: VBUS A4 A9 B4 B9, CC1 A5,
+    CC2 B5, shield SH) and the balance header J21 (1 B-, 2 midpoint, 3 B+).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.nets = netlist.build(
+            REPO_ROOT / "packages/robotics/robocar", REPO_ROOT
+        ).nets
+
+    def _net_of(self, ref, pin):
+        for name, pins in self.nets.items():
+            if (ref, pin) in pins:
+                return name
+        return None
+
+    def test_the_port_vbus_reaches_only_the_charger(self):
+        # All four receptacle VBUS pins, the charger's VBUS pin (U5 23) and its
+        # 1 uF capacitor: nothing else, so nothing feeds the XIAO's 5V pin
+        # (its VBUS, #1252) from this port.
+        vbus = {("J20", p) for p in ("A4", "A9", "B4", "B9")}
+        self.assertEqual(
+            set(self.nets["CHG_VBUS"]), vbus | {("U5", "23"), ("C10", "1")}
+        )
+
+    def test_the_port_cc_pins_are_on_their_own_pull_downs(self):
+        self.assertEqual(set(self.nets["CHG_CC1"]), {("J20", "A5"), ("R30", "1")})
+        self.assertEqual(set(self.nets["CHG_CC2"]), {("J20", "B5"), ("R31", "1")})
+
+    def test_the_midpoint_is_the_only_balance_wire(self):
+        mid = set(self.nets["CHG_MID"])
+        self.assertIn(("J21", "2"), mid)
+        self.assertIn(("R20", "2"), mid)
+        # The end pins are the raw cell terminals: on no net with anything
+        # else, so the BMS's switch cannot be bypassed through the carrier.
+        for pin in ("1", "3"):
+            net = self._net_of("J21", pin)
+            self.assertTrue(
+                net is None or len(self.nets[net]) == 1,
+                f"J21 {pin} is connected: {net}",
+            )
+
+    def test_the_port_ground_and_shield_are_the_carrier_ground(self):
+        for pin in ("A1", "A12", "B1", "B12", "SH"):
+            self.assertEqual(self._net_of("J20", pin), "GND")
+        self.assertEqual(self._net_of("U5", "25"), "GND")
 
 
 if __name__ == "__main__":

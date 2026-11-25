@@ -45,6 +45,8 @@ typedef struct {
     bool rear_failed;   /**< rear rangefinder stopped answering */
     uint16_t front_cm;  /**< smoothed front distance */
     uint16_t rear_cm;   /**< latest rear distance */
+
+    uint32_t pack_mv; /**< filtered pack voltage; 0 = no reading (no carrier or no pack) */
 } oled_status_t;
 
 /**
@@ -52,7 +54,9 @@ typedef struct {
  *        OLED_STATUS_COLS characters each.
  *
  * Row 0: network (`IP 192.168.0.42` or `WIFI DOWN`).
- * Row 1: I2C peripherals (`HW OK`, `HW NO I2C BUS`, or `HW -MOT -SRV -LED`).
+ * Row 1: I2C peripherals (`HW OK`, `HW NO I2C BUS`, or `HW -MOT -SRV -LED`),
+ *        then the pack voltage (`HW OK 7.4V`) when there is a reading and the
+ *        row still fits the panel: a long list of faults outranks it.
  * Row 2: planner (`PLAN SLEEP 12/500`, `AWAKE`, `NOGATE`, or `FUSED`).
  * Row 3: rangefinders (`SONAR F 123 R 045`, `STOP` while the reflex holds,
  *        `ERR` for a failed sensor, `SONAR --` before telemetry exists).

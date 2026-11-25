@@ -110,6 +110,13 @@ rotation = 180
 max_err_mm = 0.08
 checked = "2026-11-07"
 
+[C2761614] # BQ25887RGER
+footprint = "Package_DFN_QFN:Texas_RGE0024H_VQFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.7mm"
+lcsc_footprint = "QFN-24_L4.0-W4.0-P0.50-BL-EP2.7"
+rotation = 270
+max_err_mm = 0.04
+checked = "2026-11-24"
+
 # --- Inductors, fuses, ferrite beads ------------------------------------------
 
 [C2044594] # SRN6045TA-4R7M
@@ -118,6 +125,13 @@ lcsc_footprint = "IND-SMD_L6.0-W6.0"
 rotation = 0
 max_err_mm = 0.43
 checked = "2026-10-19"
+
+[C435392] # DFE252012F-1R0M=P2
+footprint = "Inductor_SMD:L_1008_2520Metric"
+lcsc_footprint = "L2520"
+rotation = 0
+max_err_mm = 0.09
+checked = "2026-11-24"
 
 [C883162] # BSMD1812-300-16V
 footprint = "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder"
@@ -212,6 +226,27 @@ rotation = 0
 max_err_mm = 0.04
 checked = "2026-10-19"
 
+[C28323] # 1 uF 50 V X7R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-11-24"
+
+[C1779] # 4.7 uF 25 V X5R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-11-24"
+
+[C107154] # 47 nF 50 V X7R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-11-24"
+
 # --- 0805 resistors -----------------------------------------------------------
 
 [C17714] # 47 R
@@ -270,6 +305,48 @@ rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
 
+[C27834] # 5.1 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
+[C17540] # 200 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
+[C17617] # 300 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
+[C17837] # 820 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
+[C17739] # 5.23 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
+[C21841] # 30.1 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-24"
+
 [C17621] # 30 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 lcsc_footprint = "R0805"
@@ -297,3 +374,11 @@ lcsc_footprint = "R0805"
 rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
+
+[C165948] # TYPE-C-31-M-12
+footprint = "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+lcsc_footprint = "USB-C_SMD-TYPE-C-31-M-12_1"
+rotation = 0
+pads = ["A5", "B5", "A6", "B6", "A7", "B7", "A8", "B8", "SH=4"]
+max_err_mm = 0.13
+checked = "2026-11-24"

@@ -33,6 +33,8 @@ add_executable(balancebot
     src/log_store.c
     src/lqr.c
     src/mpu6050.c
+    src/pack.c
+    src/pack_sense.c
     src/param_record.c
     src/param_store.c
     src/pid.c
