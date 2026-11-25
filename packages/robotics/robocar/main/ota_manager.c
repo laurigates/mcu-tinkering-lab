@@ -109,7 +109,7 @@ static TimerHandle_t s_stability_timer = NULL;
 
 // Forward declarations
 static void ota_task(void *arg);
-static void run_update_check(void);
+static bool run_update_check(void);
 static void start_https_ota(const char *bin_url);
 static bool announce_and_park(const char *remote_version, const char *facts);
 static void set_phase(ota_phase_t phase);
@@ -255,14 +255,22 @@ static void ota_task(void *arg)
     // The first check comes OTA_FIRST_CHECK_DELAY_MS after the task starts,
     // not a whole interval later: every reset restarted that countdown, so a
     // robot reset more often than OTA_CHECK_INTERVAL_MIN never checked (#1055).
+    // A check that cannot fetch the manifest is retried OTA_FIRST_CHECK_RETRY_MS
+    // later, a bounded number of times, until one fetch succeeds (#1126).
     const TickType_t first_delay_ticks = pdMS_TO_TICKS(OTA_FIRST_CHECK_DELAY_MS);
-    bool checked_yet = false;
+    const TickType_t retry_ticks = pdMS_TO_TICKS(OTA_FIRST_CHECK_RETRY_MS);
+    uint32_t checks_run = 0;
+    bool fetched_yet = false;
     for (;;) {
-        ulTaskNotifyTake(pdTRUE,
-                         (TickType_t)ota_interval_next_wait_ticks(
-                             checked_yet, (uint32_t)first_delay_ticks, (uint32_t)interval_ticks));
-        checked_yet = true;
-        run_update_check();
+        ulTaskNotifyTake(pdTRUE, (TickType_t)ota_interval_next_wait_ticks(
+                                     checks_run, fetched_yet, (uint32_t)first_delay_ticks,
+                                     (uint32_t)retry_ticks, (uint32_t)interval_ticks));
+        if (checks_run < UINT32_MAX) {
+            checks_run++;
+        }
+        if (run_update_check()) {
+            fetched_yet = true;
+        }
     }
 }
 
@@ -408,14 +416,16 @@ static bool resolve_relative_url(const char *base_url, const char *relative_path
     return written > 0 && (dir_len + (size_t)written) < out_size;
 }
 
-static void run_update_check(void)
+/** One manifest check. @return true when the manifest was fetched, whatever
+ *  the check decided; false when it could not be (issue #1126). */
+static bool run_update_check(void)
 {
     ESP_LOGI(TAG, "Checking manifest for update: %s", OTA_MANIFEST_URL);
 
     char *manifest_buf = malloc(OTA_MANIFEST_BUF_SIZE);
     if (!manifest_buf) {
         ESP_LOGE(TAG, "Failed to allocate manifest buffer");
-        return;
+        return false;
     }
 
     int status = 0;
@@ -423,21 +433,21 @@ static void run_update_check(void)
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Manifest fetch failed: %s (HTTP %d)", esp_err_to_name(err), status);
         free(manifest_buf);
-        return;
+        return false;
     }
 
     cJSON *manifest = cJSON_Parse(manifest_buf);
     free(manifest_buf);
     if (!manifest) {
         ESP_LOGW(TAG, "Manifest JSON parse failed");
-        return;
+        return true;
     }
 
     const cJSON *version_node = cJSON_GetObjectItemCaseSensitive(manifest, "version");
     if (!cJSON_IsString(version_node) || !version_node->valuestring) {
         ESP_LOGW(TAG, "Manifest missing a usable \"version\" field");
         cJSON_Delete(manifest);
-        return;
+        return true;
     }
 
     // Reject rather than silently truncate — a truncated string could parse
@@ -448,7 +458,7 @@ static void run_update_check(void)
                  "Manifest \"version\" is %zu bytes (max %d) — refusing to truncate; no update",
                  strlen(version_node->valuestring), OTA_VERSION_STR_BUF_SIZE - 1);
         cJSON_Delete(manifest);
-        return;
+        return true;
     }
 
     char remote_version[OTA_VERSION_STR_BUF_SIZE];
@@ -508,7 +518,7 @@ static void run_update_check(void)
     }
     if (decision != OTA_DECISION_UPDATE) {
         cJSON_Delete(manifest);
-        return;
+        return true;
     }
 
     const char *part_path = NULL;
@@ -538,7 +548,7 @@ static void run_update_check(void)
     if (!resolved) {
         ESP_LOGE(TAG, "Manifest has no resolvable app binary part");
         free(facts);
-        return;
+        return true;
     }
 
     ESP_LOGI(TAG, "Update available: %s -> %s (%s)", current_version, remote_version, bin_url);
@@ -546,9 +556,10 @@ static void run_update_check(void)
     free(facts);
     if (!go) {
         set_phase(OTA_PHASE_IDLE);
-        return;
+        return true;
     }
     start_https_ota(bin_url);
+    return true;
 }
 
 /* -------------------------------------------------------------------------

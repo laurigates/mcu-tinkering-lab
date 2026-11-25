@@ -76,7 +76,7 @@
       "prd": "PRD-001",
       "status": "active",
       "priority": "P1",
-      "notes": "Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription dropped (#1054); first check after 360 min (#1055)"
+      "notes": "Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription registered after MQTT starts (#1054, #1126; bench check pending); first check 15 s after link-up (#1055), a failed fetch retried every 60 s up to 5 times (#1126)"
     },
     {
       "id": "FR-009",
@@ -316,7 +316,7 @@
       "prd": "ADR-028",
       "status": "in-progress",
       "priority": "P0",
-      "notes": "Done: non-blocking connect, OTA/MQTT start on link-up, Improv re-arm, requests skipped offline (#846). Open: MQTT client at boot (#1054), first OTA check (#1055), home-flag gating needs FR-037"
+      "notes": "Done: non-blocking connect, OTA/MQTT start on link-up, Improv re-arm, requests skipped offline (#846), MQTT client at boot (#1054; bench check pending), first OTA check (#1055, #1126). Open: home-flag gating needs FR-037"
     },
     {
       "id": "FR-039",

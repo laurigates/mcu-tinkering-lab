@@ -207,9 +207,9 @@ typedef void (*mqtt_logger_command_cb_t)(const char *line);
 /**
  * @brief Register the handler for messages on the configured command_topic
  *
- * Distinct from mqtt_logger_subscribe(): the command topic is already
- * subscribed internally by mqtt_logger_init() at QoS 1, and this only wires
- * what happens when a message arrives on it. Call after mqtt_logger_init().
+ * Distinct from mqtt_logger_subscribe(): the command topic is subscribed
+ * internally at QoS 1 on every MQTT_EVENT_CONNECTED, and this only wires what
+ * happens when a message arrives on it. Call after mqtt_logger_init().
  * Passing NULL clears the handler — an inbound command is then logged and
  * dropped rather than silently ignored.
  *

@@ -9,7 +9,7 @@
 | FR-005 | Pymunk 2D physics simulation | PRD-003 | active | P1 | Python 3.12; import package robocar_sim. The plant (robocar_sim.plant: motors, contacts, two rangefinders, two floor sensors) for the behaviour twin, plus the legacy demo (ADR-036). 194 passed, 6 skipped on the core and dev dependencies (uv run pytest tests/, 2026-11-13) |
 | FR-006 | WebSocket communication bridge | PRD-003 | deprecated | P2 | Removed by ADR-036, which withdraws PRD-003 R6-R8. The JSONL stepper python -m robocar_sim.plant is the simulation's external interface |
 | FR-007 | Hardware-in-the-loop (HIL) testing | PRD-003 | planned | P2 | Real ESP32 + virtual environment. No bridge to build on since ADR-036 removed the WebSocket and serial bridge (FR-006) |
-| FR-008 | OTA firmware updates | PRD-001 | active | P1 | Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription dropped (#1054); first check after 360 min (#1055) |
+| FR-008 | OTA firmware updates | PRD-001 | active | P1 | Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription registered after MQTT starts (#1054, #1126; bench check pending); first check 15 s after link-up (#1055), a failed fetch retried every 60 s up to 5 times (#1126) |
 | FR-009 | ESP32 build CI pipeline | PRD-001 | active | P0 | Parallel matrix; 4 projects; artifact archive |
 | FR-010 | Python simulation CI pipeline | PRD-003 | active | P1 | uv + pytest with coverage (floor 25 %) on numpy, pymunk, pyyaml and the dev extra; the viz extra (Genesis, torch) is not installed in CI (ADR-036) |
 | FR-011 | Pre-commit code quality hooks | — | active | P1 | clang-format, ruff, mypy, gitleaks |
@@ -43,7 +43,7 @@
 | FR-035 | Owner onboarding and notices | PRD-015 | planned | P3 | Adults only, privacy, AI disclosure, WiFi setup, reset |
 | FR-036 | Open-hardware build pack | PRD-015 | planned | P3 | Route A: build guide, BOM, fab files, own-key setup guide |
 | FR-037 | Teuvo network list with scan-and-pick | ADR-028 | planned | P1 | Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT (#848) |
-| FR-038 | Network services armed on link-up | ADR-028 | in-progress | P0 | Done: non-blocking connect, OTA/MQTT start on link-up, Improv re-arm, requests skipped offline (#846). Open: MQTT client at boot (#1054), first OTA check (#1055), home-flag gating needs FR-037 |
+| FR-038 | Network services armed on link-up | ADR-028 | in-progress | P0 | Done: non-blocking connect, OTA/MQTT start on link-up, Improv re-arm, requests skipped offline (#846), MQTT client at boot (#1054; bench check pending), first OTA check (#1055, #1126). Open: home-flag gating needs FR-037 |
 | FR-039 | Runtime Gemini credential in NVS | ADR-028 | active | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
 | FR-040 | Offline voice clips and help request | ADR-028 | planned | P1 | Pre-rendered ADPCM persona lines embedded in the app image (#849) |
 | FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable (#850) |

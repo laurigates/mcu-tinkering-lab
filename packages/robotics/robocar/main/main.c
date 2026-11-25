@@ -2417,10 +2417,11 @@ static esp_err_t init_hierarchical_ai(void)
 /**
  * @brief Create the MQTT client without connecting it (ADR-028 §2).
  *
- * app_main calls this before the network supervisor starts, because the
- * supervisor's first link-up runs ota_manager_init(), which subscribes to the
- * OTA check-now topic, before start_mqtt_service(); mqtt_logger_subscribe()
- * refuses until the client exists (issue #1054). Written by app_main before
+ * app_main calls this before the network supervisor starts, so OTA and the
+ * upgrade desk can register their subscriptions before the first link-up;
+ * mqtt_logger_subscribe() refuses until the client exists (issue #1054). The
+ * supervisor runs start_mqtt_service(), which retries a failed creation,
+ * before ota_manager_init() subscribes (issue #1126). Written by app_main before
  * the supervisor task exists and by that task afterwards, never concurrently.
  *
  * @return true once the client exists.
@@ -2525,6 +2526,15 @@ static void net_supervisor_task(void *arg)
         settle_improv_attempt(link_up, &sup);
         const net_actions_t act = net_supervisor_step(&sup, link_up, now_ms);
 
+        /* MQTT first: ota_manager_init() subscribes to the OTA check-now topic
+         * once per boot, and mqtt_logger_subscribe() refuses until the client
+         * exists. start_mqtt_service() retries a boot-time creation that
+         * failed, so the subscription no longer depends on it (issue #1126). */
+        if (act.start_mqtt) {
+#if MQTT_LOGGING_ENABLED
+            start_mqtt_service();
+#endif
+        }
         if (act.start_ota) {
 #if OTA_ENABLED
             /* Arms ota_manager_confirm_valid() too. With
@@ -2536,11 +2546,6 @@ static void net_supervisor_task(void *arg)
                 ESP_LOGW(TAG, "ota_manager_init failed (%s) — updates disabled",
                          esp_err_to_name(ota_ret));
             }
-#endif
-        }
-        if (act.start_mqtt) {
-#if MQTT_LOGGING_ENABLED
-            start_mqtt_service();
 #endif
         }
         if (act.stop_mqtt) {
