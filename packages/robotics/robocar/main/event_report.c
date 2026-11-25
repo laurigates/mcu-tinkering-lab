@@ -245,10 +245,13 @@ static char *render_pending(const pending_t *p)
     ev.breadcrumb_count = line_count;
 
     char message[48];
-    // fill_note() points ev.breadcrumbs at goals, which event_report_render()
-    // reads below, so goals has to outlive the if.
+    // fill_note() points ev.breadcrumbs at goals, and the crash branch points
+    // ev's exception fields at type and value; event_report_render() reads
+    // them below, so all three have to outlive the if (#1174).
     // cppcheck-suppress variableScope
     const char *goals[EVENT_REPORT_NOTE_GOALS];
+    char type[EVENT_REPORT_CRASH_TYPE_MAX + 1];
+    char value[200];
     if (p->kind == PENDING_NOTE && p->note != NULL) {
         fill_note(&ev, p->note, goals);
     } else if (p->kind == PENDING_RESET) {
@@ -261,10 +264,8 @@ static char *render_pending(const pending_t *p)
         ev.tags[ev.tag_count++] = (event_report_tag_t){"breadcrumbs", p->crumbs_state};
     } else if (p->kind == PENDING_CRASH) {
         const crash_info_t *c = p->crash;
-        char type[EVENT_REPORT_CRASH_TYPE_MAX + 1];
         event_report_crash_type(c->reason, event_report_xtensa_cause_name(c->cause), type,
                                 sizeof(type));
-        char value[200];
         snprintf(value, sizeof(value), "%s (task %s, PC 0x%08x, EXCVADDR 0x%08x)",
                  c->reason[0] != '\0' ? c->reason : type, c->task, (unsigned)c->pc,
                  (unsigned)c->vaddr);
