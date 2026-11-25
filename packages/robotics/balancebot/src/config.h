@@ -77,7 +77,12 @@
 
 // Safety. A low pack (pack_sense.h) stops the motors with a FAULT as well, and
 // arming is refused while its cutoff is latched.
-#define TILT_CUTOFF_DEG 45.0f  // beyond this: motors off, FAULT
+// Beyond this: motors off, FAULT. 30 deg (45 until 2026-11-25, #1278): no lean
+// past ~27 deg can be held under the 40000 steps/s^2 clamp with 65 mm wheels
+// (g * tan(theta) <= 5.1 m/s^2), so a robot past it is lost and the wheels
+// only skid at full speed until the cutoff. Re-derive if the clamp or the
+// wheel diameter changes.
+#define TILT_CUTOFF_DEG 30.0f
 // ±3 deg (was ±1 until 2026-11-23, too narrow to hold by hand). With the trim
 // set, the LQR at r = 10 catches far more than this: its angle gain alone
 // reaches the acceleration clamp only at ~11 deg (README "Choosing r").

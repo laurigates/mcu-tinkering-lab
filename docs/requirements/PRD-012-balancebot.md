@@ -76,7 +76,7 @@ available and otherwise idle.
 - **US-04**: As a tuner, I want tuned gains saved to flash, so that the
   robot balances standalone after a power cycle.
 - **US-05**: As an operator, I want the robot to disable its motors
-  immediately when it falls past 45°, so that a fallen robot doesn't
+  immediately when it falls past 30°, so that a fallen robot doesn't
   grind its wheels.
 
 ### Secondary user — developer
@@ -157,7 +157,8 @@ interrupt with a timer fallback.
 **FR-4.02**: Angle PID whose output is wheel acceleration, integrated
 to step rate (clamped ~4000 steps/s).
 
-**FR-4.03**: Safety: tilt cutoff (|pitch| > 45° → motors off + FAULT),
+**FR-4.03**: Safety: tilt cutoff (|pitch| > 30° → motors off + FAULT;
+45° until 2026-11-25, lowered because no lean past ~27° is recoverable),
 hardware watchdog fed only by the control loop, arm gesture (hold
 upright ±3° for 3 s; ±1° until 2026-11-23, too narrow to hold by hand) or
 explicit `arm`.
@@ -208,7 +209,7 @@ parameter-store CRC, run in CI.
   4000 steps/s with clean direction reversals.
 - [ ] Robot balances ≥ 60 s untethered and recovers from a light push.
 - [ ] Tilt cutoff disables both drivers within 100 ms of |pitch|
-  crossing 45°.
+  crossing 30°.
 - [ ] `save`, power cycle, `get` shows the tuned gains restored.
 - [ ] Host unit tests for PID / filter / param CRC pass in CI.
 
