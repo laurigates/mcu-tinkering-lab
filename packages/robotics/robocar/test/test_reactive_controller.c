@@ -992,6 +992,27 @@ static void test_single_short_reading_trips_the_reflex(void)
     ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
 }
 
+/* The threshold itself: a reading one below STOP_THRESHOLD_CM trips the reflex
+ * and a reading at it does not (#1192). Written against the define, so a
+ * deliberate change to the threshold moves the test with it. */
+static void test_reflex_trips_below_the_threshold_not_at_it(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(STOP_THRESHOLD_CM);
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, STOP_THRESHOLD_CM - 1);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
 /* A run of failed front reads is reported, without dragging the rear with it,
  * and clears on the next good reading. */
 static void test_front_failure_streak_is_reported_per_sensor(void)
@@ -1589,6 +1610,8 @@ int main(void)
     test_run("rear_obstacle_does_not_trip_the_reflex", test_rear_obstacle_does_not_trip_the_reflex);
     test_run("front_obstacle_trips_the_reflex", test_front_obstacle_trips_the_reflex);
     test_run("single_short_reading_trips_the_reflex", test_single_short_reading_trips_the_reflex);
+    test_run("reflex_trips_below_the_threshold_not_at_it",
+             test_reflex_trips_below_the_threshold_not_at_it);
     test_run("front_failure_streak_is_reported_per_sensor",
              test_front_failure_streak_is_reported_per_sensor);
     test_run("rear_failure_streak_is_reported_per_sensor",
