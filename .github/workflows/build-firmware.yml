@@ -845,3 +845,56 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash workflow-tools/tools/verify-release-assets.sh "$RELEASE_TAG" release-assets
+
+  # A failed run here was reported nowhere: balancebot v0.1.13 and v0.1.14
+  # shipped without their .uf2 and the gap was found days later on the
+  # release page (#1181). This job opens one issue per tag, or comments on
+  # the open one, naming the failed jobs. No model runs, and it works for a
+  # workflow_dispatch replay too. A run the concierge App started skips
+  # resolve-tag, so every job here is skipped and failure() is false.
+  report-failure:
+    name: Report a failed release build
+    needs:
+      - resolve-tag
+      - discover-projects
+      - build-firmware
+      - assemble-and-deploy
+      - discover-pico-release
+      - build-pico
+      - attach-pico-release
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      issues: write
+    env:
+      # resolve-tag has no output when it is the job that failed.
+      TAG: ${{ needs.resolve-tag.outputs.tag || github.event.release.tag_name || inputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_ATTEMPT: ${{ github.run_attempt }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update the release failure issue
+        run: |
+          set -euo pipefail
+          failed=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs" \
+            --paginate --jq '.jobs[] | select(.conclusion == "failure") | .name')
+          title="Build and Release Firmware failed for $TAG"
+          body="$RUNNER_TEMP/report.md"
+          {
+            echo "Build and Release Firmware failed for \`$TAG\` (attempt $RUN_ATTEMPT): $RUN_URL"
+            echo
+            echo "Failed jobs:"
+            echo
+            sed 's/^/- /' <<< "${failed:-(none listed)}"
+          } > "$body"
+          number=$(gh issue list --state open --label core:ci --search "$title in:title" \
+            --json number,title --limit 50 \
+            | jq -r --arg t "$title" '[.[] | select(.title == $t) | .number] | first // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$body"
+          else
+            gh issue create --title "$title" --label core:ci --body-file "$body"
+          fi
