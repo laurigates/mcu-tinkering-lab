@@ -56,7 +56,7 @@ them — keep them that way. The gyro calibration's stillness judgement and
 and `cmd_trim()` calling it. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live
 in `arm_gate.c` for that reason; keep `handle_command()` calling it. The CLI's
 `arm`, `mount` and `load` refusals, and what `arm` and a sent mount report
-once core 1 drained them, live in `cli_gate.c`; keep `cmd_arm()`, `cmd_mount()`,
+once core 1 drained them, live in `cli_gate.c` (with the `rate` and `cal` refusals); keep `cmd_arm()`, `cmd_mount()`,
 `adopt_mount()` and the `load` branch calling it. The live PID/LQR switch
 (CMD_SET_CONTROLLER and the LQR->PID back-calculation tick) lives in
 `ctrl_switch.c`; keep `handle_command()` and the RUN branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.

@@ -1,4 +1,5 @@
-// Core 0's checks before `arm`, `mount` and `load` send anything, decided on
+// Core 0's checks before `arm`, `mount`, `load`, `save`, `rate` and `cal`
+// send anything, decided on
 // the snapshot cli.c reads, and what the CLI reports once core 1 has drained
 // them. Pure C (no SDK dependencies) so the host tests run the same decision
 // code the CLI runs (tests/host/test_cli_gate.c).
@@ -13,7 +14,7 @@
 typedef enum {
     CLI_GATE_SEND = 0,      // send the command
     CLI_GATE_BUSY,          // core 1 has not applied earlier commands: the snapshot is stale
-    CLI_GATE_NOT_IDLE,      // arm: core 1 arms only from IDLE and would ignore it
+    CLI_GATE_NOT_IDLE,      // arm, rate, cal: core 1 takes them only in IDLE
     CLI_GATE_ARMED,         // mount, load: core 1 ignores the mount in RUN
     CLI_GATE_UPSIDE_DOWN,   // arm: a still IMU reads upside down under the mount core 1 applies
     CLI_GATE_FAULT_NO_IMU,  // arm: FAULT with the IMU not responding; only `disarm` clears it
@@ -38,6 +39,11 @@ cli_gate_t cli_gate_load(bool synced, uint8_t state);
 // `save`. Refused in RUN: core 1 ignores CMD_SAVE there (a sector erase
 // stalls both cores), and the CLI used to print "saving" regardless.
 cli_gate_t cli_gate_save(bool synced, uint8_t state);
+
+// `rate` and `cal`, the disarmed bench commands. Refused outside IDLE: core 1
+// applies CMD_OPEN_LOOP_RATE and CMD_CALIBRATE only there and drops them in
+// RUN and FAULT.
+cli_gate_t cli_gate_bench(bool synced, uint8_t state);
 
 typedef enum {
     CLI_SAVE_OK = 0,   // core 1 ran the save and param_store_save() reported success

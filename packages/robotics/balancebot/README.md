@@ -101,20 +101,25 @@ set pack_r_kohm 22   # carrier divider R3: 27 (delivered boards, the default) or
 set pack_cells 4     # cell count the pack warning and cutoff scale with (default 3)
 ```
 
-`arm`, `mount` and `load` judge the state after the commands typed before them
-have reached core 1 (a pasted `disarm` first is waited for, a few control ticks
-at most), and refuse rather than print `OK` when core 1 would ignore them:
+`arm`, `mount`, `load`, `rate` and `cal` judge the state after the commands
+typed before them have reached core 1 (a pasted `disarm` first is waited for, a
+few control ticks at most), and refuse rather than print `OK` when core 1 would ignore them:
 
 - `arm` in FAULT: `ERR: state FAULT — 'disarm' to clear it, or hold upright …`.
   If the IMU is not responding, holding upright cannot clear the FAULT, so the
   refusal offers only `disarm`.
 - `arm` that core 1 takes but faults on in the same tick, because the robot
   lies past the 30° tilt cutoff or the IMU does not read:
-  `ERR: armed, then FAULT — …` instead of `OK`.
+  `ERR: armed, then FAULT (pitch … deg, tilt cutoff … deg) — …` or
+  `ERR: armed, then FAULT — IMU not responding; …` instead of `OK`.
 - `mount` and `load` while armed: `ERR: disarm first …`. Core 1 keeps the
   mount while armed. If the hold-upright gesture arms it before a `mount` (or
   the mount in `load`) arrives, the CLI says the mount stays where it was and
-  `get` shows the mount core 1 applies.
+  `get` shows the mount core 1 applies. `load` says whether a stored record
+  was found either way; when the mount was not confirmed, the parameters,
+  gains and controller were still applied.
+- `rate` and `cal` outside IDLE: `ERR: state RUN — 'disarm' first; …`. Core 1
+  runs them only disarmed.
 - Any of them while core 1 is still busy with earlier commands (a `save`
   stalls it ~45 ms): `ERR: core 1 busy …`; nothing is sent, so repeat it.
 

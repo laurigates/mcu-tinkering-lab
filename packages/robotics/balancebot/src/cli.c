@@ -349,11 +349,13 @@ static void cmd_set(const char *name, const char *value_str)
 static void cmd_cal(void)
 {
     balance_snapshot_t s;
-    if (!wait_core1(&s)) {
+    const bool synced = wait_core1(&s);
+    const cli_gate_t gate = cli_gate_bench(synced, s.state);
+    if (gate == CLI_GATE_BUSY) {
         printf("ERR: core 1 busy — earlier commands not applied yet; cal again\n");
         return;
     }
-    if (s.state != BAL_STATE_IDLE) {
+    if (gate != CLI_GATE_SEND) {
         printf("ERR: state %s — 'disarm' first; gyro not calibrated\n", state_name(s.state));
         return;
     }
@@ -1092,10 +1094,27 @@ static void handle_line(char *l)
             printf("usage: rate <l|r> <steps_per_s>\n");
             return;
         }
+        // Core 1 runs the bench rates only in IDLE and drops them otherwise.
+        balance_snapshot_t s;
+        const bool synced = wait_core1(&s);
+        const cli_gate_t gate = cli_gate_bench(synced, s.state);
+        if (gate == CLI_GATE_BUSY) {
+            printf("ERR: core 1 busy — earlier commands not applied yet, rate not sent; "
+                   "rate again\n");
+            return;
+        }
+        if (gate != CLI_GATE_SEND) {
+            printf("ERR: state %s — 'disarm' first; rate not sent\n", state_name(s.state));
+            return;
+        }
         balance_cmd_t cmd = {.cmd = CMD_OPEN_LOOP_RATE,
                              .param_id = motor[0] == 'l' ? 0 : 1,
                              .value = strtof(sps_str, NULL)};
-        balance_control_send_cmd(&cmd);
+        if (!balance_control_send_cmd(&cmd)) {
+            printf("ERR: command queue full — rate not sent\n");
+            return;
+        }
+        note_sent();
         printf("OK (disarmed bench mode only)\n");
     } else if (strcmp(tok, "cal") == 0) {
         cmd_cal();
@@ -1106,7 +1125,8 @@ static void handle_line(char *l)
         // the mount there, so a load while armed would leave the mirror (and
         // `get`) on a mount core 1 is not applying. Disarmed only, like save.
         balance_snapshot_t s;
-        const cli_gate_t gate = cli_gate_load(wait_core1(&s), s.state);
+        const bool synced = wait_core1(&s);
+        const cli_gate_t gate = cli_gate_load(synced, s.state);
         if (gate == CLI_GATE_BUSY) {
             printf("ERR: core 1 busy — earlier commands not applied yet, nothing loaded; "
                    "load again\n");
@@ -1123,8 +1143,17 @@ static void handle_line(char *l)
         // arms core 1 before the burst drains, core 1 drops the mount.
         // adopt_mount() reports that and keeps the mirror on what core 1
         // applies.
-        if (sync_all(true) && adopt_mount(mirror->imu_mount)) {
+        // Say whether a record was found in every case: when the mount is
+        // dropped or unconfirmed, the rest of the burst was still applied.
+        if (!sync_all(true)) {
+            printf("%s, but nothing was sent to core 1; load again\n",
+                   found ? "stored params found" : "no stored params");
+        } else if (adopt_mount(mirror->imu_mount)) {
             printf("%s\n", found ? "OK loaded from flash" : "no stored params — defaults loaded");
+        } else {
+            printf("%s: params, gains and controller applied; the mount was not confirmed "
+                   "(above)\n",
+                   found ? "loaded from flash" : "no stored params — defaults loaded");
         }
         if (boot_note[0] != '\0') {
             printf("%s\n", boot_note);
