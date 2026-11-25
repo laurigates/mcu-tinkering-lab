@@ -29,6 +29,12 @@ float pid_update(pid_t *pid, float setpoint, float measurement, float rate, floa
 // Set the integral state, clamped to +/- integral_max.
 void pid_set_integral(pid_t *pid, float integral);
 
+// Clamp the I term (ki * integral) to +/- term_max rather than the raw
+// integral: sets integral_max = term_max / |ki| (0 when ki == 0, when the
+// integral cannot move the output) and re-clamps the stored integral. Call
+// again after every ki change.
+void pid_limit_i_term(pid_t *pid, float term_max);
+
 // Bumpless transfer (back-calculation): the integral to load with
 // pid_set_integral() so that the NEXT pid_update() with these exact
 // arguments returns `target_out`. Pure: reads gains and nothing else.
