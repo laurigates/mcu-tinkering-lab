@@ -34,6 +34,10 @@ What the tests hold:
   release tag, and copies none of its steps (issue #1065). Its select step,
   run here against the repo's own files, picks balancebot, skips an ESP-IDF
   component, and selects nothing for a tag older than project-matrix.json.
+- build-firmware.yml ends with a ``report-failure`` job that needs every
+  other job and runs on ``failure()``. Its step, run here with a stub ``gh``,
+  opens an issue naming the tag, the failed jobs and the run, or comments on
+  the open issue with the same title (issue #1181).
 - build.yml's discovery step, run here against the repo's own
   project-matrix.json, does not select the robocar firmware for a change
   inside one of the four projects nested in its directory (bringup,
@@ -542,6 +546,91 @@ class BuildFirmwareTest(unittest.TestCase):
             if s.get("name") == "Download the Pico SDK build artifacts"
         ]
         self.assertEqual(step["with"].get("merge-multiple"), True)
+
+
+@unittest.skipUnless(shutil.which("jq"), "the report step needs jq")
+class ReleaseFailureReportTest(unittest.TestCase):
+    """A failed Build and Release Firmware run opens or updates one issue
+    (#1181). The report step runs here with a stub ``gh``."""
+
+    JOB = "report-failure"
+
+    def setUp(self):
+        self.jobs = load("build-firmware.yml")["jobs"]
+        self.assertIn(self.JOB, self.jobs)
+        self.job = self.jobs[self.JOB]
+
+    def test_it_runs_after_any_job_fails(self):
+        self.assertEqual(str(self.job.get("if")).strip(), "failure()")
+        self.assertEqual(needs_of(self.job), set(self.jobs) - {self.JOB})
+        self.assertEqual(
+            self.job.get("permissions"), {"actions": "read", "issues": "write"}
+        )
+
+    def run_report(self, open_issues: list[dict]) -> list[list[str]]:
+        """Run the report step against a stub gh that lists ``open_issues``
+        and two failed jobs. Returns each gh call's arguments, with the text
+        of any --body-file in place of its path."""
+        (step,) = self.job["steps"]
+        with tempfile.TemporaryDirectory() as scratch:
+            bin_dir = Path(scratch) / "bin"
+            bin_dir.mkdir()
+            log = Path(scratch) / "calls.jsonl"
+            stub = bin_dir / "gh"
+            stub.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "args = sys.argv[1:]\n"
+                "if '--body-file' in args:\n"
+                "    i = args.index('--body-file') + 1\n"
+                "    args[i] = open(args[i]).read()\n"
+                "open(os.environ['STUB_LOG'], 'a').write(json.dumps(args) + '\\n')\n"
+                "if args[:2] == ['issue', 'list']:\n"
+                "    print(os.environ['STUB_ISSUES'])\n"
+                "elif args[:1] == ['api']:\n"
+                "    print('Build robocar\\nAttach Pico SDK firmware to the release')\n"
+            )
+            stub.chmod(0o755)
+            env = {
+                **os.environ,
+                **{k: str(v) for k, v in self.job["env"].items()},
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                "TAG": "balancebot-v0.1.14",
+                "GH_REPO": "o/r",
+                "RUN_ID": "42",
+                "RUN_ATTEMPT": "1",
+                "RUN_URL": "https://example.invalid/runs/42",
+                "RUNNER_TEMP": scratch,
+                "STUB_LOG": str(log),
+                "STUB_ISSUES": json.dumps(open_issues),
+            }
+            proc = subprocess.run(
+                ["bash", "-c", step["run"]], env=env, capture_output=True, text=True
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            return [json.loads(line) for line in log.read_text().splitlines()]
+
+    def test_a_first_failure_opens_an_issue_naming_the_tag_and_jobs(self):
+        calls = self.run_report([])
+        (create,) = [c for c in calls if c[:2] == ["issue", "create"]]
+        title = create[create.index("--title") + 1]
+        body = create[create.index("--body-file") + 1]
+        self.assertIn("balancebot-v0.1.14", title)
+        self.assertIn("Attach Pico SDK firmware to the release", body)
+        self.assertIn("https://example.invalid/runs/42", body)
+        self.assertFalse([c for c in calls if c[:2] == ["issue", "comment"]])
+
+    def test_a_repeat_failure_comments_on_the_open_issue(self):
+        calls = self.run_report([])
+        (create,) = [c for c in calls if c[:2] == ["issue", "create"]]
+        title = create[create.index("--title") + 1]
+        calls = self.run_report(
+            [{"number": 7, "title": title + " (old)"}, {"number": 9, "title": title}]
+        )
+        (comment,) = [c for c in calls if c[:2] == ["issue", "comment"]]
+        self.assertEqual(comment[2], "9")
+        self.assertIn("Build robocar", comment[comment.index("--body-file") + 1])
+        self.assertFalse([c for c in calls if c[:2] == ["issue", "create"]])
 
 
 @unittest.skipUnless(shutil.which("jq"), "the discovery step needs jq")
