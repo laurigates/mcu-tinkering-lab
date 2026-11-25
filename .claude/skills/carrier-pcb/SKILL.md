@@ -303,14 +303,19 @@ down):
 26. **The KiCad PPA keeps only the newest 10.0.x**, but Launchpad still serves
     superseded builds under the PPA's `+files/` URL; `tools/kicad/setup.sh`
     pins 10.0.6's packages by sha256.
-27. **Freerouting 2.5.0 drops a DSN's `(wiring ...)` section**, fixed and
-    protected wires included, and routes other nets straight through a
-    `[[tracks]]` track. route_board.py walls each segment off with a DSN
-    `keepout`, flush with the polyline's ends so the end pads' centres stay
-    reachable (a keepout over a pad centre leaves that pad unroutable), and
-    drops the pad under each track's first point from the DSN netlist
-    (`dsn.drop_pins`): the track already joins it to the pad under its last
-    point, and both ends must sit on pads of the track's net.
+27. **An extra `)` in the DSN hides everything after it, and Freerouting
+    says nothing.** Until #1280 `dsn.rewrite` cut the net class at the first
+    `"    )\n"`, which also matches the tail of the rule's six-space `)`, and
+    left the class's own `)` behind. `(pcb ...)` then closed before
+    `(wiring ...)`, so Freerouting never read a `[[tracks]]` track and routed
+    straight through them. That was read as "Freerouting 2.5.0 drops the
+    wiring section", and route_board.py walled every fixed segment off with a
+    keepout and dropped each track's first pad from the netlist: the
+    workarounds behind traps 56 and 58, which then boxed pads in themselves.
+    `dsn.check_balanced` now fails the route on an unbalanced DSN. A
+    `[[tracks]]` end sits on a pad of its net or on a `[[vias]]` via of it, so
+    a fixed track can change layer. Reading the wiring is not the same as
+    counting it as a connection: trap 59.
 28. **One boxed-in pad can make Freerouting abandon a whole net.** A keepout
     that took U10's GND pin's only F.Cu way out left 30-50 GND connections
     unrouted across the board, deterministically, though every other pad had
@@ -388,7 +393,10 @@ down):
     mm signal via, deterministically, at the same spot on every run; removing
     that via from the structure's `(via ...)` list changes nothing. Moving
     parts to make room did not help either. `route_board.py` grows each
-    undersized via to its class's size and lets DRC judge the fit.
+    undersized via to its class's size and lets DRC judge the fit. On the
+    robocar main board (#1280) U2's +3V3 via, grown from 0.6 to 0.8 mm, came
+    0.16 mm from a GND track in 8 of 12 routes; that class now uses the signal
+    via.
 37. **A fanout via can land in a neighbouring pin's pad of its own net.**
     Same-net SMD pads were no obstacle, so U7:4's diagonal candidate sat
     inside U7:3, where the hole drains paste at reflow. Fanout vias now clear
@@ -534,26 +542,53 @@ down):
     the pad gap against track + 2 x clearance before blaming placement.
 56. **A footprint can stack two pads of one net at one spot** (a USB-C
     receptacle's A1/B12, A12/B1, A4/B9, A9/B4). Each is its own pin to
-    Freerouting, so a fixed track ending on such a spot must drop both:
-    route_board.py's `track_pins` drops every same-net pad under a track's
-    first point.
+    Freerouting. While route_board.py dropped a fixed track's first pad
+    (trap 27) it had to drop both; with the fixed wiring read, a track over
+    the spot joins both.
 57. **A carrier split in two needs `side` on both board.toml files.** With
     `[project] side = "main"` the netlist keeps every part but the heads;
     `side = "head"`, in a project with no hardware.toml, needs `join` naming
     the directory whose hardware.toml it reads, and the cable's `head_parts`
     for the heads' other parts (mounting holes). A net with nodes on both
     PCBs fails the build.
-58. **The pad a fixed track leaves to Freerouting must keep an open side.**
-    route_board.py walls each `[[tracks]]` segment off with a keepout half the
-    width plus the widest class clearance either side, flush with the ends.
-    Ending at the centre of an 0805 pad, that keepout covers all but a
-    0.6 mm strip of it, too narrow for a 0.2 mm track with 0.2 mm clearance:
-    on #1280 R15's gate pad, C10's VBUS pad and C10's GND pad were each the
-    one pad of their net left to Freerouting and walled in, and the log said
+58. **A keepout boxes in pads as surely as copper does.** Before trap 27's
+    fix, each fixed segment's keepout (half the width plus the widest class
+    clearance, flush with the ends) left 0.6 mm of an 0805 pad, and R15's
+    gate pad, C10's VBUS and GND pads and C19's BTST pad were each walled in:
     "the maze search algorithm could not be created" or "no connection was
-    found". End a track at the far edge of a small pad, or make the pad left
-    over a through-hole one (a connector or shield pin), and read
-    route_board's `Freerouting:` lines, which name the pads.
+    found". `[[route_keepouts]]` still do this: a B.Cu keepout also blocks
+    through vias (Freerouting's `ObstacleArea.isObstacle` takes any foreign
+    trace or via), so a pad under one leaves on the other layer or not at all.
+    Read route_board's `Freerouting:` lines, which name the pads, and notch the
+    keepout where a fixed track has to cross it.
+
+59. **Freerouting joins a fixed wire to a pin only on the pin's exact
+    centre, and KiCad's DSN export misses it by half a micrometre.** It writes
+    wire coordinates in whole µm but places pins from their image offsets,
+    which sit on half µm (an 0805's pads at ±1.0375 mm), and board.toml's
+    points are rounded to 0.01 mm besides. Every fixed track then counts as
+    unconnected: Freerouting never finishes a route, so its optimizer never
+    runs, and the board comes back with dangling vias and pockets of pour
+    (#1280: with the charger's fixed tracks, 1-20 unconnected items and
+    dangling vias across the whole board in every route). build_board.py ends
+    each fixed track on its pad's centre with a short segment inside the pad,
+    and `dsn.snap_wire_ends` moves each wire end within 2 µm of a pin of its
+    net onto the centre exactly. The test is Freerouting's DEBUG
+    `Pass #1: N incompletes` block, per net: CHG_PMID's five fixed-joined pads
+    read 4 incompletes before and 0 after.
+60. **Freerouting's "could not be routed" list describes its final board,
+    not the best one it saves.** The two differ after a stagnation stop; read
+    the DEBUG `Pass #N: ... incompletes` block of the pass whose score the
+    SES restored, or KiCad's DRC on the imported board.
+61. **KiCad 10's starved-thermal check reads the `.kicad_pro`'s
+    `min_resolved_spokes`, not a `.kicad_dru` rule, and the zone fill ignores
+    custom `zone_connection` rules.** The report says "zone min spoke count 2"
+    beside a rule that asks for 1; no rule form changed it (#1280). Set the
+    project value. For pads that should join the pour solid, list them in
+    `[pour] solid_pads` (route_board.py sets the pad's own zone connection).
+    A thermal that reaches only a pocket of fill fenced off by routed tracks
+    is "connected to isolated island": route_board.py's island vias tie each
+    such pocket to the other layer's plane where a via fits inside the fill.
 
 ## Verify the gate can fail
 

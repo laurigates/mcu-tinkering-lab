@@ -10,7 +10,8 @@ classes; line 1, which carries the output path, is normalised to
 `(pcb carrier.dsn`. The golden `balancebot-carrier.rewritten.dsn` is what
 `rewrite_dsn` in the balancebot `route_board.py` (as of fb24b28, before the
 script moved to tools/kicad, with its hard-coded classes) writes from that
-fixture. Here the classes come from the frozen board.toml
+fixture, less the stray `)` that function and dsn.py both left after the
+classes until #1280. Here the classes come from the frozen board.toml
 (`kicad.testfixture`) through `kicad.boardinput`, so the test also pins that
 board.toml says what the script's constants said.
 
@@ -32,7 +33,8 @@ then replace line 1 of raw.dsn with `(pcb carrier.dsn` to get the fixture,
 and run `rewrite_dsn` from
 `git show fb24b28:packages/robotics/balancebot/hardware/carrier/scripts/route_board.py`
 (the constants and the two functions above `gnd_zone`; the module imports
-pcbnew, so lift them out) on the fixture to get the golden. Check that the
+pcbnew, so lift them out) on the fixture to get the golden (then drop the `    )` line before
+`  (wiring`). Check that the
 lifted function still reproduces the previous golden from the previous
 fixture before replacing either.
 
@@ -45,7 +47,6 @@ import copy
 import importlib.util
 import unittest
 from pathlib import Path
-from typing import ClassVar
 
 from kicad import boardinput, testfixture
 
@@ -132,51 +133,103 @@ class RewriteTests(unittest.TestCase):
         self.assertEqual(dsn.via_name([1000, 500]), "Via[0-1]_1000:500_um")
 
 
-class TrackKeepoutTests(unittest.TestCase):
-    """Freerouting 2.5.0 drops a DSN's `wiring` section, fixed wires included,
-    and routes through them; a [[tracks]] trunk reaches it as keepouts."""
+class BalanceTests(unittest.TestCase):
+    """Freerouting reads a DSN only up to an extra `)`. Before #1280 the class
+    rewrite left one after the classes, so `(pcb ...)` closed before
+    `(wiring ...)` and every fixed track went unread (carrier-pcb trap 27)."""
 
-    TEXT = '  (structure\n    (via "Via[0-1]_600:300_um")\n  )\n'
-    TRUNK: ClassVar[dict] = {
-        "name": "trunk",
-        "net": "+5V",
-        "layer": "F.Cu",
-        "width_mm": 1.0,
-        "points": [[10.0, 5.0], [20.0, 5.0]],
-    }
+    @classmethod
+    def setUpClass(cls):
+        spec = boardinput.build(PROJECT, ROOT)
+        cls.fixture = (TESTDATA / "balancebot-carrier.dsn").read_text()
+        cls.out = dsn.rewrite(cls.fixture, spec["classes"], spec["signal"])
 
-    def test_a_segment_is_a_keepout_on_its_layer(self):
-        out = dsn.track_keepouts(self.TEXT, [self.TRUNK], [100.0, 100.0], 200)
-        # half-width 500 um + 200 um margin to each side, flush with both ends:
-        # a track ending inside a pad leaves the pad's centre to the router
-        self.assertIn(
-            '    (keepout "" (polygon F.Cu 0  110000 -104300  120000 -104300'
-            "  120000 -105700  110000 -105700  110000 -104300))\n"
-            '    (via "Via[0-1]_600:300_um")',
-            out,
+    def test_the_rewrite_stays_balanced(self):
+        dsn.check_balanced(self.fixture)
+        dsn.check_balanced(self.out)
+
+    def test_wiring_stays_inside_pcb(self):
+        depth = 0
+        for line in self.out.replace('(string_quote ")', "").splitlines():
+            if line.lstrip().startswith("(wiring"):
+                self.assertEqual(depth, 1)
+                break
+            depth += line.count("(") - line.count(")")
+        else:
+            self.fail("the fixture has no (wiring ...) section")
+
+    def test_the_pre_1280_cut_fails_the_check(self):
+        # What the old four-space search left: the class's own ")" behind.
+        broken = self.out.replace(
+            "    )\n  )\n  (wiring", "    )\n    )\n  )\n  (wiring", 1
         )
+        self.assertNotEqual(broken, self.out)
+        with self.assertRaisesRegex(dsn.DsnError, "closes more than was opened"):
+            dsn.check_balanced(broken)
 
-    def test_every_segment_of_a_polyline(self):
-        trunk = dict(self.TRUNK, points=[[0, 0], [10, 0], [10, 10]], layer="B.Cu")
-        out = dsn.track_keepouts(self.TEXT, [trunk], [0, 0], 0)
-        self.assertEqual(out.count('(keepout "" (polygon B.Cu 0'), 2)
+    def test_an_unclosed_paren(self):
+        with self.assertRaisesRegex(dsn.DsnError, "1 '\\(' unclosed"):
+            dsn.check_balanced("(pcb (structure)")
 
-    def test_interior_corners_are_covered(self):
-        trunk = dict(self.TRUNK, points=[[0, 0], [10, 0], [10, 10]], width_mm=2.0)
-        out = dsn.track_keepouts(self.TEXT, [trunk], [0, 0], 0)
-        # the first segment runs on past the corner by the half-width, the
-        # second starts that far before it; the polyline's own ends are flush
-        self.assertIn("(polygon F.Cu 0  0 1000  11000 1000  11000 -1000  0 -1000", out)
+    def test_parens_in_quoted_names_do_not_count(self):
+        dsn.check_balanced('(net "unconnected-(A2-Pin_5-Pad5)" (pins A2-5))')
+
+
+class SnapWireEndsTests(unittest.TestCase):
+    """Freerouting joins a fixed wire to a pin only on the pin's exact centre;
+    KiCad writes wires in whole um and places 0805 pads on half um (#1280)."""
+
+    TEXT = (
+        "(pcb x\n"
+        "  (placement\n"
+        "    (component R_0805\n"
+        "      (place C11 183200 -151600 front 0 (PN 10u))\n"
+        "      (place C12 183200 -149400 front 90 (PN 10u))\n"
+        "    )\n"
+        "  )\n"
+        "  (library\n"
+        "    (image R_0805\n"
+        "      (pin Rect 1 -1037.5 0)\n"
+        "      (pin Rect 2 1037.5 0)\n"
+        "    )\n"
+        "    (padstack Rect\n"
+        "    )\n"
+        "  )\n"
+        "  (network\n"
+        "    (net PMID\n"
+        "      (pins C11-1 C12-1)\n"
+        "    )\n"
+        "  )\n"
+        "  (wiring\n"
+        "    (wire (path F.Cu 800  182162 -151600  182162 -151000\n"
+        "            182000 -150600)(net PMID)(type fix))\n"
+        "  )\n"
+        ")\n"
+    )
+
+    def test_pin_centres_turn_with_the_part(self):
+        c = dsn.pin_centres(self.TEXT)
+        self.assertEqual(c["C11-1"], (182162.5, -151600.0))
+        x, y = c["C12-1"]  # turned 90: the pad moves along y
+        self.assertAlmostEqual(x, 183200.0)
+        self.assertAlmostEqual(y, -150437.5)
+
+    def test_an_end_within_two_um_lands_on_the_centre(self):
+        out, n = dsn.snap_wire_ends(self.TEXT)
+        self.assertEqual(n, 1)
         self.assertIn(
-            "(polygon F.Cu 0  11000 1000  11000 -10000  9000 -10000  9000 1000", out
+            "(path F.Cu 800  182162.5 -151600  182162 -151000  182000 -150600)", out
         )
+        dsn.check_balanced(out)
 
-    def test_no_tracks_leaves_the_text(self):
-        self.assertEqual(dsn.track_keepouts(self.TEXT, [], [0, 0], 200), self.TEXT)
+    def test_an_end_far_from_any_pin_stays(self):
+        far = self.TEXT.replace("182000 -150600", "182500 -150600")
+        out, _ = dsn.snap_wire_ends(far)
+        self.assertIn("182500 -150600", out)
 
-    def test_needs_the_structure_via_line(self):
-        with self.assertRaisesRegex(dsn.DsnError, "no structure"):
-            dsn.track_keepouts("(pcb x)", [self.TRUNK], [0, 0], 0)
+    def test_only_pins_of_the_wires_own_net(self):
+        other = self.TEXT.replace("(net PMID)(type fix)", "(net GND)(type fix)")
+        self.assertEqual(dsn.snap_wire_ends(other)[1], 0)
 
 
 class RectKeepoutTests(unittest.TestCase):

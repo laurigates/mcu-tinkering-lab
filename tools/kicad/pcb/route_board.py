@@ -7,10 +7,9 @@ Run with KiCad's bundled Python (3.9) after build_board.py:
 ``just <project>::carrier-board`` writes the JSON (``python3 -m
 kicad.boardinput``) and runs both scripts. Steps: export Specctra DSN, rewrite
 its single net class into board.toml's width classes (dsn.py), run Freerouting
-headless (each board.toml ``[[tracks]]`` segment a keepout in the DSN, since
-Freerouting drops the exported wires; the pad under each track's first
-point out of its netlist, since the track already joins it to the pad under
-its last point; and each [fanout] in_pad pad, whose in-pad via joins it to the
+headless (board.toml's ``[[tracks]]`` and ``[[vias]]`` reach it as the export's
+fixed wiring, each end snapped onto its pin's exact centre; each [fanout]
+in_pad pad leaves its net's pin list, since its in-pad via joins it to the
 pour), import the session, add the [fanout] vias, check every pad of
 each pour net has a routed track, then add a zone per board.toml ``[pour]``
 region on each of its layers
@@ -26,6 +25,7 @@ Freerouting 2.5.0 jar (``freerouting_jar`` in the JSON, from $FREEROUTING_JAR).
 """
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -86,56 +86,59 @@ def pour_layers(board, pour):
     return layers
 
 
+def _at(origin, point):
+    return pcbnew.VECTOR2I(
+        pcbnew.FromMM(origin[0] + point[0]), pcbnew.FromMM(origin[1] + point[1])
+    )
+
+
 def end_pads(board, origin, tr, point):
-    """Every pad of `tr`'s net and layer under `point`, else exit.
+    """Every pad of `tr`'s net and layer under `point`.
 
     Usually one; a footprint can stack two pads of one net at one spot (a
     USB-C receptacle's A1/B12), and all of them are under the point.
     """
-    at = pcbnew.VECTOR2I(
-        pcbnew.FromMM(origin[0] + point[0]), pcbnew.FromMM(origin[1] + point[1])
-    )
+    at = _at(origin, point)
     layer = board.GetLayerID(tr["layer"])
-    pads = [
+    return [
         pad
         for fp in board.GetFootprints()
         for pad in fp.Pads()
         if pad.GetNetname() == tr["net"] and pad.IsOnLayer(layer) and pad.HitTest(at)
     ]
-    if not pads:
-        sys.exit(
-            f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad on "
-            f"{tr['layer']}"
-        )
-    return pads
 
 
-def end_pad(board, origin, tr, point):
-    """The (first) pad of `tr`'s net and layer under `point`, else exit."""
-    return end_pads(board, origin, tr, point)[0]
+def end_vias(board, origin, tr, point):
+    """The locked [[vias]] of `tr`'s net under `point`."""
+    at = _at(origin, point)
+    return [
+        t
+        for t in board.GetTracks()
+        if t.GetClass() == "PCB_VIA"
+        and t.IsLocked()
+        and t.GetNetname() == tr["net"]
+        and t.HitTest(at)
+    ]
 
 
-def track_pins(board, origin, tracks):
-    """(net, "REF-PAD") of every pad under each track's first point.
-
-    Both ends must be on a pad of the track's net. The first pad leaves
-    Freerouting's netlist (dsn.drop_pins): the track joins it to the last. A
-    pad stacked on it (same net, same spot) leaves too: left in, it is a pin
-    Freerouting must reach at the track's walled-off end, and one such pin
-    can make it give up the whole net (carrier-pcb trap 28).
-    """
-    pins = []
+def check_track_ends(board, origin, tracks):
+    """Exit unless each track's two ends sit on a pad or a [[vias]] via of its
+    net, and not both on one pad: a fixed track joins two things, and an end
+    in open copper is a stub nothing routes to."""
     for tr in tracks:
-        firsts = end_pads(board, origin, tr, tr["points"][0])
-        last = end_pad(board, origin, tr, tr["points"][-1])
-        for first in firsts:
-            if first.GetParentFootprint() is last.GetParentFootprint() and (
-                first.GetNumber() == last.GetNumber()
-            ):
-                sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
-            ref = first.GetParentFootprint().GetReference()
-            pins.append((tr["net"], f"{ref}-{first.GetNumber()}"))
-    return pins
+        ends = []
+        for point in (tr["points"][0], tr["points"][-1]):
+            pads = end_pads(board, origin, tr, point)
+            if not pads and not end_vias(board, origin, tr, point):
+                sys.exit(
+                    f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad "
+                    f"on {tr['layer']} and no [[vias]] via"
+                )
+            ends.append(
+                {(p.GetParentFootprint().GetReference(), p.GetNumber()) for p in pads}
+            )
+        if ends[0] & ends[1]:
+            sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
 
 
 def _bbox_near(item, x, y, reach):
@@ -227,12 +230,13 @@ def fanout(board, fan, clearance):
 
     stub_ids = set()
 
-    def add_via(x, y, net):
+    def add_via(x, y, net, size=None):
+        diameter, hole = size if size else (via_d, drill)
         via = pcbnew.PCB_VIA(board)
         via.SetViaType(pcbnew.VIATYPE_THROUGH)
         via.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
-        via.SetWidth(pcbnew.F_Cu, via_d)
-        via.SetDrill(drill)
+        via.SetWidth(pcbnew.F_Cu, diameter)
+        via.SetDrill(hole)
         via.SetNet(net)
         board.Add(via)
         obstacles.append(via)
@@ -317,7 +321,30 @@ def fanout(board, fan, clearance):
         box = pad.GetBoundingBox()
         cx, cy = pad.GetPosition().x, pad.GetPosition().y
         if name in in_pad:
-            if not any(box.Contains(v.GetPosition()) for v in vias_of(netcode)):
+            several = (fan.get("in_pad_vias") or {}).get(name)
+            if several:
+                # several vias of their own size, turned with the part; each
+                # must land inside the pad (#1280: one via carried a charger's
+                # whole ground)
+                size = (
+                    mm(several["via_um"][0] / 1000.0),
+                    mm(several["via_um"][1] / 1000.0),
+                )
+                deg = pad.GetParentFootprint().GetOrientationDegrees()
+                points = fanout_geom.in_pad_points(
+                    pcbnew.ToMM(cx), pcbnew.ToMM(cy), deg, several["at"]
+                )
+                for x, y in points:
+                    at = pcbnew.VECTOR2I(mm(x), mm(y))
+                    if not pad.HitTest(at):
+                        sys.exit(
+                            f"[fanout] in_pad_vias {name!r}: ({x:.2f}, {y:.2f}) mm is "
+                            "outside the pad"
+                        )
+                    if not any(v.GetPosition() == at for v in vias_of(netcode)):
+                        add_via(at.x, at.y, pad.GetNet(), size)
+                        added += 1
+            elif not any(box.Contains(v.GetPosition()) for v in vias_of(netcode)):
                 add_via(cx, cy, pad.GetNet())
                 added += 1
             continue
@@ -450,16 +477,24 @@ def vias_in_pads(board, spec):
     return problems
 
 
-def in_pad_pins(board, fan):
-    """(net, "REF-PAD") of each [fanout] in_pad pad.
+def in_pad_pins(board, fan, origin, tracks):
+    """(net, "REF-PAD") of each [fanout] in_pad pad no [[tracks]] end reaches.
 
     Its in-pad via joins it to the other layer's pour, so it leaves Freerouting's
     netlist: an exposed pad inside a ring of fine-pitch pins is otherwise a pad
     Freerouting cannot reach, and one unreachable pad can make it abandon the
-    whole net (carrier-pcb skill trap 28).
+    whole net (carrier-pcb skill trap 28). A pad a fixed track already ties to
+    its net stays in: left out it is a netless obstacle, and the fixed tracks
+    into it read as clearance violations (#1280).
     """
     if not fan:
         return []
+    tied = {
+        (p.GetParentFootprint().GetReference(), p.GetNumber())
+        for tr in tracks
+        for point in (tr["points"][0], tr["points"][-1])
+        for p in end_pads(board, origin, tr, point)
+    }
     pins = []
     for name in fan["in_pad"]:
         ref, num = name.split(":", 1)
@@ -467,7 +502,8 @@ def in_pad_pins(board, fan):
         pad = fp.FindPadByNumber(num) if fp else None
         if pad is None:
             sys.exit(f"[fanout] in_pad {name!r} is not a pad on the board")
-        pins.append((pad.GetNetname(), f"{ref}-{num}"))
+        if (ref, num) not in tied:
+            pins.append((pad.GetNetname(), f"{ref}-{num}"))
     return pins
 
 
@@ -532,6 +568,106 @@ def stitch(board, spec, zones):
     return added
 
 
+def island_vias(board, spec, zones):
+    """A via in each piece of a pour net's fill cut off from that zone's main
+    piece on its layer, where one fits with the pour clearance and the other
+    pour layer's fill of the net holds it too. Returns how many.
+
+    Routed tracks can fence a pocket of fill round a ground pad; the pad's
+    thermal spokes then reach only that pocket, which DRC reports as a starved
+    thermal into an isolated island (#1280: A5:1, J1:15, J7:4 in most routes).
+    A via ties the pocket to the other layer's plane. Uses [pour] stitch's via.
+    """
+    st = spec["pour"].get("stitch")
+    if not st:
+        return 0
+    d_um, drill_um = st["via_um"]
+    # Inside the fill is enough: its edge already stands the pour clearance off
+    # every other net. Holes keep the board's 0.25 mm hole to hole.
+    reach = pcbnew.FromMM(d_um / 2000.0 + 0.02)
+    drill = pcbnew.FromMM(drill_um / 2000.0)
+    gap = pcbnew.FromMM(0.25)
+    step = pcbnew.FromMM(0.05)
+    fills = {}
+    for z in zones:
+        for layer in z.GetLayerSet().Seq():
+            fills.setdefault(z.GetNetname(), {}).setdefault(layer, []).append(
+                z.GetFilledPolysList(layer)
+            )
+    holes = [
+        (v.GetPosition(), v.GetDrill() / 2)
+        for v in board.GetTracks()
+        if v.GetClass() == "PCB_VIA"
+    ] + [
+        (p.GetPosition(), max(p.GetDrillSizeX(), p.GetDrillSizeY()) / 2)
+        for fp in board.GetFootprints()
+        for p in fp.Pads()
+        if p.GetDrillSizeX() > 0
+    ]
+
+    def ring(at):
+        return [
+            pcbnew.VECTOR2I(
+                at.x + int(reach * math.cos(a)), at.y + int(reach * math.sin(a))
+            )
+            for a in (k * math.pi / 8 for k in range(16))
+        ] + [at]
+
+    added = 0
+    for z in zones:
+        net = z.GetNetname()
+        for layer in z.GetLayerSet().Seq():
+            polys = z.GetFilledPolysList(layer)
+            n = polys.OutlineCount()
+            if n < 2:
+                continue
+            areas = [abs(polys.Outline(i).Area()) for i in range(n)]
+            main = areas.index(max(areas))
+            others = [fl for other, fl in fills[net].items() if other != layer]
+            for i in range(n):
+                if i == main:
+                    continue
+                chain = polys.Outline(i)
+                box = chain.BBox()
+                found = None
+                y = box.GetTop() + reach
+                while found is None and y <= box.GetBottom() - reach:
+                    x = box.GetLeft() + reach
+                    while x <= box.GetRight() - reach:
+                        at = pcbnew.VECTOR2I(int(x), int(y))
+                        pts = ring(at)
+                        if (
+                            all(
+                                chain.PointInside(pt) and polys.Contains(pt)
+                                for pt in pts
+                            )
+                            and all(
+                                all(any(f.Contains(pt) for f in fl) for pt in pts)
+                                for fl in others
+                            )
+                            and not any(
+                                (at.x - c.x) ** 2 + (at.y - c.y) ** 2
+                                < (drill + gap + r) ** 2
+                                for c, r in holes
+                            )
+                        ):
+                            found = at
+                            break
+                        x += step
+                    y += step
+                if found is None:
+                    continue
+                via = pcbnew.PCB_VIA(board)
+                via.SetPosition(found)
+                via.SetWidth(pcbnew.FromMM(d_um / 1000.0))
+                via.SetDrill(pcbnew.FromMM(drill_um / 1000.0))
+                via.SetNet(board.FindNet(net))
+                board.Add(via)
+                holes.append((found, drill))
+                added += 1
+    return added
+
+
 def route(spec):
     pcb = spec["pcb"]
     out = spec["out_dir"]
@@ -555,22 +691,22 @@ def route(spec):
     with open(dsn_path) as f:
         try:
             text = dsn.rewrite(f.read(), spec["classes"], spec["signal"])
-            # Freerouting ignores the exported [[tracks]] wires; keep it off them.
-            margin = max(c["clearance_um"] for c in [*spec["classes"], spec["signal"]])
-            tracks = spec.get("tracks", [])
-            text = dsn.track_keepouts(text, tracks, spec["origin"], margin)
+            check_track_ends(board, spec["origin"], spec.get("tracks", []))
             text = dsn.rect_keepouts(
                 text, spec.get("route_keepouts", []), spec["origin"]
             )
             text = dsn.no_via_at_smd(text)
-            pins = track_pins(board, spec["origin"], tracks) + in_pad_pins(
-                board, spec.get("fanout")
+            pins = in_pad_pins(
+                board, spec.get("fanout"), spec["origin"], spec.get("tracks", [])
             )
             text = dsn.drop_pins(text, sorted(set(pins)))
+            text, snapped = dsn.snap_wire_ends(text)
+            dsn.check_balanced(text)
         except dsn.DsnError as e:
             sys.exit(f"DSN rewrite: {e}")
     with open(dsn_path, "w") as f:
         f.write(text)
+    print(f"snapped {snapped} fixed wire end(s) onto their pins' centres")
 
     if os.path.exists(ses_path):
         os.remove(ses_path)
@@ -712,6 +848,15 @@ def route(spec):
             pour_layers(board, {"layers": r["layers"]}) if "layers" in r else layers
         )
     ]
+    for name in pour.get("solid_pads", []):
+        ref, num = name.split(":", 1)
+        fp = board.FindFootprintByReference(ref)
+        pad = fp.FindPadByNumber(num) if fp else None
+        if pad is None:
+            sys.exit(f"[pour] solid_pads {name!r} is not a pad on the board")
+        for p in fp.Pads():  # a stacked pair shares the number's spot
+            if p.GetNumber() == num:
+                p.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
     pcbnew.ZONE_FILLER(board).Fill(zones)
     added = stitch(board, spec, zones)
     if added:
@@ -720,6 +865,13 @@ def route(spec):
             sys.exit("stitching vias inside SMD pads:\n  " + "\n  ".join(bad))
         pcbnew.ZONE_FILLER(board).Fill(zones)
         print(f"stitch: added {added} vias")
+    islands = island_vias(board, spec, zones)
+    if islands:
+        bad = vias_in_pads(board, spec)
+        if bad:
+            sys.exit("island vias inside SMD pads:\n  " + "\n  ".join(bad))
+        pcbnew.ZONE_FILLER(board).Fill(zones)
+        print(f"islands: added {islands} vias")
     board.Save(pcb)
     return len(board.GetTracks())
 

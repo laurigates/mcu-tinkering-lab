@@ -47,6 +47,7 @@ KEYS = {
     "signal",
     "pour",
     "tracks",
+    "vias",
     "fanout",
     "keepouts",
     "route_keepouts",
@@ -245,6 +246,13 @@ class BalancebotTests(unittest.TestCase):
         data["tracks"] = [trunk]
         self.assertEqual(self.assemble(data)["tracks"], [trunk])
 
+    def test_vias_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        self.assertEqual(self.assemble(data)["vias"], [])
+        via = {"name": "down", "net": "GND", "at": [5, 30], "via_um": [600, 300]}
+        data["vias"] = [via]
+        self.assertEqual(self.assemble(data)["vias"], [via])
+
     def test_fanout_pass_through(self):
         data = copy.deepcopy(self.cfg.data)
         self.assertIsNone(self.assemble(data)["fanout"])
@@ -258,6 +266,7 @@ class BalancebotTests(unittest.TestCase):
                 "track_um": 300,
                 "reach_mm": 2.0,
                 "in_pad": [],
+                "in_pad_vias": {},
                 "exempt": [],
                 "required": [],
                 "own": [],

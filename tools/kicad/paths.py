@@ -44,6 +44,7 @@ BOARD_TABLES = frozenset(
         "route_keepouts",
         "cutouts",
         "tracks",
+        "vias",
         "fanout",
         "panel",
         "fab",

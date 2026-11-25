@@ -17,12 +17,12 @@ being net names or fnmatch patterns over the DSN's nets. `signal` is
 `[signal]`: `{"track_um", "clearance_um", "via_um"}`. A via `[d, drill]` in um
 is KiCad's padstack `Via[0-1]_<d>:<drill>_um`.
 
-`track_keepouts(text, tracks, origin, margin_um)` adds a keepout on its layer
-over each segment of board.toml's `[[tracks]]`. Freerouting 2.5.0 drops the
-DSN's `(wiring ...)` section, fixed and protected wires included, and routes
-other nets straight through them; a keepout it honours.
-`drop_pins(text, pins)` leaves a pad such a track already joins to its net
-out of the netlist, so Freerouting does not route to it again.
+`drop_pins(text, pins)` leaves a pad out of its net's pin list, for a pad
+something else joins to its net after routing (route_board.py's [fanout] in_pad
+pads). `check_balanced(text)` raises unless every `(` closes, outside quoted
+names: an unbalanced DSN still loads in Freerouting, which then reads only up
+to the extra `)` and silently drops everything after it, the fixed wiring
+included (#1280; carrier-pcb trap 27).
 """
 
 import fnmatch
@@ -31,6 +31,7 @@ import re
 
 _DEFAULT_CLASS = re.compile(r"    \(class kicad_default (.*?)\n      \(circuit", re.S)
 _DEFAULT_VIA = re.compile(r'^    \(via "([^"]*)"\)$', re.M)
+_CLASS_CLOSE = re.compile(r"^    \)\n", re.M)
 
 
 class DsnError(Exception):
@@ -110,61 +111,25 @@ def rewrite(text, classes, signal):
         )
     )
     start = m.start()
-    end = text.index("    )\n", text.index("(rule", m.end())) + len("    )\n")
-    text = text[:start] + "".join(blocks) + text[end:]
+    # The class's own closing line, exactly four spaces: a bare "    )" also
+    # matches the tail of the rule's six-space ")" and left one ")" behind,
+    # which closed (pcb ...) before (wiring ...) (#1280).
+    close = _CLASS_CLOSE.search(text, text.index("(rule", m.end()))
+    if close is None:
+        raise DsnError("DSN kicad_default class has no closing line")
+    text = text[:start] + "".join(blocks) + text[close.end() :]
 
     lib_end = text.index("  )\n  (network")
+    # A fixed via of a class's size is already in the export's library.
     pads = "".join(
         f'    (padstack "{name}"\n      (shape (circle F.Cu {d}))\n'
         f"      (shape (circle B.Cu {d}))\n      (attach off)\n    )\n"
         for name, d in extra_vias.items()
+        if f'(padstack "{name}"' not in text
     )
     text = text[:lib_end] + pads + text[lib_end:]
     listed = " ".join(f'"{v}"' for v in [signal_via, *extra_vias])
     return text.replace(f'(via "{default_via}")', f"(via {listed})", 1)
-
-
-def track_keepouts(text, tracks, origin, margin_um):
-    """`text` with a keepout on its layer over every segment of each track.
-
-    Each keepout is the segment's rectangle widened by half the track's width
-    plus `margin_um` (the widest class clearance) to each side and run on that
-    far past an interior corner, so the bend is covered, but flush with the
-    polyline's own two ends: a track that ends inside a pad leaves the pad's
-    centre to the router. Coordinates are the DSN's um with y negated. They go
-    before the structure's `(via ...)`.
-    """
-    if not tracks:
-        return text
-    anchor = text.find('\n    (via "')
-    if anchor < 0:
-        raise DsnError("DSN has no structure (via ...) line to add keepouts before")
-    ox, oy = origin
-    lines = []
-    for tr in tracks:
-        h = tr["width_mm"] * 500 + margin_um  # um
-        pts = tr["points"]
-        last = len(pts) - 2
-        for i, ((ax, ay), (bx, by)) in enumerate(zip(pts, pts[1:])):
-            run_a = 0 if i == 0 else 1
-            run_b = 0 if i == last else 1
-            ax, ay = (ox + ax) * 1000, (oy + ay) * 1000
-            bx, by = (ox + bx) * 1000, (oy + by) * 1000
-            length = math.hypot(bx - ax, by - ay)
-            if length == 0:
-                raise DsnError(f"track {tr['name']!r} has a zero-length segment")
-            dx, dy = (bx - ax) / length * h, (by - ay) / length * h
-            nx, ny = -dy, dx
-            corners = [
-                (ax - run_a * dx - nx, ay - run_a * dy - ny),
-                (bx + run_b * dx - nx, by + run_b * dy - ny),
-                (bx + run_b * dx + nx, by + run_b * dy + ny),
-                (ax - run_a * dx + nx, ay - run_a * dy + ny),
-            ]
-            corners.append(corners[0])
-            coords = "  ".join(f"{round(x)} {-round(y)}" for x, y in corners)
-            lines.append(f'    (keepout "" (polygon {tr["layer"]} 0  {coords}))')
-    return text[: anchor + 1] + "\n".join(lines) + text[anchor:]
 
 
 def rect_keepouts(text, keepouts, origin):
@@ -211,10 +176,8 @@ def no_via_at_smd(text):
 def drop_pins(text, pins):
     """`text` with each `(net, "REF-PAD")` of `pins` left out of that net.
 
-    route_board.py drops the pad under each [[tracks]] entry's first point: the
-    track joins it to the pad under its last point, which stays in the net, so
-    Freerouting need not reach it. Left in, Freerouting routes to it again, and
-    a pad the track's keepouts box in can stop it finishing the net at all.
+    route_board.py drops each [fanout] in_pad pad: its in-pad via, added after
+    routing, joins it to the pour, so Freerouting need not reach it.
     """
     for net, pin in pins:
         found = re.search(rf'\(net ("?){re.escape(net)}\1\n\s*\(pins ([^)]*)\)', text)
@@ -230,6 +193,137 @@ def drop_pins(text, pins):
             raise DsnError(f"{pin} is not a pin of net {net!r}")
         text = text[: found.start(2)] + kept + text[found.end(2) :]
     return text
+
+
+def check_balanced(text):
+    """Raise DsnError unless every `(` in `text` closes, outside quoted strings.
+
+    Freerouting loads a DSN with an extra `)` and reads only up to it. The
+    parser header's `(string_quote ")` declares the quote character and is
+    not itself a quote.
+    """
+    text = text.replace('(string_quote ")', "(string_quote)", 1)
+    depth = 0
+    quoted = False
+    line = 1
+    for ch in text:
+        if ch == "\n":
+            line += 1
+        elif ch == '"':
+            quoted = not quoted
+        elif quoted:
+            continue
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth < 0:
+                raise DsnError(f"DSN line {line}: ')' closes more than was opened")
+    if quoted:
+        raise DsnError("DSN ends inside a quoted string")
+    if depth:
+        raise DsnError(f"DSN ends with {depth} '(' unclosed")
+
+
+_PLACE_AT = re.compile(
+    r"^\s+\(place (\S+) (-?[\d.]+) (-?[\d.]+) (front|back) (-?[\d.]+)"
+)
+_PIN_AT = re.compile(
+    r'^\s+\(pin \S+ (?:\(rotate -?[\d.]+\) )?("[^"]*"|\S+) (-?[\d.]+) (-?[\d.]+)\)'
+)
+_NET_PINS = re.compile(r'\(net ("[^"]*"|\S+)\n\s*\(pins ([^)]*)\)')
+_WIRE = re.compile(
+    r'\(wire \(path (\S+) (\S+)((?:\s+-?[\d.]+)+)\s*\)\(net ("[^"]*"|\S+)\)'
+)
+
+
+def _name(token):
+    return token[1:-1] if token.startswith('"') else token
+
+
+def pin_centres(text):
+    """{"REF-PIN": (x, y)} in DSN units, from the placement and the images."""
+    images, image, places, comp = {}, None, {}, None
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("(component "):
+            comp = _name(s[len("(component ") :].split()[0])
+        elif s.startswith("(image "):
+            image = _name(s[len("(image ") :].split()[0])
+            images[image] = {}
+        elif s.startswith("(place ") and comp is not None:
+            m = _PLACE_AT.match(line)
+            if m:
+                places[m.group(1)] = (
+                    comp,
+                    *map(float, m.group(2, 3)),
+                    m.group(4),
+                    float(m.group(5)),
+                )
+        elif s.startswith("(pin ") and image is not None:
+            m = _PIN_AT.match(line)
+            if m:
+                images[image][_name(m.group(1))] = tuple(map(float, m.group(2, 3)))
+        elif s.startswith(("(padstack ", "(network")):
+            image = None
+            if s.startswith("(network"):
+                comp = None
+    out = {}
+    for ref, (img, x, y, side, rot) in places.items():
+        r = math.radians(rot)
+        for num, (px, py) in images.get(img, {}).items():
+            if side == "back":
+                px = -px
+            out[f"{ref}-{num}"] = (
+                x + px * math.cos(r) - py * math.sin(r),
+                y + px * math.sin(r) + py * math.cos(r),
+            )
+    return out
+
+
+def _fmt(v):
+    return f"{v:.1f}".rstrip("0").rstrip(".")
+
+
+def snap_wire_ends(text, tol=2.0):
+    """`text` with each fixed wire's end that lies within `tol` DSN units of a
+    pin centre of its own net moved onto that centre exactly, and how many.
+
+    Freerouting joins a wire to a pin only where the wire ends on the pin's
+    centre. KiCad writes wire coordinates in whole micrometres but places pins
+    from their image offsets, which sit on half micrometres (an 0805's pads at
+    +-1037.5), so every fixed track looked unconnected and Freerouting never
+    finished a route (#1280). build_board.py ends each fixed track on its
+    pad's centre; this removes the export's rounding.
+    """
+    centres = pin_centres(text)
+    by_net = {}
+    for m in _NET_PINS.finditer(text):
+        by_net[_name(m.group(1))] = [
+            centres[p] for p in m.group(2).split() if p in centres
+        ]
+    count = 0
+
+    def snap(m):
+        nonlocal count
+        nums = [float(v) for v in m.group(3).split()]
+        pts = [[nums[i], nums[i + 1]] for i in range(0, len(nums) - 1, 2)]
+        pins = by_net.get(_name(m.group(4)), [])
+        for k in (0, len(pts) - 1):
+            for cx, cy in pins:
+                if math.hypot(cx - pts[k][0], cy - pts[k][1]) <= tol and (
+                    (cx, cy) != tuple(pts[k])
+                ):
+                    pts[k] = [cx, cy]
+                    count += 1
+                    break
+        coords = "  ".join(f"{_fmt(x)} {_fmt(y)}" for x, y in pts)
+        return f"(wire (path {m.group(1)} {m.group(2)}  {coords})(net {m.group(4)})"
+
+    w0 = text.find("(wiring")
+    if w0 < 0:
+        return text, 0
+    return text[:w0] + _WIRE.sub(snap, text[w0:]), count
 
 
 _STUCK = re.compile(r"insert trace failed .*? target: \((-?\d+),(-?\d+)\)")

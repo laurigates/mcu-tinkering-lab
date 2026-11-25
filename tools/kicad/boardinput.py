@@ -31,6 +31,8 @@ registry and board.toml. This writes it to
   a single-net `[pour]` is one region with `rect` null, the whole board;
 - `tracks`: board.toml `[[tracks]]`, `[{name, net, layer, width_mm, points}]`,
   points relative to the origin; pre-routed tracks, laid down locked;
+- `vias`: board.toml `[[vias]]`, `[{name, net, at, via_um}]`, `at` relative to
+  the origin; through vias laid down locked, where a fixed track changes layer;
 - `keepouts`: board.toml `[[keepouts]]`, `[{name, rect}]`, rects relative to
   the origin; rule areas with no copper (tracks, vias, pads, pour);
 - `cutouts`: board.toml `[[cutouts]]`, `[{name, center, diameter}]`, centres
@@ -169,6 +171,7 @@ def assemble(
             "regions": boardcheck.pour_region_specs(data["pour"]),
         },
         "tracks": [dict(tr) for tr in data.get("tracks", [])],
+        "vias": [dict(v) for v in data.get("vias", [])],
         "fanout": boardcheck.fanout_spec(data),
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
         "route_keepouts": [dict(k) for k in data.get("route_keepouts", [])],

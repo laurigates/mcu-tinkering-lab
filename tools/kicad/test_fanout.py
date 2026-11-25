@@ -10,6 +10,7 @@ import importlib.util
 import math
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 HERE = Path(__file__).resolve().parent
 
@@ -92,3 +93,27 @@ class CandidateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InPadPointTests(unittest.TestCase):
+    """fanout.in_pad_points: [fanout] in_pad_vias offsets turned with the part."""
+
+    OFFSETS: ClassVar[list] = [[0.0, 0.0], [1.0, 0.0], [0.0, -1.0]]
+
+    def test_unturned_offsets_add_to_the_centre(self):
+        self.assertEqual(
+            fanout.in_pad_points(10.0, 20.0, 0.0, self.OFFSETS),
+            [(10.0, 20.0), (11.0, 20.0), (10.0, 19.0)],
+        )
+
+    def test_offsets_turn_with_the_footprint_like_its_pads(self):
+        # KiCad turns a footprint counter-clockwise as seen with y down: at
+        # 90 degrees a pad at local +x lands at -y (verified against
+        # pcbnew pad positions of a part at 90 and 270 degrees, #1280).
+        pts = fanout.in_pad_points(0.0, 0.0, 90.0, self.OFFSETS)
+        self.assertEqual(
+            [(round(x, 9), round(y, 9)) for x, y in pts],
+            [(0.0, 0.0), (0.0, -1.0), (-1.0, 0.0)],
+        )
+        pts = fanout.in_pad_points(0.0, 0.0, 270.0, [[1.0, 0.0]])
+        self.assertEqual([(round(x, 9), round(y, 9)) for x, y in pts], [(0.0, 1.0)])
