@@ -332,7 +332,7 @@ class SimulationManager:
 
 def main():
     """Main function"""
-    sys.stdout.reconfigure(line_buffering=True)  # ty: ignore[unresolved-attribute]
+    sys.stdout.reconfigure(line_buffering=True)  # ty: ignore[missing-union-attribute]
     parser = argparse.ArgumentParser(
         description="ESP32 Robot Car Simulation with Genesis Visualizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,

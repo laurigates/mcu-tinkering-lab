@@ -14,7 +14,7 @@ license = {text = "MIT"}
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    "numpy==2.5.4",
+    "numpy==2.5.5",
     "pillow==13.0.0",
     "albumentations==2.0.8",
     "click==8.5.1",
@@ -32,7 +32,7 @@ quantize = [
     # esp-ppq allows instead of pinning one. It conflicts with `dev`, which
     # pins the patched onnx; see [tool.uv] conflicts below.
     "esp-ppq==1.3.14",
-    "onnxruntime==1.31.1",
+    "onnxruntime==1.32.0",
 ]
 dev = [
     "pytest==9.2.0",
@@ -40,7 +40,7 @@ dev = [
     "ruff==0.15.12",
     "ty",
     "onnx==1.23.2",
-    "onnxruntime==1.31.1",
+    "onnxruntime==1.32.0",
     "onnxscript==0.7.2",
 ]
 
