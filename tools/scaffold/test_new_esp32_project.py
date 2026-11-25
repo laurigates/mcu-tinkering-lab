@@ -8,6 +8,7 @@ the script writes under packages/.
     python3 -m unittest discover -s tools/scaffold
 """
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -126,6 +127,20 @@ class DefaultTemplate(unittest.TestCase):
         self.assertNotIn("esp32-cam.local", main_c)
         self.assertNotIn('mdns_hostname_set("esp32-cam")', main_c)
 
+    def test_justfile_flashes_the_binary_the_build_writes(self):
+        # #1178: the build writes build/<CMake project>.bin.
+        cmake = (self.project / "CMakeLists.txt").read_text()
+        project = re.search(r"^project\(([^)\s]+)\)", cmake, re.MULTILINE)[1]
+        self.assertEqual(project, "esp32-probe-proj")
+        justfile = (self.project / "justfile").read_text()
+        bin_name = re.search(r'^bin_name := "([^"]*)"', justfile, re.MULTILINE)[1]
+        self.assertEqual(bin_name, project)
+
+    def test_info_names_the_new_project(self):
+        justfile = (self.project / "justfile").read_text()
+        self.assertNotIn("cam-webserver", justfile)
+        self.assertIn('@echo "esp32-probe-proj', justfile)
+
     def test_closing_advice_names_release_setup(self):
         out = self.result.stdout
         self.assertIn("release-please-config.json", out)
@@ -162,6 +177,12 @@ class CopyFromExisting(unittest.TestCase):
         (source / ".claude" / "rules").mkdir(parents=True)
         (source / ".claude" / "rules" / "testing.md").write_text("src-proj\n")
         (source / "CMakeLists.txt").write_text("project(src-proj)\n")
+        # #1178: sources that name their binary without bin_name
+        # (camera-vision/llm-telegram, input-gaming/xbox-switch-bridge).
+        (source / "justfile").write_text(
+            'project_name := "src-proj"\n'
+            "flash:\n    esptool.py write_flash 0x10000 build/src-proj.bin\n"
+        )
         (source / "main" / "main.c").write_text(
             '// mDNS: src-host.local\nmdns_hostname_set("src-host");\n'
         )
@@ -191,6 +212,12 @@ class CopyFromExisting(unittest.TestCase):
         self.assertEqual(
             main_c, '// mDNS: copy-proj.local\nmdns_hostname_set("copy-proj");\n'
         )
+
+    def test_justfile_flashes_the_binary_the_build_writes(self):
+        justfile = (self.project / "justfile").read_text()
+        self.assertIn('project_name := "copy-proj"', justfile)
+        self.assertIn("0x10000 build/copy-proj.bin", justfile)
+        self.assertNotIn("src-proj", justfile)
 
 
 class CopyFromBareSource(unittest.TestCase):

@@ -172,6 +172,27 @@ if [ -f "$PROJECT_DIR/justfile" ]; then
         sed -i '' "s|^project_dir := .*|project_dir := \"packages/$DOMAIN/$PROJECT_NAME\"|" "$PROJECT_DIR/justfile"
 fi
 
+# Flash the binary the build writes, build/<CMake project()>.bin, and name the
+# new project in the justfile's echo lines (the info recipe). Left as is, the
+# flash recipe names the template's binary (issue #1178). A type-4 source may
+# name its binary in a `project_name :=` line or a hardcoded build/<name>.bin
+# path instead of bin_name, so those follow the template's project() name too.
+if [ -f "$PROJECT_DIR/justfile" ]; then
+    TEMPLATE_NAME=$(basename "$TEMPLATE_DIR")
+    CMAKE_PROJECT=$(sed -n 's/^project(\([^) ]*\)).*/\1/p' "$PROJECT_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
+    OLD_PROJECT=$(sed -n 's/^project(\([^) ]*\)).*/\1/p' "$TEMPLATE_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
+    EXPR="/^[[:space:]]*@echo /s/$TEMPLATE_NAME/$PROJECT_NAME/g"
+    if [[ $CMAKE_PROJECT =~ ^[A-Za-z0-9_.-]+$ ]]; then
+        EXPR="$EXPR; s|^bin_name := .*|bin_name := \"$CMAKE_PROJECT\"|"
+        if [[ $OLD_PROJECT =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            OLD_RE=${OLD_PROJECT//./\\.}
+            EXPR="$EXPR; s|^project_name := \"$OLD_RE\"|project_name := \"$CMAKE_PROJECT\"|"
+            EXPR="$EXPR; s|build/$OLD_RE\\.|build/$CMAKE_PROJECT.|g"
+        fi
+    fi
+    sed -i "$EXPR" "$PROJECT_DIR/justfile" 2>/dev/null || sed -i '' "$EXPR" "$PROJECT_DIR/justfile"
+fi
+
 # Drop `set positional-arguments` from the copied justfile.
 # The template is copied wholesale, so this setting propagated into every
 # scaffolded project even though no recipe ever read $1/$@ (issue #410).
