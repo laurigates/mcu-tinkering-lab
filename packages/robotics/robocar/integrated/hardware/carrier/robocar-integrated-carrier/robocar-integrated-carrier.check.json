@@ -1,6 +1,6 @@
 {
- "board_sha256": "7a9834a721c7f3ccfdac6a0ffd3c0d5cb9b3a1a3b3730f069ea91fc5fdd98dde",
- "kicad_cli_version": "10.0.7",
+ "board_sha256": "2ff217a6dbe944263637c2a76c80e2172278612a254013bc1d4cea57ff1e914a",
+ "kicad_cli_version": "10.0.8",
  "netlist": {
   "components": {
    "BZ1": {
@@ -2547,5 +2547,5 @@
    ]
   }
  },
- "schematic_sha256": "a3002b415f10876c47030bef1a84dbbd370c60e2b8168868f425e10648b3d305"
+ "schematic_sha256": "92e7f7a3c7033c4172659082e556b57bee6466cd27baca9aa7986b0f0c3d30cb"
 }
