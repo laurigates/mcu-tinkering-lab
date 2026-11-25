@@ -1,0 +1,46 @@
+# US-D3: a failed rear read does not release a held reverse (#1185). The hold
+# follows the latest good rear reading (rangers_rear_blocked() in
+# reactive_controller.c), and a failed read leaves that reading standing, so
+# the reverse stays braked until a good reading at or above STOP_THRESHOLD_CM
+# (15 cm).
+#
+# Before #1185 a failed read released the hold on the tick of the first failed
+# read, 36.267 s here, and the reverse ramped up again toward the obstacle.
+#
+# The timeline is us-d3-rear-holds-reverse's up to the release: woken by the
+# front range at 15 s, a reverse at 60 % from 16 s, 8 cm behind from 20 s,
+# braked at 20.262 s.
+#
+# Failure: `range_fail` on the rear sensor at 36 s. The front sensor is not
+# named and keeps reading 120 cm. A failed read is paced like a read (the bus
+# takes the trigger and fails the read, ADR-036 section 1 "Rangefinders"): the
+# rear trigger at 36.135 s (219 x 165) is the first after the event and its
+# read at 36.267 s fails, and so does every read after it, well past
+# ULTRASONIC_FAIL_STREAK. The reverse written at 31 s stays braked to the end.
+id: us-d3-rear-failed-read-holds
+stories: [US-D3]
+seed: 7
+duration: 44s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 0s, range: 120}
+  - {at: 0s, range: {cm: 120, sensor: rear}}
+  - {at: 20s, range: {cm: 8, sensor: rear}}
+  - {at: 36s, range_fail: {sensor: rear}}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 180, distance_cm: 50, speed_pct: 60}
+expect:
+  - requests: {count: 2}
+  # Braked by the rear reading, and held while it reads 8 cm.
+  - wheels: {left: brake, right: brake, after: "range[2]", within: 297ms, count: 1}
+  # Still held after the reads start failing, to the end of the run.
+  - wheels: {left: reverse, between: [20.262s, 44s], count: 0}
+  - wheels_at: {at: 36.267s, left: brake, right: brake}
+  - wheels_at: {at: 43.9s, left: brake, right: brake}
+  - wheels: {left: brake, count: 1}

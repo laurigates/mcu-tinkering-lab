@@ -144,9 +144,9 @@ typedef struct {
     bool audio_event;
 
     /** Latest smoothed rangefinder reading, and whether it means anything.
-     *  reactive_telemetry_t.sensor_failed must map to range_valid = false: the
-     *  filter maps a dead sensor to max range, so an unguarded reading would
-     *  show a large step exactly once and then sit still forever. */
+     *  reactive_telemetry_t.sensor_failed must map to range_valid = false: a
+     *  dead sensor holds its last good mean, so an unguarded reading would sit
+     *  still forever. */
     uint16_t distance_cm;
     bool range_valid;
 

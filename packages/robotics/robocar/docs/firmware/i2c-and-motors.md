@@ -72,9 +72,10 @@ forward component, arcs and pivots included), back, a turn in place, or none:
 
 Until #1026 the front reflex braked every command, so a robot with something in
 front of it could neither back out nor turn away. On 2026-11-09 Teuvo stopped at
-a toy train and stayed stuck. A failed or absent rear sensor reads as clear, so
-a reverse without one is blind, as it always was. `test_reactive_controller.c`
-pins each row. The corner clearance for a turn in place under the reflex is not measured yet; boxed in front and behind, the turn is held. Three mutants (brake everything, no rear gate, manual turns
+a toy train and stayed stuck. A failed read changes nothing: the last good
+reading of either sensor still holds or frees its side (#1185). An absent rear
+sensor reads as clear, so a reverse without one is blind, as it always was.
+`test_reactive_controller.c` pins each row. The corner clearance for a turn in place under the reflex is not measured yet; boxed in front and behind, the turn is held. Three mutants (brake everything, no rear gate, manual turns
 classed as turns in place) each fail the test written for them.
 
 `set_motors()` writes all six in one transaction and therefore places each value

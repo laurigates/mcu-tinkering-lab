@@ -285,9 +285,9 @@ add_test(NAME speech_evidence COMMAND test_speech_evidence)
 # -----------------------------------------------------------------------------
 # planner_range (the rangefinder readings in every planner request)
 #
-# A failed sensor reads as max range in the executor's filter; the clause must
-# say "unavailable" there, never "no echo", or the model is told the path is
-# clear when nothing was measured.
+# A failed sensor holds its last good mean in the executor's filter; the clause
+# must say "unavailable" there, never the number or "no echo", or the model is
+# told a distance nothing measured.
 # -----------------------------------------------------------------------------
 add_executable(test_planner_range
     "${MAIN_SRC_DIR}/planner_range.c"

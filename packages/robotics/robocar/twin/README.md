@@ -285,9 +285,9 @@ builder still lives in `gemini_backend.c`, and its extraction to
   they follow the pose, and are as good as the plant's estimates: nothing in
   `plant.yaml` is measured (ADR-036, open question 1). Camera frames, sounds
   and voice turns are scripted either way.
-- **Under 2 cm the plant reports no reading**, and the reflex takes a failed
-  read for a clear path, so a robot that reaches a wall loses its reflex
-  there. The datasheet page gives a 2 cm blind zone and not what the sensor
+- **Under 2 cm the plant reports no reading**, and a failed read leaves the
+  last good reading standing (#1185), so a robot that reaches a wall keeps
+  whatever that reading said. The datasheet page gives a 2 cm blind zone and not what the sensor
   returns inside it, so this is an assumption (`plant.yaml` `min_cm`), and
   the outcome of any scenario in which he touches a wall depends on it.
 - **Two start-up rules have no test**, because nothing the trace records

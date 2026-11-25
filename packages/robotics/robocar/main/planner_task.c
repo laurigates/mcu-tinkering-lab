@@ -165,10 +165,11 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     reactive_telemetry_t tele = {0};
     if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
         ev.distance_cm = tele.distance_cm;
-        /* A failed rangefinder reads as max range through the filter, so an
-         * unguarded reading would show one large step and then sit perfectly
-         * still — a sensor that appears to agree that nothing is happening. */
-        ev.range_valid = !tele.sensor_failed;
+        /* A failed rangefinder holds its last good mean, so an unguarded
+         * reading would sit perfectly still — a sensor that appears to agree
+         * that nothing is happening. Before the first good reading the value
+         * is a placeholder, which must not become the reference (#1187). */
+        ev.range_valid = tele.distance_valid && !tele.sensor_failed;
         ev.robot_moving = tele.manual_active;
     }
 

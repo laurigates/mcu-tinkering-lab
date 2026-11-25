@@ -95,7 +95,8 @@ extern "C" {
  * The cost is a false trip: one spurious short reading brakes for one reading
  * period (~165 ms) until the next clear one, because the mean never fell. That
  * errs toward stopping, which is the side a reflex should err on. A failed read
- * still enters the filter as max range and never trips it.
+ * is no reading: it stays out of the filter and leaves the latest reading as it
+ * was, so it can neither trip nor release the reflex (#1185).
  *
  * Worst case from an obstacle appearing to the brake, with
  * C = ceil(ULTRASONIC_CONVERSION_MS / REACTIVE_LOOP_PERIOD_MS):
@@ -277,6 +278,10 @@ typedef struct {
      *  reflex release only: the trip uses the latest reading, so this can read
      *  >= STOP_THRESHOLD_CM while reflex_active is true (issue #791). */
     uint16_t distance_cm;
+    /** The front sensor has returned a good reading since init. Until then
+     *  distance_cm is a placeholder (max range) and not a measurement, so the
+     *  planner must not take it as one (#1187). */
+    bool distance_valid;
     bool reflex_active; /**< True when obstacle reflex has latched stop.  */
     /** Times the reflex has latched since init, counted on the rising edge. The
      *  planner samples telemetry every 15 s or more, so reflex_active alone
@@ -287,9 +292,9 @@ typedef struct {
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
     bool manual_active;        /**< True while a manual override lease is live.  */
     /** True when the rangefinder has failed for ULTRASONIC_FAIL_STREAK readings
-     *  in a row. Distinguishes "nothing ahead" from "the sensor stopped
-     *  answering" — the filter maps both to max range, so without this the two
-     *  are indistinguishable from outside. */
+     *  in a row. Distinguishes "nothing changed" from "the sensor stopped
+     *  answering": a failed read leaves distance_cm at the last good mean, so
+     *  without this the two are indistinguishable from outside. */
     bool sensor_failed;
     /** What the executor did with the pan/tilt head on the last tick. */
     reactive_head_mode_t head_mode;

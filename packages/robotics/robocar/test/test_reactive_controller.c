@@ -1040,6 +1040,102 @@ static void test_front_failure_streak_is_reported_per_sensor(void)
     ASSERT(!t.sensor_failed);
 }
 
+/* A failed read is no reading: it neither releases a latched reflex nor holds
+ * one (#1185). It used to enter the filter as max range, so after 8, 8, 8 and
+ * one failure the latest reading read 400 and the mean 138, the reflex let go,
+ * and a fresh drive goal accelerated toward an obstacle still 8 cm away. */
+static void test_a_failed_read_does_not_release_the_reflex(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(8);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, ULTRASONIC_DIST_ERROR);
+    reactive_controller_tick_for_test();
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    /* Released by the next good reading, with the mean of good readings
+     * (120, 8, 8 = 45) agreeing. */
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, 120);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+}
+
+/* Declaring the front sensor failed does not release the reflex either: the
+ * last good reading stands, and the reflex errs toward stopping, as the cliff
+ * reflex does with a failed floor read. Reversing and turning still run. */
+static void test_a_failed_sensor_keeps_a_latched_reflex(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(8);
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, ULTRASONIC_DIST_ERROR);
+    for (unsigned i = 0; i < ULTRASONIC_FAIL_STREAK + 2u; i++) {
+        reactive_controller_tick_for_test();
+    }
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.sensor_failed);
+    ASSERT(t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
+/* The rear holds a reverse through a failed read the same way, while its
+ * telemetry still reports the failed read as no reading (#1185). */
+static void test_a_failed_rear_read_keeps_a_reverse_held(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 8);
+    drive_goal(180, 50);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, ULTRASONIC_DIST_ERROR);
+    reactive_controller_tick_for_test();
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.distance_rear_cm == ULTRASONIC_DIST_ERROR);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 60);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+    ASSERT(ld == 0 && rd == 0 && ls > 0);
+}
+
+/* Until the first good front reading, distance_cm is a placeholder and
+ * telemetry says so (#1187): the planner took the boot 400 cm as a real range,
+ * adopted it as its reference, and the first real reading then woke it. */
+static void test_distance_is_not_valid_before_the_first_reading(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, ULTRASONIC_DIST_ERROR);
+    reactive_controller_tick_for_test();
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.distance_valid);
+    ASSERT(!t.sensor_failed); /* one failure is not a failed sensor */
+
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, 120);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.distance_valid);
+    ASSERT(t.distance_cm == 120);
+
+    /* A later failed read does not take it back; sensor_failed covers that. */
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, ULTRASONIC_DIST_ERROR);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.distance_valid);
+}
+
 /* The rear's failures are its own: the front, and the reflex, are unaffected. */
 static void test_rear_failure_streak_is_reported_per_sensor(void)
 {
@@ -1614,6 +1710,13 @@ int main(void)
              test_reflex_trips_below_the_threshold_not_at_it);
     test_run("front_failure_streak_is_reported_per_sensor",
              test_front_failure_streak_is_reported_per_sensor);
+    test_run("a_failed_read_does_not_release_the_reflex",
+             test_a_failed_read_does_not_release_the_reflex);
+    test_run("a_failed_sensor_keeps_a_latched_reflex", test_a_failed_sensor_keeps_a_latched_reflex);
+    test_run("a_failed_rear_read_keeps_a_reverse_held",
+             test_a_failed_rear_read_keeps_a_reverse_held);
+    test_run("distance_is_not_valid_before_the_first_reading",
+             test_distance_is_not_valid_before_the_first_reading);
     test_run("rear_failure_streak_is_reported_per_sensor",
              test_rear_failure_streak_is_reported_per_sensor);
 
