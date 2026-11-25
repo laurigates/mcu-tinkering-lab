@@ -241,10 +241,12 @@
 # SNS 3 x 22 uF 25 V (44 uF minimum suggested for 2.2 A; ripple scales with
 # charge current, which is here under half that). BAT 2 x 10 uF (10 uF minimum
 # after derating). REGN 4.7 uF, BTST to SW 47 nF, each as in §6. The three
-# 22 uF are C45783, whose DC-bias curve is unread: the "keeps about half at
-# 5 V" in tps563208-5v.toml is the same rule of thumb. SNS runs to 8.4 V, so
-# the three may land near 35 uF effective, under 44. Bench-check SNS ripple and
-# the first-board PMID/SNS capacitance before relying on it.
+# 22 uF on SNS are 1210 X7R 25 V (Samsung CL32B226KAJNNNE, C309062) since the
+# #1280 pre-fab review: three 0805 X5R (C45783) were estimated near 35 uF at
+# 8.4 V, under 44. A 1210 X7R at a third of its rating keeps more (estimate,
+# about 15 uF each; Samsung's catalogue has no DC-bias curve for it, and the
+# curve is still unread). Bench-check SNS ripple and the first-board PMID/SNS
+# capacitance before relying on it.
 #
 # Layout (not checked by the block; §11.1, in the datasheet's priority order):
 # 1 SNS capacitors at the SNS and GND pins; 2 PMID capacitors at PMID and GND;
@@ -329,23 +331,23 @@ lcsc = "C15850"
 [parts.csns1]
 name = "22 uF SNS (boost output)"
 kind = "capacitor"
-part = "c0805"
-value = "22uF 25V"
-lcsc = "C45783"
+part = "c1210"
+value = "22uF 25V X7R"
+lcsc = "C309062"
 
 [parts.csns2]
 name = "22 uF SNS (boost output)"
 kind = "capacitor"
-part = "c0805"
-value = "22uF 25V"
-lcsc = "C45783"
+part = "c1210"
+value = "22uF 25V X7R"
+lcsc = "C309062"
 
 [parts.csns3]
 name = "22 uF SNS (boost output)"
 kind = "capacitor"
-part = "c0805"
-value = "22uF 25V"
-lcsc = "C45783"
+part = "c1210"
+value = "22uF 25V X7R"
+lcsc = "C309062"
 
 [parts.cbat1]
 name = "10 uF BAT"

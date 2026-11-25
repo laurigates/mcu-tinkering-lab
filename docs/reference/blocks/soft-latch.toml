@@ -26,8 +26,17 @@
 # the pack is the override; add a slide switch in series with BTN's GND, or
 # with the pack, if a board needs another.
 #
-# SENSE low level: the GPIO sees B5819W's forward drop at the pull-up's tens
-# of microamps. Check it against the MCU datasheet's VIL max (not yet in
+# Diode leakage (#1280 pre-fab review): with the switch off, d_sense is
+# reverse-biased by most of the pack voltage, and its leakage flows from
+# COMMON through gate_pu (100 kOhm), so 10 uA of leakage is -1.0 V of VGS, the
+# DMP3013SFV's minimum threshold; with the switch on, d_sw's leakage fights
+# SENSE's pull-up. A B5819W guarantees only IR <= 1 mA (40 V, 25 C), so both
+# diodes are SD101AW: IRM 0.2 uA max at 50 V, 25 C (JSCJ datasheet, LCSC
+# C3031887). At 60 C that is a few uA (Schottky leakage roughly doubles per
+# 10 C; estimate, the datasheet's reverse curve is not read), under the 10 uA.
+#
+# SENSE low level: the GPIO sees the diode's forward drop (SD101AW 0.41 V max
+# at 1 mA) at the pull-up's current. Check it against the MCU datasheet's VIL max (not yet in
 # docs/reference/datasheets/mcu--esp32-s3.md) and measure it on the first
 # board. Pick SENSE on an RTC-capable GPIO so a press can wake the chip from
 # deep sleep, and keep HOLD's level through deep sleep with gpio_hold_en().
@@ -62,11 +71,11 @@ value = "100k"
 lcsc = "C149504"
 
 [parts.d_sw]
-name = "B5819W button-to-switch diode"
+name = "SD101AW button-to-switch diode"
 kind = "diode"
-part = "b5819w"
+part = "sd101aw"
 
 [parts.d_sense]
-name = "B5819W button-sense diode"
+name = "SD101AW button-sense diode"
 kind = "diode"
-part = "b5819w"
+part = "sd101aw"
