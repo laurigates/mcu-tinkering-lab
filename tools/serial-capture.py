@@ -64,7 +64,8 @@ def main() -> int:
         command = args.send if args.send else f"stream on {args.hz}"
         port.write(command.encode() + b"\n")
         buf = b""
-        end = time.monotonic() + args.seconds
+        start = time.monotonic()
+        end = start + args.seconds
         done = False
         while not done and time.monotonic() < end:
             buf += port.read(port.in_waiting or 1)
@@ -82,6 +83,8 @@ def main() -> int:
                     rows.append(line)
                 else:
                     print(line, file=sys.stderr)
+        # A capture ended by --until took less than the timeout.
+        elapsed = round(time.monotonic() - start, 1) if done else args.seconds
         if not args.send:
             port.write(b"stream off\n")
         port.flush()
@@ -100,7 +103,7 @@ def main() -> int:
         return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(header + "\n" + "".join(r + "\n" for r in rows))
-    print(f"{len(rows)} rows in {args.seconds:g} s -> {args.out}")
+    print(f"{len(rows)} rows in {elapsed:g} s -> {args.out}")
     return 0 if rows else 1
 
 
