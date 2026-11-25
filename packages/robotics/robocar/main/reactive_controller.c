@@ -1347,6 +1347,10 @@ void reactive_controller_seed_gaze_for_test(uint32_t seed)
      * multiply spreads neighbouring seeds (1, 2, 3) over the state space; the
      * one seed it maps to 0 gets the init value. */
     const uint32_t state = seed * 2654435761u + 0x9E3779B9u;
+    // cppcheck 2.13 does not wrap the uint32 arithmetic above, so it reads state
+    // as at least 0x9E3779B9 and this test as always true. It wraps to 0 for one
+    // seed.
+    // cppcheck-suppress knownConditionTrueFalse
     s_test_rng_state = (state != 0u) ? state : 0x12345678u;
 }
 
