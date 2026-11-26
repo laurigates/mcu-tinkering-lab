@@ -1,5 +1,5 @@
 {
- "board_sha256": "54e907ae4a1d1594a8c0b212ae6c65a777f916d29347935d73e6e8b8b3b935c4",
+ "board_sha256": "fc411753ca650bde394ced349405691fc7a53b25341a5dbc063a81d73e967687",
  "kicad_cli_version": "10.0.8",
  "netlist": {
   "components": {
@@ -129,6 +129,13 @@
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
+   "C20": {
+    "footprint": "Capacitor_SMD:CP_Elec_6.3x5.8",
+    "in_bom": true,
+    "lcsc": "C128532",
+    "lib_id": "Device:C_Polarized",
+    "value": "100uF 16V"
+   },
    "C3": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
@@ -198,6 +205,13 @@
     "lcsc": "C3031887",
     "lib_id": "Device:D_Schottky",
     "value": "SD101AW"
+   },
+   "D4": {
+    "footprint": "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C84256",
+    "lib_id": "Device:LED",
+    "value": "red"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -569,6 +583,13 @@
     "lcsc": "C17414",
     "lib_id": "Device:R",
     "value": "10k"
+   },
+   "R33": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C4310",
+    "lib_id": "Device:R",
+    "value": "1.5k"
    },
    "R4": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -986,6 +1007,10 @@
      "1"
     ],
     [
+     "C20",
+     "1"
+    ],
+    [
      "F2",
      "2"
     ],
@@ -1136,6 +1161,10 @@
      "1"
     ],
     [
+     "R33",
+     "1"
+    ],
+    [
      "U5",
      "11"
     ]
@@ -1180,6 +1209,26 @@
     [
      "U5",
      "16"
+    ]
+   ],
+   "CHG_STAT": [
+    [
+     "D4",
+     "1"
+    ],
+    [
+     "U5",
+     "2"
+    ]
+   ],
+   "CHG_STAT_LED": [
+    [
+     "D4",
+     "2"
+    ],
+    [
+     "R33",
+     "2"
     ]
    ],
    "CHG_SW": [
@@ -1537,6 +1586,10 @@
     ],
     [
      "C18",
+     "2"
+    ],
+    [
+     "C20",
      "2"
     ],
     [
@@ -2132,10 +2185,6 @@
     "U5",
     "3"
    ],
-   "unconnected-(U5-STAT-Pad2)": [
-    "U5",
-    "2"
-   ],
    "unconnected-(U5-~{INT}-Pad6)": [
     "U5",
     "6"
@@ -2146,5 +2195,5 @@
    ]
   }
  },
- "schematic_sha256": "2f5d39a133911ab50bc7deab61c943df81777d67c90b676d804b88a045caa33b"
+ "schematic_sha256": "e2793788f1ac6641e554c2d6141e4f9eef6c1cf7c4f6d69a4df558eca2fc4a03"
 }

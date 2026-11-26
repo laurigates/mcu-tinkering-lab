@@ -209,7 +209,7 @@
 // soft-latch.toml): drive it HIGH as early in app_main as possible, because the
 // button that switched the robot on has to stay pressed until then; drive it
 // LOW to switch off. D7 is GPIO44 (UART0 RX by default, not a strapping pin).
-// The carrier's 100 kOhm pull-down holds it LOW while the MCU is unpowered or
+// The carrier's 10 kOhm pull-down holds it LOW while the MCU is unpowered or
 // in reset. Firmware must claim GPIO44 as a plain output (this releases it from
 // UART0 RX; log_mirror.c does not use RX). The pad's level during the ROM and
 // bootloader stages, and its internal pull state out of reset, are not

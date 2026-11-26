@@ -1119,7 +1119,14 @@ class RobocarPowerSwitchTests(unittest.TestCase):
         )
         self.assertEqual(
             set(self.nets["CHG_BAT"]),
-            {("F2", "2"), ("U5", "13"), ("U5", "14"), ("C16", "1"), ("C17", "1")},
+            {
+                ("F2", "2"),
+                ("U5", "13"),
+                ("U5", "14"),
+                ("C16", "1"),
+                ("C17", "1"),
+                ("C20", "1"),
+            },
         )
         self.assertIn(("D2", "2"), self.nets["PWR_SW"])
         self.assertIn(("R15", "2"), self.nets["PWR_SW"])
@@ -1163,6 +1170,13 @@ class RobocarChargerTests(unittest.TestCase):
         self.assertEqual(
             set(self.nets["CHG_VBUS"]), vbus | {("U5", "23"), ("C10", "1")}
         )
+
+    def test_the_status_led_lights_from_regn_into_stat(self):
+        # STAT is open drain, LOW while charging (SLUSD89B §6): REGN, R33, D4's
+        # anode, D4's cathode on STAT.
+        self.assertEqual(set(self.nets["CHG_STAT"]), {("U5", "2"), ("D4", "1")})
+        self.assertEqual(set(self.nets["CHG_STAT_LED"]), {("R33", "2"), ("D4", "2")})
+        self.assertEqual(self._net_of("R33", "1"), "CHG_REGN")
 
     def test_the_port_cc_pins_are_on_their_own_pull_downs(self):
         self.assertEqual(set(self.nets["CHG_CC1"]), {("J20", "A5"), ("R30", "1")})

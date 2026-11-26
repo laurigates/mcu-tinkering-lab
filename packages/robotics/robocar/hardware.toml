@@ -752,7 +752,7 @@ note = "HIGH holds the pack switch on"
 role = "POWER_HOLD_PIN"
 to = "latch.HOLD_PD"
 build = "carrier"
-note = "100 kΩ pull-down: keeps it low while the MCU is unpowered or in reset"
+note = "10 kΩ pull-down: keeps it low while the MCU is unpowered or in reset"
 
 # The pack-voltage divider into ADC1_CH3 (D3). 100 kOhm from VBAT, the switched
 # rail, so it draws nothing with the robot off; 22 kOhm to GND, the ratio
@@ -841,7 +841,7 @@ build = "carrier"
 block = "bq25887-2s-usb-charger"
 net_prefix = "CHG"
 build = "carrier"
-refs = { ic = "U5", l = "L1", cvbus = "C10", cpmid1 = "C11", cpmid2 = "C12", csns1 = "C13", csns2 = "C14", csns3 = "C15", cbat1 = "C16", cbat2 = "C17", cregn = "C18", cboot = "C19", rilim = "R19", rmid = "R20", rcb1 = "R21", rcb2 = "R22", rcb3 = "R23", rcb4 = "R24", rt1 = "R25", rt2 = "R26", rts = "R27", sda_pu = "R28", scl_pu = "R29", rd1 = "R30", rd2 = "R31" }
+refs = { ic = "U5", l = "L1", cvbus = "C10", cpmid1 = "C11", cpmid2 = "C12", csns1 = "C13", csns2 = "C14", csns3 = "C15", cbat1 = "C16", cbat2 = "C17", cregn = "C18", cboot = "C19", rilim = "R19", rmid = "R20", rcb1 = "R21", rcb2 = "R22", rcb3 = "R23", rcb4 = "R24", rt1 = "R25", rt2 = "R26", rts = "R27", sda_pu = "R28", scl_pu = "R29", rd1 = "R30", rd2 = "R31", rstat = "R33", dstat = "D4" }
 
 # The charge-only USB-C port. Its data and sideband pins are open (the part's
 # no_connect list); the shield goes to GND with the receptacle's own GND pins.
@@ -907,11 +907,29 @@ build = "carrier"
 from = "pack.+"
 to = ["input.IN", "bat_fuse.1"]
 
+# Damping for the pack hot-plug ring (#1280 pre-fab review, a calculation not
+# yet measured): with Q1/Q2 off at plug-in, about 86 uF of MLCC on CHG_BAT
+# (C16, C17, and C13-C15 through the charger's sense path) rings with the pack
+# lead's ~0.3 uH, characteristic impedance about 0.08 ohm, to an estimated
+# 10-11 V against BAT and SNS's 12 V absolute maximum (SLUSD89B §7.1). An
+# electrolytic whose ESR is near that impedance damps it: Panasonic
+# EEE-FK1C101P, 100 uF 16 V, 0.36 ohm impedance at 100 kHz (FK series table),
+# LCSC C128532, Extended, 32,763 in stock on 2026-11-26. Scope PACK_IN at
+# XT30 insertion on the first board all the same.
+[parts.bat_damp]
+name = "100 uF damping capacitor, charger BAT branch"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-6.3x5.8"
+ref = "C20"
+value = "100uF 16V"
+lcsc = "C128532"
+
 [[rails]]
 name = "CHG_BAT"
 build = "carrier"
 from = "charger.BAT"
-to = ["bat_fuse.2"]
+to = ["bat_fuse.2", "bat_damp.+"]
 
 [[rails]]
 name = "VBAT"
@@ -1426,6 +1444,7 @@ to = [
     "gnd_post_ldo.GND",
     "latch.GND",
     "charger.GND",
+    "bat_damp.-",
     "charge_port.GND",
     "charge_port.SHIELD",
     "power_button.2",
