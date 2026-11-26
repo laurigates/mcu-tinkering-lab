@@ -45,6 +45,12 @@
       "allowedVersions": "<9.2"
     },
     {
+      "description": "Hold the robocar simulation's viz extra (#1190): no CI job installs it, so a bump that breaks the legacy demo would merge on lock resolution alone. Pillow is left out so its security fixes keep coming. Lift once #1189 decides the demo's future, with a CI job that syncs --extra viz if the demo stays.",
+      "matchFileNames": ["packages/robotics/robocar/simulation/**"],
+      "matchPackageNames": ["genesis-world", "torch", "opencv-python", "matplotlib", "trimesh", "spatialmath-python"],
+      "enabled": false
+    },
+    {
       "description": "Keep torch and torchvision together in melody-train: each torchvision release pins one exact torch (0.28.0 requires torch==2.13.0), so a torch-only bump in the grouped non-major PR makes the train extra unsatisfiable (#895). Renovate does not bump torch here; move it by hand in the PR that bumps torchvision, as #891 did.",
       "matchFileNames": ["packages/audio/melody-detector/training/**"],
       "matchPackageNames": ["torch"],
