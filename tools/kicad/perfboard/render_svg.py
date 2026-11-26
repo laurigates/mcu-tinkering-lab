@@ -44,7 +44,21 @@ def text_box(x, y, text, anchor="start", size=FONT):
     return left, y - ASCENT * size, left + width, y + DESCENT * size
 
 
-def label_at(body_left, body_top, text, grid_top, grid_right):
+def _intersects(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def label_at(
+    body_left,
+    body_top,
+    text,
+    grid_top,
+    grid_right,
+    body=None,
+    obstacles=(),
+    grid_left=None,
+    soft=(),
+):
     """Baseline (x, y) of a part's label on the component side.
 
     Inside the body's top-left corner while the body's top edge is on the hole
@@ -53,14 +67,60 @@ def label_at(body_left, body_top, text, grid_top, grid_right):
     row instead; the component panel has no legend, so the band is free.
     Either way a label that would run into the row numbers to the right of
     the grid is pulled left to end before them.
+
+    With `body` = (right, bottom) and `obstacles` (boxes that must stay
+    visible: every pad, the labels already placed), a label on the grid that
+    would cover one of them tries, in turn: lower inside the body past its
+    pads, beside it (right, then left) at each row, above it, below it
+    (#762). Each candidate stays on the grid, clear of the letters and
+    numbers. The first clear of `soft` boxes too (other parts' bodies) wins;
+    else the one covering the fewest `obstacles`, then the fewest `soft`.
     """
+    numbers_left = grid_right + NUMBERS_DX - 1
+
+    def pulled(x, y):
+        right = text_box(x, y, text)[2]
+        return x - max(0, right - numbers_left), y
+
     if body_top < grid_top:
         letters_top = text_box(0, grid_top - LETTERS_DY, "A")[1]
-        y = letters_top - 2 - DESCENT * FONT
-    else:
-        y = body_top + 10
-    right = text_box(body_left + 3, y, text)[2]
-    return body_left + 3 - max(0, right - (grid_right + NUMBERS_DX - 1)), y
+        return pulled(body_left + 3, letters_top - 2 - DESCENT * FONT)
+    first = pulled(body_left + 3, body_top + 10)
+    if body is None:
+        return first
+    body_right, body_bottom = body
+    width = text_box(0, 0, text)[2]
+    rows = []
+    y = body_top + 10
+    while y < body_bottom + 10:
+        rows.append(y)
+        y += S / 2
+    above = [body_top - 3 - DESCENT * FONT - k * S / 2 for k in range(3)]
+    below = [body_bottom + 2 + ASCENT * FONT + k * S / 2 for k in range(3)]
+    candidates = [pulled(body_left + 3, y) for y in rows]
+    candidates += [pulled(body_right + 3, y) for y in rows]
+    candidates += [(body_left - 3 - width, y) for y in rows]
+    for y in (*above, *below):
+        candidates += [pulled(body_left + 3, y), pulled(body_right - width, y)]
+    # then slid along each of those rows, half a hole at a time, up to the
+    # label's own width either side of the body
+    for y in (*rows, *above, *below):
+        x = body_left - width - 3
+        while x <= body_right + 3:
+            candidates.append(pulled(x, y))
+            x += S / 2
+    left = grid_left if grid_left is not None else -float("inf")
+    scored = []
+    for i, (x, y) in enumerate(candidates):
+        box = text_box(x, y, text)
+        if box[0] < left or box[1] < grid_top or box[2] > numbers_left:
+            continue
+        hard = sum(_intersects(box, o) for o in obstacles)
+        light = sum(_intersects(box, o) for o in soft)
+        if hard == light == 0:
+            return x, y
+        scored.append((hard, light, i, (x, y)))
+    return min(scored)[3] if scored else first
 
 
 S = 17  # px per hole
@@ -155,9 +215,17 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
             for c in range(board.cols):
                 out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="1.6" fill="{GRID}"/>')
         if not mirror:
-            for p in sorted(parts.values(), key=lambda p: p.ref in raised):
+            # Bodies first, then every label over them: a later body's fill
+            # would hide an earlier label. Pads are drawn over both, so a label
+            # finds room clear of the pads (#762), of the other parts' solid
+            # bodies, and of the labels placed before it, with a margin for
+            # its white halo.
+            order = sorted(parts.values(), key=lambda p: p.ref in raised)
+            boxes = {}
+            for p in order:
                 c0, r0, c1, r1 = p.body
                 xa, xb = X(c0), X(c1)
+                boxes[p.ref] = (min(xa, xb), Y(r0), max(xa, xb), Y(r1))
                 is_raised = p.ref in raised
                 fill = "none" if is_raised else "#eef3fa"
                 dash = ' stroke-dasharray="4 2"' if is_raised else ""
@@ -166,8 +234,50 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
                     f'width="{abs(xb - xa)}" height="{Y(r1) - Y(r0)}" '
                     f'fill="{fill}" stroke="{PART_INK}" stroke-width="1"{dash}/>'
                 )
-                label = f"{p.ref} {p.value}"
-                lx, ly = label_at(min(xa, xb), Y(r0), label, top, x0 + w)
+            pads = [
+                (X(c) - 4, Y(r) - 4, X(c) + 4, Y(r) + 4)
+                for q in parts.values()
+                for c, r in q.pads.values()
+            ]
+            # The longest labels choose first: a short one fits more places.
+            # A label left covering a pad or another label moves to the front
+            # and the round runs again, so the crowded ones choose before the
+            # neighbours that took their room.
+            queue = sorted(
+                order, key=lambda p: (p.ref in raised, -len(f"{p.ref} {p.value}"))
+            )
+            for _ in range(len(queue)):
+                labels, placed, forced = [], [], None
+                for p in queue:
+                    left, body_top, right, bottom = boxes[p.ref]
+                    others = [
+                        b
+                        for ref, b in boxes.items()
+                        if ref != p.ref and ref not in raised
+                    ]
+                    label = f"{p.ref} {p.value}"
+                    lx, ly = label_at(
+                        left,
+                        body_top,
+                        label,
+                        top,
+                        x0 + w,
+                        body=(right, bottom),
+                        obstacles=pads + labels,
+                        grid_left=x0,
+                        soft=others,
+                    )
+                    box = text_box(lx, ly, label)
+                    if forced is None and any(
+                        _intersects(box, o) for o in pads + labels
+                    ):
+                        forced = p
+                    labels.append((box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2))
+                    placed.append((lx, ly, label))
+                if forced is None or queue[0] is forced:
+                    break
+                queue = [forced, *(p for p in queue if p is not forced)]
+            for lx, ly, label in placed:
                 out.append(
                     f'<text x="{lx}" y="{ly}" fill="{PART_INK}" '
                     f'stroke="white" stroke-width="3" paint-order="stroke">{label}</text>'
