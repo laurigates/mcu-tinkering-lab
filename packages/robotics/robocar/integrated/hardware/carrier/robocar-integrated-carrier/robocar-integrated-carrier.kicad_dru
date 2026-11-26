@@ -5,6 +5,8 @@
 # (route_board.py checks this before pouring), so a thermal relief is a second
 # connection, not the only one. Between fine-pitch chip pins the routed tracks
 # can leave room for a single spoke.
+# KiCad 10's starved-thermal check reads the .kicad_pro's min_resolved_spokes,
+# not this rule, so that is 1 as well (#1302; test_project_settings.py).
 (rule "Pour thermals may resolve to one spoke"
 	(condition "A.Type == 'Pad' && (A.NetName == 'GND' || A.NetName == 'HEAD_GND' || A.NetName == 'HEAD2_GND' || A.NetName == 'HEAD3_GND')")
 	(constraint min_resolved_spokes 1))
