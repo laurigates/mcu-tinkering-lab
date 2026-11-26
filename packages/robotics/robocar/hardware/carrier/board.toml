@@ -188,12 +188,13 @@ C9 = [72.5, 3.75, 90]
 # The BQ25887 USB charger (block bq25887-2s-usb-charger), placed by the
 # datasheet's priority list (SLUSD89B §11.1) with Figure 81 as the pattern
 # (#1280 pre-fab review, two rounds). U5 is unturned: its GND/PMID side faces
-# north, its SW/SNS/BAT side east. The PMID capacitors stand straight over
-# their pins, PMID pad over the PMID pins and GND pad over U5's GND pins. The
+# north, its SW/SNS/BAT side east. C11 stands straight over the PMID pins,
+# PMID pad over the PMID pins and GND pad over U5's GND pins. The
 # 1210 SNS capacitor C13 stands just east of the SNS pins, its GND pad at the
 # GND corner and tied 1.0 mm wide to C11's GND. SW leaves under C13's body to
-# L1, beside C13 (about 4.4 mm), and L1's PMID pad reaches the PMID capacitors
-# between C11's and C12's GND pads. C19 sits by L1's SW pad. BTST (pin 12) and
+# L1, beside C13, and L1's PMID pad runs north to C12, which stands beside it
+# with its GND pad tied to C13's, then west to C11. C19 sits by L1's SW pad.
+# BTST (pin 12) and
 # SW (17-18) are on opposite corners of the package, with BAT and SNS between,
 # so on two layers BTST reaches C19 as fixed tracks through two vias
 # ([[vias]]). C14 and C15 are the SNS bulk, C16 and C17 the BAT capacitors
@@ -550,7 +551,7 @@ points = [[58.78, 96.5], [53.9, 94.4]]
 # capacitors are tied pad to pad.
 # GND: pins 19 and 20, and PSEL (24, tied low by the block), into the exposed
 # pad, which takes five vias ([fanout] in_pad_vias); pin 19 to C11's GND pad,
-# C13's GND pad to C11's, C11's to C12's.
+# C13's GND pad to C11's; C12's GND pad to C13's (below).
 [[tracks]]
 name = "U5 GND, pin 19 to 20"
 net = "GND"
@@ -603,7 +604,8 @@ layer = "F.Cu"
 width_mm = 0.8
 points = [[87.0, 51.9], [87.0, 53.4]]
 
-# PMID: pins 21-22 to C11 and C12 straight above them, then over C12 to L1.
+# PMID: pins 21-22 to C11 straight above them; L1's PMID pad north to C12
+# beside it, then west to C11.
 [[tracks]]
 name = "U5 PMID, pin 22 to 21"
 net = "CHG_PMID"
@@ -802,7 +804,7 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[88.4, 78.57], [89.5, 79.6], [94.7, 79.6], [95.5, 80.9]]
 
-# SNS: pins 15-16 to C13 (1.3 mm), then the bulk C14 and C15.
+# SNS: pins 15-16 to C13 just east of them, then the bulk C14 and C15.
 [[tracks]]
 name = "U5 SNS, pin 16 to 15"
 net = "CHG_SNS"

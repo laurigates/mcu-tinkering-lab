@@ -184,9 +184,11 @@ comparison against the MP2672A, and every number below.
   `CHG_BAT` (C16, C17, and C13–C15 through the charger's sense path). Against
   the pack lead's inductance (about 0.3 µH, assumed) it rings at plug-in, to an
   estimated 10–11 V against BAT's and SNS's 12 V absolute maximum (SLUSD89B
-  §7.1). C20, a 100 µF electrolytic whose 0.36 Ω impedance at 100 kHz is near
-  the ring's characteristic impedance, damps it. Calculated, not measured:
-  scope `PACK_IN` at XT30 insertion on the first board.
+  §7.1). C20, a 100 µF electrolytic (0.36 Ω at 100 kHz), adds lossy
+  capacitance across the ceramics; F2 in series does much of the damping. The
+  third review round's simulation puts the peak at 9.7–10.6 V with C20 against
+  11.1–13.0 V without, and 10.3–11.6 V with C20 cold. Simulated, not measured:
+  scope `PACK_IN` at XT30 insertion on the first board (#1307).
 - **Charge-status LED.** D4 lights from REGN through R33 (1.5 kΩ) into STAT,
   which is open drain: on while charging, off when the charge ends or is
   disabled, blinking at 1 Hz on any fault (SLUSD89B §6). About 1.9 mA, and
@@ -542,7 +544,9 @@ paying for the order.
    from [`jlcpcb-rotations.toml`](../../../../../docs/reference/jlcpcb-rotations.toml)
    (`kicad.jlc`; U2 goes out at 270°, KiCad's 90° plus 180°). **Verify
    polarity in the placement preview** before confirming: each "+" on the pad
-   marked "+" on the silkscreen (C1–C3, C7, C8), D1's cathode bar on its pad toward the rear edge (pad 1, `XIAO_5V`),
+   marked "+" on the silkscreen (C1–C3, C7, C8, and C20's on its north
+   pad, `CHG_BAT`), D1's cathode bar on its pad toward the rear edge (pad 1,
+   `XIAO_5V`), D4's cathode (pad 1, the silkscreen's closed end) toward U5,
    and U2's tab toward C7.
 5. **Buy the through-hole parts**, soldered by hand either way:
 

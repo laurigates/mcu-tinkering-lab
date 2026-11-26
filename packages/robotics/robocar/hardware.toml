@@ -911,11 +911,16 @@ to = ["input.IN", "bat_fuse.1"]
 # yet measured): with Q1/Q2 off at plug-in, about 86 uF of MLCC on CHG_BAT
 # (C16, C17, and C13-C15 through the charger's sense path) rings with the pack
 # lead's ~0.3 uH, characteristic impedance about 0.08 ohm, to an estimated
-# 10-11 V against BAT and SNS's 12 V absolute maximum (SLUSD89B §7.1). An
-# electrolytic whose ESR is near that impedance damps it: Panasonic
-# EEE-FK1C101P, 100 uF 16 V, 0.36 ohm impedance at 100 kHz (FK series table),
-# LCSC C128532, Extended, 32,763 in stock on 2026-11-26. Scope PACK_IN at
-# XT30 insertion on the first board all the same.
+# 10-11 V against BAT and SNS's 12 V absolute maximum (SLUSD89B §7.1). C20
+# adds lossy capacitance across the ceramics: Panasonic EEE-FK1C101P, 100 uF
+# 16 V, 0.36 ohm impedance at 100 kHz (FK series table), LCSC C128532,
+# Extended, 32,763 in stock on 2026-11-26. Its ESR is 3.5-6x the ring's
+# impedance, not matched to it; F2 (0.02 ohm minimum, BHFUSE BSMD1812) in
+# series does much of the damping. The round-3 review's simulation (8.4 V
+# step, 0.04 ohm in series): 11.1-13.0 V without C20, 9.7-10.6 V with it,
+# 10.3-11.6 V with it cold (its impedance triples at -40 C). A 330 uF FK
+# (0.16 ohm, 8 x 10.2 mm) would leave 9.2-9.4 V. Scope PACK_IN at XT30
+# insertion on the first board (#1307).
 [parts.bat_damp]
 name = "100 uF damping capacitor, charger BAT branch"
 kind = "capacitor"
