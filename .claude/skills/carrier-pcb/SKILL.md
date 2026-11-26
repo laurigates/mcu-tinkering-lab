@@ -575,7 +575,10 @@ down):
     and `dsn.snap_wire_ends` moves each wire end within 2 µm of a pin of its
     net onto the centre exactly. The test is Freerouting's DEBUG
     `Pass #1: N incompletes` block, per net: CHG_PMID's five fixed-joined pads
-    read 4 incompletes before and 0 after.
+    read 4 incompletes before and 0 after. Two fixed tracks join only where
+    they share a corner: a branch that meets another track mid-segment counts
+    as unconnected too (#1280, REGN's lane to R28), so give the polyline a
+    corner at every junction.
 60. **Freerouting's "could not be routed" list describes its final board,
     not the best one it saves.** The two differ after a stagnation stop; read
     the DEBUG `Pass #N: ... incompletes` block of the pass whose score the

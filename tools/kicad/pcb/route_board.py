@@ -429,9 +429,20 @@ def grow_vias(board, spec):
             sys.exit(f"grow_vias: {e}")
         for n in nets:
             via_of[n] = cls["via_um"]
+    fan = spec.get("fanout") or {}
+    in_pads = []
+    for name in fan.get("in_pad", []):
+        ref, num = name.split(":", 1)
+        fp = board.FindFootprintByReference(ref)
+        pad = fp.FindPadByNumber(num) if fp else None
+        if pad is not None:
+            in_pads.append(pad)
     grown = []
     for v in board.GetTracks():
         if v.GetClass() != "PCB_VIA" or v.GetNetname() not in via_of:
+            continue
+        # A [[vias]] via and an [fanout] in_pad_vias via carry their own size.
+        if v.IsLocked() or any(p.HitTest(v.GetPosition()) for p in in_pads):
             continue
         want_d, want_drill = (pcbnew.FromMM(u / 1000.0) for u in via_of[v.GetNetname()])
         # GetDrillValue: a routed via's own drill is -1 ("the net class's"),
@@ -583,10 +594,11 @@ def island_vias(board, spec, zones):
         return 0
     d_um, drill_um = st["via_um"]
     # Inside the fill is enough: its edge already stands the pour clearance off
-    # every other net. Holes keep the board's 0.25 mm hole to hole.
+    # every other net. Holes keep the board's 0.25 mm hole to hole, with 0.02 mm
+    # to spare: at exactly 0.25 DRC rounded 9 of 12 routes under it (#1280).
     reach = pcbnew.FromMM(d_um / 2000.0 + 0.02)
     drill = pcbnew.FromMM(drill_um / 2000.0)
-    gap = pcbnew.FromMM(0.25)
+    gap = pcbnew.FromMM(0.27)
     step = pcbnew.FromMM(0.05)
     fills = {}
     for z in zones:
@@ -594,6 +606,9 @@ def island_vias(board, spec, zones):
             fills.setdefault(z.GetNetname(), {}).setdefault(layer, []).append(
                 z.GetFilledPolysList(layer)
             )
+    smd = [
+        p for fp in board.GetFootprints() for p in fp.Pads() if p.GetDrillSizeX() == 0
+    ]
     holes = [
         (v.GetPosition(), v.GetDrill() / 2)
         for v in board.GetTracks()
@@ -636,8 +651,11 @@ def island_vias(board, spec, zones):
                     while x <= box.GetRight() - reach:
                         at = pcbnew.VECTOR2I(int(x), int(y))
                         pts = ring(at)
+                        # Same-net fill covers its SMD pads (U5's exposed
+                        # pad): a via there drains the pad's paste.
                         if (
-                            all(
+                            not any(p.HitTest(pt) for p in smd for pt in pts)
+                            and all(
                                 chain.PointInside(pt) and polys.Contains(pt)
                                 for pt in pts
                             )
