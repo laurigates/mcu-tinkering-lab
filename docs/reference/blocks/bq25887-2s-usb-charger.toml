@@ -476,6 +476,23 @@ part = "r0805"
 value = "5.1k"
 lcsc = "C27834"
 
+# Charge-status LED on STAT (#1280 pre-fab review: nothing showed a charge).
+# STAT is open drain: LOW while charging, high-impedance when done or disabled,
+# blinking at 1 Hz on any fault (SLUSD89B §6), and it sinks up to 6 mA (§7.1).
+# §8.3 allows REGN as STAT's pull-up rail. REGN 4.7-5.15 V less the LED's
+# 1.5-2.6 V across 1.5 kohm: about 1.9 mA typical, 2.4 mA at most.
+[parts.rstat]
+name = "1.5 kohm STAT LED resistor"
+kind = "resistor"
+part = "r0805"
+value = "1.5k"
+lcsc = "C4310"
+
+[parts.dstat]
+name = "Charge-status LED (on while charging)"
+kind = "led"
+part = "led-0805-red"
+
 # Boost: VBUS -> (QBLK) -> PMID -> L -> SW; the output is SNS, then BAT.
 [[rails]]
 name = "PMID"
@@ -500,7 +517,7 @@ to = ["csns1.A", "csns2.A", "csns3.A"]
 [[rails]]
 name = "REGN"
 from = "ic.REGN"
-to = ["cregn.A", "rt1.A", "sda_pu.A", "scl_pu.A"]
+to = ["cregn.A", "rt1.A", "sda_pu.A", "scl_pu.A", "rstat.A"]
 
 [[rails]]
 name = "TS"
@@ -531,3 +548,13 @@ to = ["sda_pu.B"]
 name = "SCL"
 from = "ic.SCL"
 to = ["scl_pu.B"]
+
+[[rails]]
+name = "STAT_LED"
+from = "rstat.B"
+to = ["dstat.A"]
+
+[[rails]]
+name = "STAT"
+from = "ic.STAT"
+to = ["dstat.K"]
