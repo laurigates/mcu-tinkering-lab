@@ -303,10 +303,15 @@ REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
 def _numbers(v: Any, n: int) -> bool:
+    """`n` finite numbers. TOML parses `inf` and `nan` as floats, and an
+    infinite cut line never ends panel.build's tab loop (#1124)."""
     return (
         isinstance(v, list)
         and len(v) == n
-        and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)
+        and all(
+            isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+            for x in v
+        )
     )
 
 
@@ -670,7 +675,9 @@ def _validate_cut_clearance(where: str, data: dict[str, Any], size: Any) -> list
             d = _segment_rect(line[:2], line[2:], tuple(box))
             if d < CUT_CLEARANCE_MM - 1e-9:
                 errors.append(
-                    f"{where}: [pour] regions: {rect!r} is {d:.1f} mm from cut line "
+                    f"{where}: [pour] regions: "
+                    f"{'the whole board' if rect is None else repr(rect)} is {d:.1f} mm "
+                    f"from cut line "
                     f"{list(line)!r}; keep {CUT_CLEARANCE_MM} mm"
                 )
     return errors

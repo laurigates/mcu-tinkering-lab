@@ -490,7 +490,7 @@ class ConfigTests(unittest.TestCase):
         # a whole-board [pour] (net, no regions) meets every cut line
         self.fails(
             lambda d: d.setdefault("silk", {}).update(cut_lines=[[41, 0.5, 41, 61]]),
-            "[pour] regions: None is 0.0 mm from cut line [41, 0.5, 41, 61]",
+            "[pour] regions: the whole board is 0.0 mm from cut line [41, 0.5, 41, 61]",
         )
 
     def test_silk_text_height_floor(self):
@@ -1054,6 +1054,27 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(
             self.errors(edit), [f"[silk] cut_lines: {line!r} has no length"]
         )
+
+    def test_mousebite_panel_with_a_non_finite_cut_line(self):
+        """TOML parses `inf` and `nan`; an infinite cut line passed the shape
+        check and hung panel.build's tab loop (#1124)."""
+        for text in ("inf", "nan", "-inf"):
+            line = tomllib.loads(f"l = [41.5, 0.0, 41.5, {text}]")["l"]
+
+            def edit(d, line=line):
+                del d["pour"]["net"]
+                d["pour"]["regions"] = [
+                    {"net": "GND", "rect": [0, 0, 40.5, 62]},
+                    {"net": "GND", "rect": [42.5, 0, 90, 62]},
+                ]
+                d["panel"] = {"mode": "mousebites"}
+                d["silk"]["cut_lines"] = [line]
+
+            with self.subTest(text=text):
+                self.assertEqual(
+                    self.errors(edit),
+                    [f"[silk] cut_lines: {line!r} must be [x0, y0, x1, y1]"],
+                )
 
     def test_file_is_toml(self):
         self.assertEqual(
