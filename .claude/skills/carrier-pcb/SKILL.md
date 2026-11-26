@@ -55,7 +55,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   Edge.Cuts slots and board-only MB<n> footprints of NPTH holes, all inside
   the keepout bands; `boardcheck` compares both with board.toml
 - `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
-  Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
+  Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`. With
+  `--docker` (or when Launchpad no longer serves the .deb, #1146) it writes
+  `kicad-cli` and `kicad-python` wrappers around `kicad/kicad:10.0.6-full` and
+  prints the exports; that is how a cloud session runs every carrier recipe
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow
@@ -300,9 +303,11 @@ down):
     (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while
     the real one still fails. For a symbol's pin-type quirk, change the
     project's ERC `pin_map` instead, and check that no other pin has that type.
-26. **The KiCad PPA keeps only the newest 10.0.x**, but Launchpad still serves
-    superseded builds under the PPA's `+files/` URL; `tools/kicad/setup.sh`
-    pins 10.0.6's packages by sha256.
+26. **The KiCad PPA keeps only the newest 10.0.x**, and Launchpad's `+files/`
+    URL for the superseded 10.0.6 .deb answered 404 on 2026-11-12 and
+    2026-11-26 (#1146). `tools/kicad/setup.sh` still pins those packages by
+    sha256, and falls back to the `kicad/kicad:10.0.6-full` image, pinned by
+    digest, when docker is present.
 27. **An extra `)` in the DSN hides everything after it, and Freerouting
     says nothing.** Until #1280 `dsn.rewrite` cut the net class at the first
     `"    )\n"`, which also matches the tail of the rule's six-space `)`, and
