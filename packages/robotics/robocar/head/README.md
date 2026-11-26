@@ -83,6 +83,11 @@ none needs a relief hole.
 4. **Sand each head back to its lines, 29.5 × 29.5 mm,** on sandpaper on a flat
    surface, checking with calipers. The cradle's inner size is 30.0 × 30.0 mm.
 
+The closest copper to any cut is a HEAD3_XIAO_5V track, 0.91 mm inside head
+3's top edge (the y 70.5 line; `carrier-review`, 2026-11-26). That is above the
+board's 0.5 mm copper-to-edge clearance, but leaves no room for a kerf on the
+line: saw in the waste strip above it and sand down to the line.
+
 FR-4 dust contains glass fibre: wet-sand, and wear a mask. The heat-set
 inserts go in the cradle, not the PCB: H5–H10 are plain 2.2 mm clearance holes.
 
