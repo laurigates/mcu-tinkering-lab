@@ -66,6 +66,7 @@ cliff_action_t cliff_step(cliff_t *c, const cliff_sample_t *s, uint32_t now_ms, 
          * usually drives toward, and with both gone no back-off starts anyway. */
         c->trigger = front_edge ? CLIFF_FRONT : CLIFF_REAR;
         c->trips++;
+        c->held[c->trigger] = true;
         enter(c, CLIFF_PHASE_BRAKE, now_ms);
     }
 
@@ -95,13 +96,22 @@ cliff_action_t cliff_step(cliff_t *c, const cliff_sample_t *s, uint32_t now_ms, 
     }
 }
 
+void cliff_goal_seen(cliff_t *c, uint32_t goal_seq)
+{
+    if (goal_seq != c->goal_seq) {
+        c->goal_seq = goal_seq;
+        c->held[CLIFF_FRONT] = false;
+        c->held[CLIFF_REAR] = false;
+    }
+}
+
 bool cliff_permits(const cliff_t *c, cliff_motion_t m)
 {
     switch (m) {
         case CLIFF_MOTION_FORWARD:
-            return !c->cliff[CLIFF_FRONT];
+            return !c->cliff[CLIFF_FRONT] && !c->held[CLIFF_FRONT];
         case CLIFF_MOTION_BACKWARD:
-            return !c->cliff[CLIFF_REAR];
+            return !c->cliff[CLIFF_REAR] && !c->held[CLIFF_REAR];
         case CLIFF_MOTION_ROTATE:
             return !c->cliff[CLIFF_FRONT] && !c->cliff[CLIFF_REAR];
         case CLIFF_MOTION_NONE:

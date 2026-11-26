@@ -362,6 +362,23 @@ TEST(test_a_reflex_trip_offers_a_note_once_then_waits_for_the_window)
            NOTE_TRIGGER_REFLEX);
 }
 
+/* #1186: the planner was never told of a cliff trip, so it kept renewing the
+ * drive toward the edge. A trip offers the note tool with a reason that says
+ * the robot will not drive toward the edge until a new goal. */
+TEST(test_a_cliff_trip_offers_a_note_with_its_own_reason)
+{
+    planner_cycle_state_t st = {0};
+    planner_note_inputs_t in = {.reflex_trips = 0, .cliff_trips = 0, .blind = false};
+    ASSERT(planner_cycle_note_offer(&st, &in, 1000) == NOTE_TRIGGER_NONE);
+
+    in.cliff_trips = 1;
+    ASSERT(planner_cycle_note_offer(&st, &in, 16000) == NOTE_TRIGGER_CLIFF);
+    ASSERT(strstr(note_trigger_reason(NOTE_TRIGGER_CLIFF), "new goal") != NULL);
+    ASSERT(strcmp(note_trigger_name(NOTE_TRIGGER_CLIFF), "cliff") == 0);
+    ASSERT(planner_cycle_note_offer(&st, &in, 16000 + NOTE_GATE_MIN_INTERVAL_MS) ==
+           NOTE_TRIGGER_NONE);
+}
+
 TEST(test_blind_is_raised_once_per_spell)
 {
     planner_cycle_state_t st = {0};
@@ -479,6 +496,7 @@ int main(void)
     run_test_after_request_returns_the_gate_verdict_at_that_moment();
     run_test_after_request_notes_the_call();
     run_test_a_reflex_trip_offers_a_note_once_then_waits_for_the_window();
+    run_test_a_cliff_trip_offers_a_note_with_its_own_reason();
     run_test_blind_is_raised_once_per_spell();
     run_test_a_track_streak_raises_track_stuck();
     run_test_a_failed_request_breaks_the_track_streak();

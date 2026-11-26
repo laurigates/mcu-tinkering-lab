@@ -997,6 +997,9 @@ static void reactive_task(void *arg)
             goal.kind = GOAL_KIND_STOP;
             fresh = false;
         }
+        if (s_cliff_armed) {
+            cliff_goal_seen(&s_cliff, goal_seq); /* a new goal releases a cliff hold */
+        }
 
         /* ---- 5. Head ----
          * Before the wheels, because a head-led track goal decides whether the
@@ -1463,6 +1466,9 @@ void reactive_controller_tick_for_test(void)
     if (goal_state_read_seq(&goal, &fresh, &goal_seq) != ESP_OK) {
         goal.kind = GOAL_KIND_STOP;
         fresh = false;
+    }
+    if (s_cliff_armed) {
+        cliff_goal_seen(&s_cliff, goal_seq);
     }
 
     if (s_head_lease.kind != HEAD_LEASE_NONE) {

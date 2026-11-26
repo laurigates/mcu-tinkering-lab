@@ -59,6 +59,7 @@ extern "C" {
 typedef enum {
     NOTE_TRIGGER_NONE = 0,
     NOTE_TRIGGER_REFLEX,      /**< the obstacle reflex braked since the last offer */
+    NOTE_TRIGGER_CLIFF,       /**< the cliff reflex braked at an edge since the last offer */
     NOTE_TRIGGER_BLIND,       /**< no camera frame has decoded */
     NOTE_TRIGGER_TRACK_STUCK, /**< `track` chosen NOTE_GATE_TRACK_STUCK_CYCLES times running */
     NOTE_TRIGGER_REPEATS,     /**< NOTE_GATE_REPEAT_STREAK lines withheld as repeats */

@@ -128,6 +128,8 @@ const char *note_trigger_name(note_trigger_t trigger)
     switch (trigger) {
         case NOTE_TRIGGER_REFLEX:
             return "reflex";
+        case NOTE_TRIGGER_CLIFF:
+            return "cliff";
         case NOTE_TRIGGER_BLIND:
             return "blind";
         case NOTE_TRIGGER_TRACK_STUCK:
@@ -147,6 +149,10 @@ const char *note_trigger_reason(note_trigger_t trigger)
         case NOTE_TRIGGER_REFLEX:
             return "the robot's obstacle reflex braked it since your last note, because its "
                    "front rangefinder measured something very close ahead";
+        case NOTE_TRIGGER_CLIFF:
+            return "the robot's cliff reflex braked it since your last note, because a floor "
+                   "sensor stopped seeing floor, and it backed away; it will not drive toward "
+                   "that edge again until you choose a new goal";
         case NOTE_TRIGGER_BLIND:
             return "no camera frame has decoded on the robot since it started, so the image "
                    "you are given may be blank or corrupt";

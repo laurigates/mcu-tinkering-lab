@@ -66,6 +66,8 @@ typedef struct {
      *  brake has already released. Zero-initialised to match the executor's
      *  count at boot. */
     uint32_t note_reflex_seen;
+    /** The same for the cliff reflex's count (#1186). */
+    uint32_t note_cliff_seen;
     /** BLIND was raised for the current blind spell; cleared when a frame
      *  decodes, so the next spell raises it again. */
     bool note_blind_raised;
@@ -226,6 +228,8 @@ uint32_t planner_cycle_wait_periods(const planner_cycle_state_t *st);
 typedef struct {
     /** reactive_telemetry_t.reflex_trips. */
     uint32_t reflex_trips;
+    /** reactive_telemetry_t.cliff_trips (#1186). */
+    uint32_t cliff_trips;
     /** !scene_change_has_measurement(): no frame has decoded. */
     bool blind;
 } planner_note_inputs_t;
@@ -234,7 +238,8 @@ typedef struct {
  * @brief Raise the triggers @p in supports, then ask the gate for an offer.
  *
  * Call on a cycle that will make a request, before it is built. A reflex trip
- * since the last call raises NOTE_TRIGGER_REFLEX; the start of a blind spell
+ * since the last call raises NOTE_TRIGGER_REFLEX, a cliff trip
+ * NOTE_TRIGGER_CLIFF; the start of a blind spell
  * raises NOTE_TRIGGER_BLIND once. Returns note_gate_take(now_ms): the trigger
  * this request offers the tool for, or NONE.
  */
