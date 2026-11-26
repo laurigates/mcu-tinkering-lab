@@ -479,42 +479,42 @@
 <circle cx="300.5" cy="493.5" r="1.6" fill="#d9d9d9"/>
 <circle cx="317.5" cy="493.5" r="1.6" fill="#d9d9d9"/>
 <rect x="42.42125984251969" y="397.0551181102362" width="56.889763779527556" height="56.889763779527584" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="45.42125984251969" y="407.0551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C1 100uF 35V</text>
 <rect x="195.4212598425197" y="397.0551181102362" width="56.88976377952753" height="56.889763779527584" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="198.4212598425197" y="407.0551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C2 100uF 35V</text>
 <rect x="154.46062992125985" y="364.46062992125985" width="36.81102362204726" height="20.078740157480297" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="157.46062992125985" y="374.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C3 100nF</text>
 <rect x="187.79133858267716" y="465.7913385826772" width="36.74409448818898" height="21.417322834645574" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="190.79133858267716" y="475.7913385826772" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D1 1N5819</text>
 <rect x="102.79133858267717" y="331.46456692913387" width="21.41732283464566" height="36.74409448818898" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="105.79133858267717" y="341.46456692913387" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D2 1N4744A</text>
 <rect x="137.46062992125985" y="398.46062992125985" width="20.078740157480297" height="34.06692913385825" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="140.46062992125985" y="408.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">F1 radial PTC, 3 A hold</text>
 <rect x="135.65354330708664" y="481.6535433070866" width="40.75984251968504" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="138.65354330708664" y="491.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J1 JST-XH pack lead</text>
 <rect x="101.65354330708662" y="447.6535433070866" width="74.69291338582677" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="104.65354330708662" y="457.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J2 LM2596 module</text>
 <rect x="33.653543307086615" y="481.6535433070866" width="74.69291338582676" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="36.653543307086615" y="491.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J4 Motor left</text>
 <rect x="237.6535433070866" y="481.6535433070866" width="74.69291338582681" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="240.6535433070866" y="491.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J5 Motor right</text>
 <rect x="101.65354330708662" y="379.6535433070866" width="23.692913385826756" height="57.692913385826785" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="104.65354330708662" y="389.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">Q1 TO-220 P-FET (G D S)</text>
 <rect x="137.46062992125985" y="262.46062992125985" width="34.06692913385825" height="20.078740157480297" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="140.46062992125985" y="272.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R1 10k</text>
 <rect x="154.46062992125985" y="296.46062992125985" width="34.06692913385825" height="20.078740157480297" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="157.46062992125985" y="306.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R2 100k</text>
 <rect x="154.46062992125985" y="330.46062992125985" width="34.06692913385825" height="20.078740157480297" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="157.46062992125985" y="340.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R3 22k</text>
 <rect x="171.46062992125982" y="401.4724409448819" width="20.078740157480354" height="34.06692913385825" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="174.46062992125982" y="411.4724409448819" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R4 10k</text>
 <rect x="35.25984251968504" y="245.3267716535433" width="105.34645669291339" height="139.34645669291336" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
-<text x="38.25984251968504" y="255.3267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A1 DRV8825 left</text>
 <rect x="205.25984251968504" y="245.3267716535433" width="105.34645669291336" height="139.34645669291336" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
-<text x="208.25984251968504" y="255.3267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A2 DRV8825 right</text>
 <rect x="153.7237" y="106.71600000000001" width="140.55259999999998" height="106.28399999999999" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
-<text x="156.7237" y="116.71600000000001" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J3 GY-521 MPU6050</text>
 <rect x="20.06692913385826" y="82.95669291338584" width="118.79921259842521" height="140.28346456692913" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="128.34645669291336" y="389.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">Q1 TO-220 P-FET (G D S)</text>
+<text x="157.46062992125985" y="358.96062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C3 100nF</text>
+<text x="157.46062992125985" y="324.96062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R3 22k</text>
+<text x="140.46062992125985" y="442.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">F1 radial PTC, 3 A hold</text>
+<text x="138.65354330708664" y="515.3464566929134" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J1 JST-XH pack lead</text>
+<text x="24.95354330708662" y="474.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J2 LM2596 module</text>
+<text x="240.6535433070866" y="476.1535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J5 Motor right</text>
+<text x="36.653543307086615" y="508.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J4 Motor left</text>
+<text x="24.91102362204724" y="391.5551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C1 100uF 35V</text>
+<text x="198.4212598425197" y="407.0551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C2 100uF 35V</text>
+<text x="62.20866141732283" y="325.96456692913387" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D2 1N4744A</text>
+<text x="179.99133858267714" y="492.7913385826772" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D1 1N5819</text>
+<text x="157.46062992125985" y="290.96062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R2 100k</text>
+<text x="140.46062992125985" y="256.96062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R1 10k</text>
+<text x="182.2606299212598" y="462.53937007874015" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">R4 10k</text>
+<text x="156.7237" y="116.71600000000001" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J3 GY-521 MPU6050</text>
+<text x="208.25984251968504" y="239.8267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A2 DRV8825 right</text>
+<text x="38.25984251968504" y="239.8267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A1 DRV8825 left</text>
 <text x="23.06692913385826" y="77.5" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">U1 XIAO RP2350</text>
 <rect x="41.5" y="251.5" width="8" height="8" fill="#b87333"/>
 <circle cx="45.5" cy="272.5" r="4" fill="#b87333"/>
