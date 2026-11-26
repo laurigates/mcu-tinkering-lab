@@ -123,6 +123,26 @@ fit-leff csv wheel_diam_m steps_per_rev="1600":
 analyze csv l_eff_m="0.21" maxrate="4000":
     python3 -I tools/analyze_capture.py "{{ join(invocation_directory(), csv) }}" --l-eff {{l_eff_m}} --maxrate {{maxrate}}
 
+# A run log's 1 s summary, the rows around the fall and the stretches at maxrate
+[group: "tune"]
+timeline csv maxrate="4000":
+    python3 -I tools/log_inspect.py timeline "{{ join(invocation_directory(), csv) }}" --maxrate {{maxrate}}
+
+# The LQR's commanded acceleration rebuilt term by term over [t0, t1] s; K as `stat` prints it
+[group: "tune"]
+terms csv k0 k1 k2 k3 t0 t1 wheel_diam_m="0.065":
+    python3 -I tools/log_inspect.py terms "{{ join(invocation_directory(), csv) }}" --k {{k0}} {{k1}} {{k2}} {{k3}} --t0 {{t0}} --t1 {{t1}} --wheel-diam {{wheel_diam_m}}
+
+# IMU-implied vs commanded wheel acceleration over [t0, t1] s; gyro wobble over [s0, s1] s
+[group: "tune"]
+accel csv t0 t1 s0 s1 l_eff_m="0.21" wheel_diam_m="0.065":
+    python3 -I tools/log_inspect.py accel "{{ join(invocation_directory(), csv) }}" --t0 {{t0}} --t1 {{t1}} --steady {{s0}} {{s1}} --l-eff {{l_eff_m}} --wheel-diam {{wheel_diam_m}}
+
+# Largest steady push survived, and where it fails, across q_x and maxrate (numpy and scipy through uv)
+[group: "tune"]
+push-sim *args:
+    uv run --quiet --with scipy --with numpy python3 tools/push_sim.py {{args}}
+
 # LQR gains, poles and clamp lean across r for a model (numpy and scipy through uv)
 [group: "tune"]
 lqr-sweep l_eff_m wheel_diam_m *r:

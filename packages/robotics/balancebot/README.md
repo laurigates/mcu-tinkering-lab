@@ -350,6 +350,20 @@ runs; `log list` shows them with their run numbers.
 re-armed within the 1 s tail, or if power drops before a FAULT or disarm is
 seen (a brownout or the pack's BMS cutting out).
 
+To look inside a run beyond `analyze` (`tools/log_inspect.py`, #1279):
+
+```bash
+just balancebot::timeline <csv> [maxrate]           # 1 s summary, rows around the fall, stretches at maxrate
+just balancebot::terms <csv> K0 K1 K2 K3 <t0> <t1>  # the LQR's acceleration term by term (K from `stat`)
+just balancebot::accel <csv> <t0> <t1> <s0> <s1>    # IMU-implied vs commanded acceleration; gyro wobble RMS
+just balancebot::push-sim [--q-x ...] [--maxrate ...] # largest steady push survived on the model
+```
+
+`accel` shows whether the wheels kept up: an IMU-implied acceleration above
+the commanded one means they turned slower than told. `push-sim` (numpy and
+scipy through uv) sweeps q_x and maxrate on the point-mass model with the
+acceleration and speed clamps, and prints K for q_x 400 to compare with `stat`.
+
 ### Choosing r
 
 `just balancebot::lqr-sweep <l_eff_m> <wheel_diam_m> [r...]` prints K, the
