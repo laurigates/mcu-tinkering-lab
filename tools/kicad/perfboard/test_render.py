@@ -22,6 +22,8 @@ ROOT, PROJECT = testfixture.shared()
 TEXT = re.compile(r"<text ([^>]*)>([^<]*)</text>")
 ATTR = re.compile(r'([\w-]+)="([^"]*)"')
 RECT = re.compile(r"<rect ([^>]*)/>")
+CIRCLE = re.compile(r"<circle ([^>]*)/>")
+PAD = "#b87333"  # copper: the component side's pads
 
 
 def elements(pattern, svg):
@@ -53,7 +55,9 @@ class ComponentPanel:
             anchor = a.get("text-anchor", "start")
             box = text_box(x, y, text, anchor)
             if a.get("fill") == PART_INK:
-                self.labels[text] = box
+                # the component side is the first panel; the step panels
+                # repeat the labels further right and down
+                self.labels.setdefault(text, box)
             elif a.get("fill") != MUTED:
                 continue
             elif anchor == "middle" and self.left <= x <= self.right and y < self.top:
@@ -107,6 +111,41 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(
             self.panel.collisions({text: old}), [f"{text} covers the column letters"]
         )
+
+    def test_no_label_covers_a_pad(self):
+        """#762: a label inside a one- or two-hole-tall body ran across its
+        own pads, which are drawn over it ("R2 100k" read "R? 100k")."""
+        pads = [
+            (cx - 4, cy - 4, cx + 4, cy + 4)
+            for cx, cy in self.pad_centres()
+            if self.panel.left <= cx <= self.panel.right
+            and self.panel.top <= cy <= self.panel.bottom
+        ]
+        self.assertGreater(len(pads), 30)
+        covered = [
+            text
+            for text, box in self.panel.labels.items()
+            if any(intersects(box, p) for p in pads)
+        ]
+        self.assertEqual(covered, [])
+
+    def test_no_two_labels_overlap(self):
+        boxes = list(self.panel.labels.items())
+        overlaps = [
+            (a, b)
+            for i, (a, box_a) in enumerate(boxes)
+            for b, box_b in boxes[i + 1 :]
+            if intersects(box_a, box_b)
+        ]
+        self.assertEqual(overlaps, [])
+
+    def pad_centres(self):
+        for a, _ in elements(CIRCLE, self.svg):
+            if a.get("fill") == PAD and a.get("r") == "4":
+                yield float(a["cx"]), float(a["cy"])
+        for a, _ in elements(RECT, self.svg):
+            if a.get("fill") == PAD and a.get("width") == "8":
+                yield float(a["x"]) + 4, float(a["y"]) + 4
 
     def test_modules_above_the_grid_are_labelled_above_the_letters(self):
         for ref in ("U1 XIAO RP2350", "J3 GY-521 MPU6050"):
