@@ -147,6 +147,7 @@ already has:
 | Trigger | Raised when |
 |---|---|
 | `reflex` | the executor's `reflex_trips` count changed since the last request (a brake that tripped and released between two plans still counts) |
+| `cliff` | the executor's `cliff_trips` count changed since the last request; the reason tells the model the robot will not drive toward that edge until it chooses a new goal (#1186) |
 | `blind` | a request is made while no camera frame has decoded; once per blind spell |
 | `track_stuck` | `track` goals written on `NOTE_GATE_TRACK_STUCK_CYCLES` (4) requests in a row; the executor does not report arrival, so the streak stands in for "not converging" |
 | `repeats` | `NOTE_GATE_REPEAT_STREAK` (3) spoken lines in a row withheld as near-repeats |

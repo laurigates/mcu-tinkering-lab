@@ -90,6 +90,12 @@ typedef struct {
     cliff_id_t trigger; /**< The sensor whose edge started the phase.   */
     uint32_t phase_start_ms;
     uint32_t trips; /**< Edges that started a reflex, since reset.  */
+    /** Motion toward this end stays refused after a trip there, even once the
+     *  floor clears, until a new goal is written (cliff_goal_seen()). Without
+     *  it a fresh drive goal takes the robot straight back to the edge it
+     *  just backed away from (#1186). */
+    bool held[CLIFF_COUNT];
+    uint32_t goal_seq; /**< The goal_state write last seen.            */
 } cliff_t;
 
 /**
@@ -112,10 +118,21 @@ cliff_action_t cliff_step(cliff_t *c, const cliff_sample_t *s, uint32_t now_ms,
                           bool obstacle_ahead);
 
 /**
+ * @brief Tell the reflex which goal_state write is current.
+ *
+ * Call every tick after reading the goal. A sequence number different from
+ * the last one seen is a new goal, and releases the holds that earlier trips
+ * set: the planner has chosen again, knowing of the trip (#1186).
+ */
+void cliff_goal_seen(cliff_t *c, uint32_t goal_seq);
+
+/**
  * @brief Whether a wheel motion is allowed with the sensors as they are now.
  *
  * Forward needs floor in front, backward needs floor behind, rotating in place
- * needs both (a turn swings both ends). Stopping is always allowed.
+ * needs both (a turn swings both ends). Stopping is always allowed. A trip
+ * also holds motion toward its end until the next goal (cliff_t.held); a
+ * rotation is not held, since turning away is how the robot leaves the edge.
  */
 bool cliff_permits(const cliff_t *c, cliff_motion_t m);
 

@@ -201,6 +201,10 @@ note_trigger_t planner_cycle_note_offer(planner_cycle_state_t *st, const planner
         st->note_reflex_seen = in->reflex_trips;
         note_gate_raise(NOTE_TRIGGER_REFLEX);
     }
+    if (in->cliff_trips != st->note_cliff_seen) {
+        st->note_cliff_seen = in->cliff_trips;
+        note_gate_raise(NOTE_TRIGGER_CLIFF);
+    }
     if (in->blind && !st->note_blind_raised) {
         st->note_blind_raised = true;
         note_gate_raise(NOTE_TRIGGER_BLIND);

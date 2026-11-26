@@ -15,6 +15,8 @@
  *  - No back-off toward a side without floor, and no forward pull-away into an
  *    obstacle; a back-off stops the moment its side loses floor.
  *  - permits(): forward needs front floor, backward rear floor, rotate both.
+ *  - A trip holds motion toward its end after the floor clears, until a new
+ *    goal is seen (#1186); rotation is not held, and the same goal is not new.
  *  - The uint32 millisecond wrap does not stretch or cut a phase.
  */
 
@@ -225,6 +227,50 @@ static void test_read_failure_fails_closed(void)
     CHECK(!cliff_permits(&c, CLIFF_MOTION_BACKWARD), "backward permitted after failed reads");
 }
 
+/* #1186: with a fresh drive goal, the floor clearing after the back-off used
+ * to hand the wheels straight back to the goal, which drove to the edge again
+ * (19 trips in 21 s in us-d6-stays-on-table). The hold keeps forward refused
+ * until the planner writes a new goal. */
+static void test_trip_holds_toward_edge_until_new_goal(void)
+{
+    cliff_t c;
+    uint32_t t = 0;
+    on_floor(&c, &t);
+    cliff_goal_seen(&c, 7u);
+
+    (void)feed(&c, &FRONT_GONE, CLIFF_TRIP_SAMPLES, &t, false);
+    while (feed(&c, &FRONT_GONE, 1, &t, false) != CLIFF_ACT_NONE) {
+    }
+    /* Backed off onto floor: the debounce clears, the hold stays. */
+    (void)feed(&c, &BOTH_FLOOR, CLIFF_CLEAR_SAMPLES, &t, false);
+    CHECK(!c.cliff[CLIFF_FRONT], "front still reads no floor after clearing");
+    CHECK(!cliff_permits(&c, CLIFF_MOTION_FORWARD), "forward permitted under the same goal");
+    CHECK(cliff_permits(&c, CLIFF_MOTION_BACKWARD), "backward refused: only the front is held");
+    CHECK(cliff_permits(&c, CLIFF_MOTION_ROTATE), "rotate refused: turning away must stay open");
+
+    cliff_goal_seen(&c, 7u);
+    CHECK(!cliff_permits(&c, CLIFF_MOTION_FORWARD), "re-reading the same goal released the hold");
+
+    cliff_goal_seen(&c, 8u);
+    CHECK(cliff_permits(&c, CLIFF_MOTION_FORWARD), "a new goal did not release the hold");
+}
+
+static void test_rear_trip_holds_backward(void)
+{
+    cliff_t c;
+    uint32_t t = 0;
+    on_floor(&c, &t);
+    cliff_goal_seen(&c, 3u);
+    (void)feed(&c, &REAR_GONE, CLIFF_TRIP_SAMPLES, &t, false);
+    while (feed(&c, &REAR_GONE, 1, &t, false) != CLIFF_ACT_NONE) {
+    }
+    (void)feed(&c, &BOTH_FLOOR, CLIFF_CLEAR_SAMPLES, &t, false);
+    CHECK(!cliff_permits(&c, CLIFF_MOTION_BACKWARD), "backward permitted after a rear trip");
+    CHECK(cliff_permits(&c, CLIFF_MOTION_FORWARD), "forward refused after a rear trip");
+    cliff_goal_seen(&c, 4u);
+    CHECK(cliff_permits(&c, CLIFF_MOTION_BACKWARD), "a new goal did not release the rear hold");
+}
+
 static void test_ms_wrap(void)
 {
     cliff_t c;
@@ -253,6 +299,8 @@ int main(void)
     test_rear_pull_skipped_with_obstacle();
     test_backoff_stops_at_second_edge();
     test_read_failure_fails_closed();
+    test_trip_holds_toward_edge_until_new_goal();
+    test_rear_trip_holds_backward();
     test_ms_wrap();
     if (s_failures) {
         printf("FAILED: %d check(s)\n", s_failures);

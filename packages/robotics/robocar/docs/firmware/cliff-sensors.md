@@ -72,6 +72,13 @@ Every executor tick (~33 ms) the firmware reads both pins.
   floor, rotating in place needs both. Stopping is always allowed. The
   direction comes from the same classification the rangefinders use (#1026),
   so a drive goal past ±90°, which reverses (#1028), needs rear floor.
+- **Hold until a new goal** (#1186). A trip also refuses motion toward that end
+  after the floor clears, until `goal_state` holds a new write
+  (`cliff_goal_seen()`). Without it a fresh drive goal took the robot straight
+  back to the edge it had backed away from, once every ~1.2 s in the twin's
+  `us-d6-stays-on-table`. Rotating in place is not held, since turning is how
+  the robot leaves the edge. The planner hears of the trip through the `cliff`
+  note trigger ([planner.md](planner.md)).
 - **Order** (`apply_wheels()`): the OTA hold, then the cliff reflex, then the
   rangefinders, then the floor sensors' refusal, then the manual lease or the
   planner. A front edge reverses even with an obstacle ahead, because the
