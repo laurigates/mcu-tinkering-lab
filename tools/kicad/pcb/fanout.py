@@ -6,9 +6,12 @@ candidate against the routed board, in order, and takes the first that clears.
 It runs under KiCad's bundled Python 3.9 as the sibling of route_board.py: no
 3.10+ syntax.
 
-A candidate sits on one of `DIRECTIONS` rays from the pad's centre, `gap` plus
-the via's radius beyond the edge of the pad's bounding box, then `step` further
-out at a time while the via's centre stays within `reach` of that edge. They
+A candidate sits on one of `DIRECTIONS` rays from the pad's centre, where its
+centre is `gap` plus the via's radius from the pad's bounding box, then `step`
+further at a time while the via's centre stays within `reach` of the box.
+Distance is to the box, not along the ray: on a diagonal ray a point `gap +
+radius` past the edge along the ray can sit closer than that to the edge it
+crossed at a slant, or to the corner beside it (#825). They
 are ordered by distance beyond the edge, then by how far the ray turns from
 `prefer` (a direction, normally away from the pad's own part, where a via
 blocks nothing else's way out), then by ray (0 is +x, counting toward +y), so
@@ -25,6 +28,30 @@ def edge_distance(half_w, half_h, dx, dy):
     tx = half_w / abs(dx) if dx else math.inf
     ty = half_h / abs(dy) if dy else math.inf
     return min(tx, ty)
+
+
+def box_distance(half_w, half_h, x, y):
+    """Distance from (x, y) to a 2*half_w x 2*half_h box centred on the origin; 0 inside."""
+    return math.hypot(max(abs(x) - half_w, 0.0), max(abs(y) - half_h, 0.0))
+
+
+def ray_point_at(half_w, half_h, dx, dy, clearance):
+    """Distance along unit (dx, dy) from the box's centre to the first point
+    `clearance` from the box. The distance to the box grows monotonically along
+    the ray once past the edge, so step out from the edge until a point clears,
+    then bisect back to the first one that does.
+    """
+    lo = edge_distance(half_w, half_h, dx, dy)
+    hi = lo + clearance
+    while box_distance(half_w, half_h, dx * hi, dy * hi) < clearance:
+        hi += clearance
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if box_distance(half_w, half_h, dx * mid, dy * mid) < clearance:
+            lo = mid
+        else:
+            hi = mid
+    return hi
 
 
 def stub_width(track, half_w, half_h):
@@ -49,13 +76,12 @@ def candidates(cx, cy, half_w, half_h, via_r, gap, reach, step, prefer=(0.0, 0.0
         dx, dy = math.cos(a), math.sin(a)
         dx = 0.0 if abs(dx) < 1e-12 else dx
         dy = 0.0 if abs(dy) < 1e-12 else dy
-        edge = edge_distance(half_w, half_h, dx, dy)
         n = 0
         while True:
             extra = gap + via_r + n * step
             if extra > reach + 1e-9:
                 break
-            d = edge + extra
+            d = ray_point_at(half_w, half_h, dx, dy, extra)
             turn = round(1.0 - (dx * px + dy * py), 9)
             out.append((n, turn, i, cx + dx * d, cy + dy * d))
             n += 1
