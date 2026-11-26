@@ -134,8 +134,18 @@ def check_track_ends(board, origin, tracks):
                     f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad "
                     f"on {tr['layer']} and no [[vias]] via"
                 )
+            # A pad's number is not its identity: a SOT-223's tab and its
+            # middle pin are both pad 2, and a track joining them is real.
             ends.append(
-                {(p.GetParentFootprint().GetReference(), p.GetNumber()) for p in pads}
+                {
+                    (
+                        p.GetParentFootprint().GetReference(),
+                        p.GetNumber(),
+                        p.GetPosition().x,
+                        p.GetPosition().y,
+                    )
+                    for p in pads
+                }
             )
         if ends[0] & ends[1]:
             sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
