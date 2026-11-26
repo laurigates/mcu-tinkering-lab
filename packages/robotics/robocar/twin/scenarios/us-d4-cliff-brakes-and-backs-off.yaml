@@ -1,5 +1,6 @@
 # US-D4: at an edge he brakes, backs away from it, and will not drive toward it
-# again until there is floor (docs/firmware/cliff-sensors.md, cliff_core.c).
+# again until there is floor and a new goal (docs/firmware/cliff-sensors.md,
+# cliff_core.c, #1186).
 #
 # `cliff: true` arms the cliff reflex. It starts as "no floor" under both
 # sensors and fails closed; the floor reading scripted at 0 clears both after
@@ -24,8 +25,15 @@
 # apply_wheels() refuses it and brakes (cliff_permits()).
 #
 # Floor again from 22 s: the ticks at 22.011 s (667 x 33), 22.044 s and
-# 22.077 s are the three clear samples, so the drive resumes at 22.077 s,
-# ramping to 2457 by 22.242 s.
+# 22.077 s are the three clear samples. The trip still holds forward motion
+# under the goal that drove to the edge (cliff_t.held), so the wheels stay
+# braked: before #1186 the drive resumed here and, on a real table, took him
+# straight back to the edge.
+#
+# The planner hears of the trip: the 30 s request offers the note tool for
+# `cliff` (NOTE_TRIGGER_CLIFF). Its reply, a new forward drive written at
+# 31 s, releases the hold, and the drive resumes on the next tick, 31.020 s,
+# ramping to 2457 by 31.185 s.
 id: us-d4-cliff-brakes-and-backs-off
 stories: [US-D4]
 seed: 7
@@ -64,7 +72,11 @@ expect:
   - wheels: {left: brake, right: brake, between: [20.658s, 20.658s], count: 1}
   - wheels: {left: forward, between: [20.064s, 22.076s], count: 0}
   - wheels_at: {at: 22.076s, left: brake, right: brake}
-  # Floor confirmed on the third sample: the drive resumes.
-  - wheels: {left: forward, right: forward, left_duty: 546, between: [22.077s, 22.077s], count: 1}
-  - wheels_at: {at: 22.242s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # Floor confirmed, but the goal that drove to the edge stays held (#1186).
+  - wheels: {left: forward, between: [20.064s, 31.019s], count: 0}
+  - wheels_at: {at: 30.9s, left: brake, right: brake}
+  # The planner is told, and its new goal releases the hold.
+  - note_offered: {trigger: cliff, between: [30s, 31s], count: 1}
+  - wheels: {left: forward, right: forward, left_duty: 546, between: [31.020s, 31.020s], count: 1}
+  - wheels_at: {at: 31.185s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   - wheels: {left: brake, count: 2}

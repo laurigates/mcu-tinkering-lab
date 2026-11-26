@@ -19,10 +19,12 @@
 #   - At the edge: CLIFF_TRIP_SAMPLES (2) no-floor samples brake, the brake
 #     lasts CLIFF_BRAKE_MS (150), and the back-off reverses at
 #     CLIFF_BACKOFF_SPEED (140/255, duty 2248) for CLIFF_BACKOFF_MS (400)
-#     (cliff_core.c). Once three samples see floor again the drive goal, still
-#     fresh, takes him forward to the edge once more, so he goes back and forth
-#     at it for as long as the goal lasts. The 30 s planner tick renews the
-#     goal (goal_moves_wheels()).
+#     (cliff_core.c). Once three samples see floor again the trip still holds
+#     forward motion under that goal (cliff_t.held, #1186), so he waits there.
+#     Before #1186 the fresh goal took him back to the edge 19 times in 21 s.
+#   - The 30 s request offers the note tool for `cliff`, and its reply, a new
+#     drive written at 31 s, releases the hold: one more trip, then he waits
+#     again.
 #
 # From the plant's estimates (simulation/src/robocar_sim/plant.yaml; none of
 # them is measured, ADR-036 open question 1), so asserted as ordering and wide
@@ -76,8 +78,14 @@ expect:
   # The cliff reflex answers: a brake, then the back-off at its own duty.
   - wheels: {left: brake, right: brake, min: 1}
   - wheels: {left: reverse, right: reverse, left_duty: 2248, right_duty: 2248, min: 1}
-  # Backing off brings the floor back, and the goal takes him forward again.
-  - wheels: {left: forward, right: forward, left_duty: 1638, between: [17s, 40s], min: 1}
+  # One trip per goal: a brake at the edge and a brake when the back-off ends
+  # with the goal held (#1186).
+  - wheels: {left: brake, between: [16s, 31s], max: 2}
+  - wheels: {left: forward, between: [18.645s, 31s], count: 0}
+  - note_offered: {trigger: cliff, between: [30s, 31s], count: 1}
+  # The new goal releases the hold and takes him forward again, once.
+  - wheels: {left: forward, right: forward, left_duty: 1638, between: [31s, 40s], min: 1}
+  - wheels: {left: brake, between: [31s, 40s], max: 2}
   # No wheel ever leaves the table, and there is nothing on it to hit.
   - pose: {off_floor: true, count: 0}
   - pose: {collided: true, count: 0}
