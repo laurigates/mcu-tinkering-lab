@@ -1,6 +1,6 @@
 {
  "board_sha256": "fc411753ca650bde394ced349405691fc7a53b25341a5dbc063a81d73e967687",
- "kicad_cli_version": "10.0.8",
+ "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
    "A1": {
