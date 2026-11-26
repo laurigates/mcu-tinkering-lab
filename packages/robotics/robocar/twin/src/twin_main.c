@@ -1210,6 +1210,7 @@ static uint64_t planner_tick(uint64_t tick_ms)
     (void)reactive_controller_get_telemetry(&note_tele);
     const planner_note_inputs_t note_in = {
         .reflex_trips = note_tele.reflex_trips,
+        .cliff_trips = note_tele.cliff_trips,
         .blind = !scene_change_has_measurement(),
     };
     const note_trigger_t note_offer = planner_cycle_note_offer(&s_cycle, &note_in, now_ms);
