@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.1.17](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.16...balancebot-v0.1.17) (2026-11-25)
+
+
+### Features
+
+* **balancebot:** analyze and lqr-sweep tuning recipes ([5f3202d](https://github.com/laurigates/mcu-tinkering-lab/commit/5f3202dbfa4bad932fbc3916c5eebfd0db79fc73))
+* **balancebot:** drive and turn while balancing ([#1257](https://github.com/laurigates/mcu-tinkering-lab/issues/1257)) ([5b1615e](https://github.com/laurigates/mcu-tinkering-lab/commit/5b1615ef945f4392ed714aead629a2d25621911e))
+* **balancebot:** lower the tilt cutoff from 45 to 30 degrees ([a2e1f06](https://github.com/laurigates/mcu-tinkering-lab/commit/a2e1f0637c7aee2e943b044ae300f8dc47ffb940)), closes [#1278](https://github.com/laurigates/mcu-tinkering-lab/issues/1278)
+* **balancebot:** record each run untethered and save it to flash ([#1266](https://github.com/laurigates/mcu-tinkering-lab/issues/1266)) ([a4ae3fe](https://github.com/laurigates/mcu-tinkering-lab/commit/a4ae3fe97894728754ba0e7959c316caa591a836)), closes [#1262](https://github.com/laurigates/mcu-tinkering-lab/issues/1262)
+* **balancebot:** RGB LED guides the hand to the auto-arm window ([#1248](https://github.com/laurigates/mcu-tinkering-lab/issues/1248)) ([6c292cb](https://github.com/laurigates/mcu-tinkering-lab/commit/6c292cbc9657bc5d324d3305a24ee2e1478b5f4c))
+* **balancebot:** show firmware, gains, maxrate and model in stat ([efed044](https://github.com/laurigates/mcu-tinkering-lab/commit/efed044fa3b244de1fd7507c72c4531a9d91af93))
+* **balancebot:** widen the auto-arm window to +/-3 deg ([02036d7](https://github.com/laurigates/mcu-tinkering-lab/commit/02036d78f45401f1d0fe73812cbb205679585e57))
+* **balancebot:** widen the auto-arm window to ±3° ([#1255](https://github.com/laurigates/mcu-tinkering-lab/issues/1255)) ([02036d7](https://github.com/laurigates/mcu-tinkering-lab/commit/02036d78f45401f1d0fe73812cbb205679585e57))
+* **carriers:** ADR-038 power design: pack cutoff firmware, switch and latch, 2S USB charger ([#1282](https://github.com/laurigates/mcu-tinkering-lab/issues/1282)) ([1632776](https://github.com/laurigates/mcu-tinkering-lab/commit/1632776a1cdd2adc9870987cdde6ba7127183354))
+
+
+### Bug Fixes
+
+* **balancebot:** alpha default for 500 Hz, and core 1 'starting' during boot ([#1244](https://github.com/laurigates/mcu-tinkering-lab/issues/1244)) ([2c2c749](https://github.com/laurigates/mcu-tinkering-lab/commit/2c2c7499337a199a91e897ae4690e63ed6650c4f))
+* **balancebot:** bound IMU I2C transfers and free a held bus ([e586197](https://github.com/laurigates/mcu-tinkering-lab/commit/e58619758518874f576e12b21451fb47b531f266))
+* **balancebot:** drop the second reboot from the flash recipe ([#1267](https://github.com/laurigates/mcu-tinkering-lab/issues/1267)) ([8311690](https://github.com/laurigates/mcu-tinkering-lab/commit/8311690fb126d4f930f8fe69c657f7e9afad7fb4))
+* **balancebot:** give the accel pitch the gyro's forward-positive sign ([#1242](https://github.com/laurigates/mcu-tinkering-lab/issues/1242)) ([6182c13](https://github.com/laurigates/mcu-tinkering-lab/commit/6182c13024fbe676834846e2242af3f6243e6f35))
+* **balancebot:** hold off auto-arm after disarm and trim capture; report save ([#1243](https://github.com/laurigates/mcu-tinkering-lab/issues/1243)) ([dc6c21b](https://github.com/laurigates/mcu-tinkering-lab/commit/dc6c21b073fd968f9e17bc33eb8bead01330e7de))
+* **balancebot:** let the PID velocity integral reach its lean limit ([f245f42](https://github.com/laurigates/mcu-tinkering-lab/commit/f245f4201800b372fe5f3fc198f64d2bc55d4229)), closes [#1258](https://github.com/laurigates/mcu-tinkering-lab/issues/1258)
+* **balancebot:** refuse rate and cal outside IDLE, and say what load found ([8fe247a](https://github.com/laurigates/mcu-tinkering-lab/commit/8fe247aa31f0f4d1324a15008205889e68051990)), closes [#1128](https://github.com/laurigates/mcu-tinkering-lab/issues/1128)
+
+
+### Documentation
+
+* **balancebot:** publish the balancebot story on GitHub Pages ([#1263](https://github.com/laurigates/mcu-tinkering-lab/issues/1263)) ([31ee2f7](https://github.com/laurigates/mcu-tinkering-lab/commit/31ee2f7f75116691bb7c0e0f407c54f6a06dc574))
+* **balancebot:** reach BOOTSEL without the board's buttons ([b405f11](https://github.com/laurigates/mcu-tinkering-lab/commit/b405f114c18de069b1ff759d86f5ec6d66610f36))
+* **balancebot:** the tuning loop, choosing r, and bring-up signs ([#1246](https://github.com/laurigates/mcu-tinkering-lab/issues/1246)) ([303d8c1](https://github.com/laurigates/mcu-tinkering-lab/commit/303d8c10a546e9462f8b547bd94e621559ec61ff))
+* **skills:** balancebot-tuning skill, and the filter and test-model lessons ([#1247](https://github.com/laurigates/mcu-tinkering-lab/issues/1247)) ([47c727f](https://github.com/laurigates/mcu-tinkering-lab/commit/47c727fb1436f1ac1b96ed872322a22b816cd576))
+
+
+### Miscellaneous
+
+* **balancebot:** analyze and lqr-sweep tuning recipes ([#1245](https://github.com/laurigates/mcu-tinkering-lab/issues/1245)) ([5f3202d](https://github.com/laurigates/mcu-tinkering-lab/commit/5f3202dbfa4bad932fbc3916c5eebfd0db79fc73))
+
 ## [0.1.16](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.15...balancebot-v0.1.16) (2026-11-23)
 
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.26](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.25...robocar-v0.2.26) (2026-11-25)
+
+
+### Features
+
+* **carriers:** ADR-038 power design: pack cutoff firmware, switch and latch, 2S USB charger ([#1282](https://github.com/laurigates/mcu-tinkering-lab/issues/1282)) ([1632776](https://github.com/laurigates/mcu-tinkering-lab/commit/1632776a1cdd2adc9870987cdde6ba7127183354))
+* **robocar:** lay out the switch, latch and charger; heads on their own PCB ([#1288](https://github.com/laurigates/mcu-tinkering-lab/issues/1288)) ([a0ef0bb](https://github.com/laurigates/mcu-tinkering-lab/commit/a0ef0bb72c1e89f5e798de71fa53e978a077b886)), closes [#1289](https://github.com/laurigates/mcu-tinkering-lab/issues/1289)
+
+
+### Bug Fixes
+
+* **robocar:** do not send hands-free clips with too little speech ([8ca644a](https://github.com/laurigates/mcu-tinkering-lab/commit/8ca644a25e512c99daf2e90f00008ceea7a7fca3)), closes [#949](https://github.com/laurigates/mcu-tinkering-lab/issues/949)
+* **robocar:** keep a rangefinder hold through a failed read, and flag the boot range invalid ([78f7c86](https://github.com/laurigates/mcu-tinkering-lab/commit/78f7c8637f12e361be7f46eee111f5962b297162)), closes [#1185](https://github.com/laurigates/mcu-tinkering-lab/issues/1185) [#1187](https://github.com/laurigates/mcu-tinkering-lab/issues/1187)
+* **robocar:** keep crash event strings alive until the render reads them ([d7f9fd2](https://github.com/laurigates/mcu-tinkering-lab/commit/d7f9fd273186a81f7a85a52fc6b12d02ad89f803)), closes [#1174](https://github.com/laurigates/mcu-tinkering-lab/issues/1174)
+* **robocar:** retry a failed first OTA check and start MQTT before OTA ([5aeab77](https://github.com/laurigates/mcu-tinkering-lab/commit/5aeab776997f604e67426a17fbd59723dd697019)), closes [#1126](https://github.com/laurigates/mcu-tinkering-lab/issues/1126) [#1054](https://github.com/laurigates/mcu-tinkering-lab/issues/1054)
+* **robocar:** tell voice turns they cannot act, and what the body is doing ([d18fc64](https://github.com/laurigates/mcu-tinkering-lab/commit/d18fc645f6abf2ee4ce028108e7427dde118e042)), closes [#947](https://github.com/laurigates/mcu-tinkering-lab/issues/947)
+
 ## [0.2.25](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.24...robocar-v0.2.25) (2026-11-20)
 
 
