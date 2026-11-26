@@ -4,14 +4,15 @@
 # ahead the wheels stay braked under a fresh drive goal.
 #
 # The timeline is us-d1-front-reflex-brakes' up to the brake: a forward drive
-# at 60 % written at 16 s, 8 cm ahead from 19.966 s, braked at 20.262 s.
+# at 60 % written at 16 s, 8 cm ahead from 17.326 s, braked at 17.622 s, all
+# inside the drive's 3 s time bound (#1057), which ends it at 19.008 s.
 #
-# Failure: `range_fail` on the front sensor at 21.12 s, the instant of the
-# trigger (128 x 165), so the read at 21.252 s fails. The obstacle reads again
-# from 21.285 s, the next trigger. Before #1185 the failed read entered the
+# Failure: `range_fail` on the front sensor at 18.48 s, the instant of the
+# trigger (112 x 165), so the read at 18.612 s fails. The obstacle reads again
+# from 18.645 s, the next trigger. Before #1185 the failed read entered the
 # filter as 400 cm: the latest reading read 400 and the mean (8 + 8 + 400) / 3
-# = 138, the reflex released, and the drive ramped up from 546 at 21.252 s
-# until the brake at 21.417 s, 165 ms of drive toward the obstacle.
+# = 138, the reflex released, and the drive ramped up from 546 at 18.612 s
+# until the brake at 18.777 s, 165 ms of drive toward the obstacle.
 id: us-d1-failed-read-keeps-reflex
 stories: [US-D1]
 seed: 7
@@ -21,9 +22,9 @@ world:
   - {at: 0s, frame: {scene: hallway}}
   - {at: 5s, console: status}
   - {at: 0s, range: 120}
-  - {at: 19.966s, range: 8}
-  - {at: 21.12s, range_fail: {}}
-  - {at: 21.285s, range: 8}
+  - {at: 17.326s, range: 8}
+  - {at: 18.48s, range_fail: {}}
+  - {at: 18.645s, range: 8}
 models:
   planner: inline
 default:
@@ -33,9 +34,10 @@ default:
   args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
 expect:
   - requests: {count: 1}
-  - wheels_at: {at: 19.966s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels_at: {at: 17.326s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   - wheels: {left: brake, right: brake, after: "range[1]", within: 297ms, count: 1}
   # Held through the failed read and to the end of the run.
-  - wheels: {left: forward, between: [20.262s, 24s], count: 0}
-  - wheels_at: {at: 21.252s, left: brake, right: brake}
+  - wheels: {left: forward, between: [17.622s, 24s], count: 0}
+  - wheels_at: {at: 18.612s, left: brake, right: brake}
+  - wheels_at: {at: 18.9s, left: brake, right: brake}
   - wheels: {left: brake, count: 1}

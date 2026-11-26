@@ -9,7 +9,9 @@
 # wakes the planner for the 15 s tick, and the reply (1 s) is a forward drive
 # at 60 %, written at 16 s. apply_wheels() refuses it (cliff_permits()) and
 # brakes, from the first tick after the goal, 16.005 s: the wheels are never
-# driven forward or backward, and their duty stays 0.
+# driven forward or backward, and their duty stays 0. The goal's 3 s time
+# bound (motion_bound_core.h, #1057) ends it on the tick at 19.008 s; with
+# nothing asking to move, the wheels coast from there.
 #
 # us-d4-cliff-brakes-and-backs-off scripts a floor reading at 0 s, so it does
 # not show what happens before the first one.
@@ -37,7 +39,8 @@ expect:
   - wheels: {right: forward, count: 0}
   - wheels: {left: reverse, count: 0}
   - wheels: {right: reverse, count: 0}
-  # The refused goal is held braked, to the end of the run.
+  # The refused goal is held braked until its time bound ends it.
   - wheels: {left: brake, right: brake, between: [16.005s, 16.005s], count: 1}
-  - wheels_at: {at: 20s, left: brake, right: brake, left_duty: 0, right_duty: 0}
-  - wheels_at: {at: 30s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 19.007s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 19.008s, left: coast, right: coast, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 30s, left: coast, right: coast, left_duty: 0, right_duty: 0}

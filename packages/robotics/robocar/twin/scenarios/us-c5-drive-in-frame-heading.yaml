@@ -25,7 +25,9 @@
 # reached on the sixth tick of the ramp, 16.170 s (us-d1-front-reflex-brakes).
 # The left wheel runs at that; the right one at less (119/255, duty 1911, with
 # pan 40). The goal keeps the angle it was written with, so the wheels do not
-# change when the gaze moves the head on.
+# change when the gaze moves the head on. 100 cm at 60 % outlasts the 3 s cap
+# (motion_bound_core.h, #1057): timed from the first tick that read the goal,
+# 16.005 s, the drive ends on the tick at 19.008 s and the wheels coast.
 id: us-c5-drive-in-frame-heading
 stories: [US-C5]
 seed: 29
@@ -52,4 +54,7 @@ expect:
   # the slower one.
   - wheels_at: {at: 16.17s, left: forward, right: forward, left_duty: 2457, right_duty: [1, 2456]}
   # The goal carries the pan it was planned at, wherever the head goes next.
-  - wheels: {between: [16.171s, 30s], count: 0}
+  - wheels: {between: [16.171s, 19.007s], count: 0}
+  # Then the time bound ends the drive, and nothing moves after it.
+  - wheels: {left: coast, right: coast, between: [19.008s, 19.008s], count: 1}
+  - wheels: {between: [19.009s, 30s], count: 0}

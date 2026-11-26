@@ -84,6 +84,7 @@ add_executable(robocar-twin
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/cliff_core.c"
     "${MAIN_SRC_DIR}/cliff_sensor.c"
+    "${MAIN_SRC_DIR}/motion_bound_core.c"
     # The servo_controller.h subset the executor uses; servo_stub_reset() says
     # whether the servos are present (config `head`).
     "${TEST_DIR}/servo_controller_stub.c"

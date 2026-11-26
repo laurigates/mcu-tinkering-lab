@@ -9,31 +9,34 @@
 #
 # Waking and the drive are as in us-d1-front-reflex-brakes: the console line at
 # 5 s wakes the planner for the 15 s tick, the reply is a forward drive at 60 %
-# written at 16 s, duty 2457 from 16.170 s.
+# written at 16 s, duty 2457 from 16.170 s. Each drive runs at most 3 s from
+# the first tick that read it (motion_bound_core.h, #1057): 16.005 s to the
+# tick at 19.008 s, so the edge and the floor's return fall inside it.
 #
-# Edge: the front sensor loses the floor at 20 s. The ticks at 20.031 s
-# (607 x 33) and 20.064 s are the CLIFF_TRIP_SAMPLES (2) samples, so the
-# reflex starts on the second: brake at 20.064 s. It brakes for CLIFF_BRAKE_MS
-# (150): the first tick at or past 20.214 s is 20.229 s, where the back-off
+# Edge: the front sensor loses the floor at 18 s. The ticks at 18.018 s
+# (546 x 33) and 18.051 s are the CLIFF_TRIP_SAMPLES (2) samples, so the
+# reflex starts on the second: brake at 18.051 s. It brakes for CLIFF_BRAKE_MS
+# (150): the first tick at or past 18.201 s is 18.216 s, where the back-off
 # starts because the rear sensor has floor. The back-off is
 # motor_move_backward(CLIFF_BACKOFF_SPEED): 140/255 = duty 2248, ramped 546,
-# 996, 1446, 1896, 2248 (20.361 s). It runs for CLIFF_BACKOFF_MS (400): the
-# first tick at or past 20.629 s is 20.658 s, where the reflex ends.
+# 996, 1446, 1896, 2248 (18.348 s). It runs for CLIFF_BACKOFF_MS (400): the
+# first tick at or past 18.616 s is 18.645 s, where the reflex ends.
 #
 # The scripted front sensor still reads no floor (the world here does not move
-# with the robot), and the goal is still a forward drive, so from 20.658 s
+# with the robot), and the goal is still a forward drive, so from 18.645 s
 # apply_wheels() refuses it and brakes (cliff_permits()).
 #
-# Floor again from 22 s: the ticks at 22.011 s (667 x 33), 22.044 s and
-# 22.077 s are the three clear samples. The trip still holds forward motion
+# Floor again from 18.7 s: the ticks at 18.711 s (567 x 33), 18.744 s and
+# 18.777 s are the three clear samples. The trip still holds forward motion
 # under the goal that drove to the edge (cliff_t.held), so the wheels stay
 # braked: before #1186 the drive resumed here and, on a real table, took him
-# straight back to the edge.
+# straight back to the edge. The time bound then ends that goal at 19.008 s,
+# and with nothing asking to move the wheels coast.
 #
 # The planner hears of the trip: the 30 s request offers the note tool for
 # `cliff` (NOTE_TRIGGER_CLIFF). Its reply, a new forward drive written at
 # 31 s, releases the hold, and the drive resumes on the next tick, 31.020 s,
-# ramping to 2457 by 31.185 s.
+# ramping to 2457 by 31.185 s, until its own bound ends it at 34.023 s.
 id: us-d4-cliff-brakes-and-backs-off
 stories: [US-D4]
 seed: 7
@@ -45,8 +48,8 @@ world:
   - {at: 5s, console: status}
   - {at: 0s, range: 120}
   - {at: 0s, floor: {front: true, rear: true}}
-  - {at: 20s, floor: {front: false, rear: true}}
-  - {at: 22s, floor: {front: true, rear: true}}
+  - {at: 18s, floor: {front: false, rear: true}}
+  - {at: 18.7s, floor: {front: true, rear: true}}
 models:
   planner: inline
 default:
@@ -60,23 +63,24 @@ expect:
   - wheels_at: {at: "floor[1]", left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   # Brake on the second no-floor sample.
   - wheels: {left: brake, right: brake, after: "floor[1]", within: 66ms, count: 1}
-  - wheels_at: {at: 20.064s, left: brake, right: brake, left_duty: 0, right_duty: 0}
-  - wheels_at: {at: 20.228s, left: brake, right: brake}
-  # Back-off: reverse from 20.229 s, at the back-off duty once ramped.
-  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [20.229s, 20.229s], count: 1}
-  - wheels_at: {at: 20.361s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
-  - wheels_at: {at: 20.657s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
-  - wheels: {left: reverse, between: [0s, 20.228s], count: 0}
-  - wheels: {left: reverse, between: [20.658s, 40s], count: 0}
+  - wheels_at: {at: 18.051s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 18.215s, left: brake, right: brake}
+  # Back-off: reverse from 18.216 s, at the back-off duty once ramped.
+  - wheels: {left: reverse, right: reverse, left_duty: 546, between: [18.216s, 18.216s], count: 1}
+  - wheels_at: {at: 18.348s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
+  - wheels_at: {at: 18.644s, left: reverse, right: reverse, left_duty: 2248, right_duty: 2248}
+  - wheels: {left: reverse, between: [0s, 18.215s], count: 0}
+  - wheels: {left: reverse, between: [18.645s, 40s], count: 0}
   # The reflex ends; the forward goal is refused while the front has no floor.
-  - wheels: {left: brake, right: brake, between: [20.658s, 20.658s], count: 1}
-  - wheels: {left: forward, between: [20.064s, 22.076s], count: 0}
-  - wheels_at: {at: 22.076s, left: brake, right: brake}
-  # Floor confirmed, but the goal that drove to the edge stays held (#1186).
-  - wheels: {left: forward, between: [20.064s, 31.019s], count: 0}
-  - wheels_at: {at: 30.9s, left: brake, right: brake}
+  - wheels: {left: brake, right: brake, between: [18.645s, 18.645s], count: 1}
+  # Floor confirmed at 18.777 s, but the goal that drove to the edge stays held
+  # (#1186) until the time bound ends it.
+  - wheels: {left: forward, between: [18.051s, 31.019s], count: 0}
+  - wheels_at: {at: 18.9s, left: brake, right: brake}
+  - wheels_at: {at: 19.008s, left: coast, right: coast}
   # The planner is told, and its new goal releases the hold.
   - note_offered: {trigger: cliff, between: [30s, 31s], count: 1}
   - wheels: {left: forward, right: forward, left_duty: 546, between: [31.020s, 31.020s], count: 1}
   - wheels_at: {at: 31.185s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels_at: {at: 34.023s, left: coast, right: coast}
   - wheels: {left: brake, count: 2}
