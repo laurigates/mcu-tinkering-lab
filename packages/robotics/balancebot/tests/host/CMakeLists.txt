@@ -50,3 +50,11 @@ add_test(NAME fit_leff
 # offset in a synthetic capture.
 add_test(NAME analyze_capture
     COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/analyze_capture.py --self-test)
+# tools/log_inspect.py (just balancebot::timeline|terms|accel) checks each
+# view against a synthetic log with known answers (#1279).
+add_test(NAME log_inspect
+    COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/log_inspect.py --self-test)
+# tools/push_sim.py (just balancebot::push-sim) checks its simulation against
+# the linear model's steady lean; the gain check runs only where scipy imports.
+add_test(NAME push_sim
+    COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_LIST_DIR}/../../tools/push_sim.py --self-test)

@@ -36,9 +36,11 @@ are in `BRINGUP.md`. This skill is the decision table and the traps.
    For a push, a fall or anything the cable would spoil, use the run log
    instead: unplug USB, run, then `just balancebot::log-dump` and `analyze`
    the CSV it writes (README "Untethered run log", ADR-037). `log` says
-   whether the last run saved. Dump after **every** run: flash keeps only
-   the newest, so the next run overwrites it (runs 5 and 6 were lost this
-   way on 2026-11-24).
+   whether the last run saved. Flash keeps the newest six runs (`log list`,
+   `log-dump n=<run>`, #1277); before that it kept one, and runs 5 and 6
+   were lost on 2026-11-24. For a fall, `just balancebot::timeline <csv>`
+   prints the rows around it; `terms`, `accel` and `push-sim` go further
+   (README "Untethered run log").
 5. `just balancebot::cli disarm save` when it holds; `save` reports `OK saved`.
 
 | `analyze` shows | Cause | Change |
