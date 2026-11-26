@@ -20,30 +20,37 @@
 # (MOTOR_RAMP_FULL_SCALE_MS): 546 on the first write, then 450 per 33 ms tick,
 # so the duty reaches 2457 on the sixth tick, 16.170 s.
 #
+# The drive runs for at most MOTION_BOUND_CAP_MS (3 s, motion_bound_core.h,
+# #1057) from the first tick that read it, so it ends on the tick at 19.008 s
+# and the obstacle and its release fall inside it.
+#
 # Obstacle: 14 cm ahead, the last whole centimetre below STOP_THRESHOLD_CM
-# (15, reactive_controller.h), from 19.966 s, 1 ms after
-# the trigger at 19.965 s (121 x 165), which ranged the clear path. That is the
-# worst case: the read at 20.097 s is still 120 cm, the next trigger at
-# 20.130 s ranges the obstacle and its read at 20.262 s trips the reflex on
+# (15, reactive_controller.h), from 17.326 s, 1 ms after
+# the trigger at 17.325 s (105 x 165), which ranged the clear path. That is the
+# worst case: the read at 17.457 s is still 120 cm, the next trigger at
+# 17.490 s ranges the obstacle and its read at 17.622 s trips the reflex on
 # that tick, 296 ms after the obstacle appeared. The reflex trips on one
 # reading (rangers_reflex()), so there is no wait for the 3-reading mean.
 #
-# Release: the path is clear again from 21.120 s, the instant of the trigger
-# (128 x 165, tick 640). A world event is applied before an executor tick at
+# Release: the path is clear again from 18.480 s, the instant of the trigger
+# (112 x 165, tick 560). A world event is applied before an executor tick at
 # the same instant (ADR-036 section 1, "Tick"), so that trigger ranges 120 cm
-# and is read at 21.252 s. The latest reading and the
+# and is read at 18.612 s. The latest reading and the
 # mean of the last three (14, 14, 120 = 49 cm) are then both at or above 15 cm,
 # so the reflex releases on that tick and the drive goal, still fresh (TTL
-# 22.5 s from 16 s), ramps up again: 546 at 21.252 s, 2457 at 21.417 s.
+# 22.5 s from 16 s), ramps up again: 546 at 18.612 s, 2457 at 18.777 s, until
+# the time bound ends it at 19.008 s and the wheels coast.
 #
-# At the threshold: 15 cm ahead from 25.080 s (152 x 165, a trigger instant)
-# to 25.410 s, so the triggers at 25.080 s and 25.245 s range it. A reading
-# at the threshold is not below it, so the wheels do not change and the brake
-# above stays the only one of the run.
+# Planner: the 30 s tick requests because the goal still moves the wheels
+# (goal_moves_wheels(), which reads the goal, not the time bound), and that
+# request is offered the `note` tool: the executor's reflex_trips went up since
+# the last request (note_gate.h). Its reply, the same drive, is written at
+# 31 s: first tick 31.020 s, 2457 at 31.185 s.
 #
-# Planner: the 30 s tick requests because the robot is moving
-# (goal_moves_wheels()), and that request is offered the `note` tool: the
-# executor's reflex_trips went up since the last request (note_gate.h).
+# At the threshold, under that second drive: 15 cm ahead from 31.515 s
+# (191 x 165, a trigger instant) to 31.845 s, so the triggers at 31.515 s and
+# 31.680 s range it. A reading at the threshold is not below it, so the wheels
+# do not change and the brake above stays the only one of the run.
 id: us-d1-front-reflex-brakes
 stories: [US-D1]
 seed: 7
@@ -53,10 +60,10 @@ world:
   - {at: 0s, frame: {scene: hallway}}
   - {at: 5s, console: status}
   - {at: 0s, range: 120}
-  - {at: 19.966s, range: 14}
-  - {at: 21.12s, range: 120}
-  - {at: 25.08s, range: 15}
-  - {at: 25.41s, range: 120}
+  - {at: 17.326s, range: 14}
+  - {at: 18.48s, range: 120}
+  - {at: 31.515s, range: 15}
+  - {at: 31.845s, range: 120}
 models:
   planner: inline
 default:
@@ -75,18 +82,20 @@ expect:
   - wheels_at: {at: "range[1]", left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   # The brake, inside the bound and not before the obstacle could be read.
   - wheels: {left: brake, right: brake, after: "range[1]", within: 297ms, count: 1}
-  - wheels: {left: brake, between: [0s, 20.261s], count: 0}
-  - wheels_at: {at: 20.262s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels: {left: brake, between: [0s, 17.621s], count: 0}
+  - wheels_at: {at: 17.622s, left: brake, right: brake, left_duty: 0, right_duty: 0}
   # Held for as long as the obstacle is there.
-  - wheels: {left: forward, between: [20.262s, 21.251s], count: 0}
-  - wheels_at: {at: 21.251s, left: brake, right: brake}
+  - wheels: {left: forward, between: [17.622s, 18.611s], count: 0}
+  - wheels_at: {at: 18.611s, left: brake, right: brake}
   # Released on the first clear reading, and back at 60 %.
   - wheels: {left: forward, right: forward, after: "range[2]", within: 297ms, min: 1}
-  - wheels: {left: forward, right: forward, left_duty: 546, between: [21.252s, 21.252s], count: 1}
-  - wheels_at: {at: 21.417s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: forward, right: forward, left_duty: 546, between: [18.612s, 18.612s], count: 1}
+  - wheels_at: {at: 18.777s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # The time bound ends the first drive (#1057).
+  - wheels: {left: coast, right: coast, between: [19.008s, 19.008s], count: 1}
   # The 15 cm readings change nothing: still at 60 % after them, and the brake
-  # at 20.262 s is the only one of the run.
-  - wheels_at: {at: 25.6s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  # at 17.622 s is the only one of the run.
+  - wheels_at: {at: 32.2s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
   - wheels: {left: brake, count: 1}
   # The planner hears of the trip from the executor's telemetry.
   - note_offered: {trigger: reflex, between: [30s, 30s], count: 1}

@@ -10,13 +10,20 @@
 #   - The console line at 5 s wakes the planner for the 15 s tick. The reply
 #     (1 s) is a drive at heading 180 and 40 %, which the executor runs in
 #     reverse (drive_reverses()), duty 1638 from 16.104 s.
+#   - A drive runs at most 3 s from the first tick that read it
+#     (motion_bound_core.h, #1057): 16.005 s to the tick at 19.008 s, and
+#     31.020 s to the tick at 34.023 s. He starts 30 cm back so the wall's
+#     15 cm falls inside the first.
 #   - A rear reading below STOP_THRESHOLD_CM (15) brakes a reverse and holds
-#     it (rangers_rear_blocked()). It is not the obstacle reflex, so the
+#     it (rangers_rear_blocked()). It holds only a reverse, so when the bound
+#     ends the goal the wheels coast. It is not the obstacle reflex, so the
 #     planner is offered no note. The 30 s tick requests again (the goal still
-#     moves the wheels) and its reverse is held the same way.
+#     moves the wheels) and its reverse is braked from its first tick, then
+#     coasts when its own bound ends it.
 #
 # From the plant's estimates (simulation/src/robocar_sim/plant.yaml; none is
-# measured), so asserted as ordering and wide bounds only: the rear rangefinder
+# measured), so asserted as ordering and wide bounds only. He starts with the
+# axle at x = -30. The rear rangefinder
 # and the chassis rear edge are 13 cm behind the axle, so the first rear range
 # is 87 cm, the wall is inside 15 cm from x = -72 and the chassis touches it
 # at x = -87.
@@ -33,7 +40,7 @@ models:
 plant:
   physics:
     arena: arenas/wall-behind-1m.yaml
-    start: {x_cm: 0, y_cm: 0, heading_deg: 0}
+    start: {x_cm: -30, y_cm: 0, heading_deg: 0}
 default:
   status: 200
   latency: 1s
@@ -43,16 +50,20 @@ expect:
   - requests: {count: 2}
   - goals: {sequence: [drive, drive]}
   # Parked until the goal, then backing up at 40 %.
-  - pose_at: {at: 16s, x_cm: 0, y_cm: 0, heading_deg: 0, collided: false}
+  - pose_at: {at: 16s, x_cm: -30, y_cm: 0, heading_deg: 0, collided: false}
   - wheels_at: {at: 16.104s, left: reverse, right: reverse, left_duty: 1638, right_duty: 1638}
   - wheels: {left: forward, count: 0}
   # He covers ground toward the wall before anything brakes him.
   - wheels: {left: brake, between: [0s, 17s], count: 0}
-  - pose: {x_cm: [-87, -20], between: [16s, 40s], min: 1}
-  # One brake, on both wheels, and no reverse after it.
-  - wheels: {left: brake, right: brake, count: 1}
-  - wheels_at: {at: 30s, left: brake, right: brake, left_duty: 0, right_duty: 0}
-  - wheels_at: {at: 40s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - pose: {x_cm: [-87, -50], between: [16s, 40s], min: 1}
+  # A brake inside the first goal's bound, then a coast; the second goal is
+  # braked from its first tick, then coasts. No reverse after the first brake.
+  - wheels: {left: brake, between: [16s, 19.007s], count: 1}
+  - wheels_at: {at: 19.008s, left: coast, right: coast}
+  - wheels_at: {at: 30s, left: coast, right: coast, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 31.020s, left: brake, right: brake, left_duty: 0, right_duty: 0}
+  - wheels_at: {at: 34.023s, left: coast, right: coast}
+  - wheels: {left: brake, right: brake, count: 2}
   # He never touches the wall.
   - pose: {collided: true, count: 0}
   # Stopped inside the hold distance and short of the wall, and still there at
