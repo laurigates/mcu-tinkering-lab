@@ -7,16 +7,32 @@ x right, y down, as in [placement]. case.py flips y when it builds solids.
 from __future__ import annotations
 
 import math
+import os
 import re
 import subprocess
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from kicad import paths, sexpr
+from kicad import library, paths, sexpr, vendor
 
-KICAD_CLI = Path("/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
-KICAD_3DMODELS = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels")
+# kicad-cli as tools/kicad finds it: $KICAD_CLI, the PATH, then the macOS bundle.
+KICAD_CLI = Path(vendor.kicad_cli() or library.MAC_ROOT.parent / "MacOS" / "kicad-cli")
+# The stock 3D models: $KICAD10_3DMODEL_DIR as given (with the Docker wrappers
+# from tools/kicad/setup.sh it is a path inside the image), else the macOS
+# bundle's, else the Linux packages'.
+KICAD_3DMODELS = (
+    Path(os.environ["KICAD10_3DMODEL_DIR"])
+    if os.environ.get("KICAD10_3DMODEL_DIR")
+    else next(
+        (
+            p
+            for p in (library.MAC_ROOT / "3dmodels", library.LINUX_ROOT / "3dmodels")
+            if p.is_dir()
+        ),
+        library.MAC_ROOT / "3dmodels",
+    )
+)
 ENCLOSURE_TOML = "enclosure.toml"
 MOUNTING_HOLE = re.compile(r"MountingHole_(\d+(?:\.\d+)?)mm")
 
