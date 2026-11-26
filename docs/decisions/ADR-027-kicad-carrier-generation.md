@@ -216,8 +216,11 @@ datasheets found it, with power-stage problems no gate can see. What changed:
   after Freerouting, not before as keepouts: pre-placed vias boxed in enough
   pads that Freerouting abandoned whole nets.
 - **`board.toml [[tracks]]`**: fixed polylines (a power trunk, a regulator's
-  ground to its input capacitor, an exposed pad's ground ties), walled off from
-  Freerouting by DSN keepouts. Freerouting 2.5.0 drops the DSN's wiring.
+  ground to its input capacitor, an exposed pad's ground ties), laid down
+  locked and exported as the DSN's fixed wiring, with `[[vias]]` where one
+  changes layer. Until #1280 a stray `)` from the class rewrite hid that
+  wiring from Freerouting, and DSN keepouts stood in for it (carrier-pcb
+  skill, trap 27).
 - **No power pour above ground on a two-layer carrier.** Power travels in fixed
   tracks and routed tracks; both layers stay ground.
 - **KiCad-free gates in `boardcheck`**: a pour region stays 1.0 mm from every

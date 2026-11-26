@@ -59,13 +59,17 @@ top side; everything else is through-hole.
 | F1 | 4 A hold PTC fuse, 16 V, 1812 (BSMD1812-400-16V) | main | After the power switch Q2, ahead of everything else on VBAT, at the rear edge between Q2 and J4; see [The power switch](#the-power-switch) |
 | Q1, Q2 | DMP3013SFV P-MOSFET, PowerDI3333-8 (C264098) | main | Back to back: Q1 blocks a reversed pack, Q2 is the switch; see [The power switch](#the-power-switch) |
 | R14, R15 | 100 kΩ (C149504), 10 kΩ (C17414), 0805 | main | Q1/Q2 gate pull-up and gate resistor |
-| Q3, R16 | 2N7002 (C8545), 100 kΩ 0805 | main | The latch's hold FET and its HOLD pull-down |
-| D2, D3 | B5819W Schottky, SOD-123 | main | The latch's button-to-switch and button-to-SENSE diodes |
+| Q3, R16 | 2N7002 (C8545), 10 kΩ 0805 (C17414) | main | The latch's hold FET and its HOLD pull-down |
+| D2, D3 | SD101AW Schottky, SOD-123 (C3031887) | main | The latch's button-to-switch and button-to-SENSE diodes; 0.2 µA leakage: a B5819W's would pull the off switch's gate toward its threshold through R14 (`soft-latch` block header) |
+| R32 | 10 kΩ, 0805 (C17414) | main | `PWR_SENSE` pull-up to 3V3, so D2's leakage does not read as a held button against the MCP23017's weak pull-up |
 | J19 | JST-XH 2-pin | main | Power button lead (a chassis push button, either way round) |
 | R17, R18, C9 | 100 kΩ (C149504), 22 kΩ (C17560), 100 nF (C49678), 0805 | main | Pack-voltage divider into D3 and its filter |
 | J3 | XT30 (AMASS XT30PW-M) | main | Pack in, at the rear edge on the right, mating face to the rear; pad 1 is "−" |
 | U5, L1 | BQ25887RGER (VQFN-24, C2761614), 1 µH 1008 inductor (C435392) | main | The pack's USB charger; see [The USB-C charger](#the-usb-c-charger) |
-| C10–C19, R19–R31 | 0805 | main | The charger block's capacitors and resistors (the block's header lists values and LCSC numbers) |
+| C10–C19, R19–R31 | 0805, except C13–C15 (22 µF 25 V X7R, 1210, C309062) | main | The charger block's capacitors and resistors (the block's header lists values and LCSC numbers) |
+| F2 | 2 A hold PTC fuse, 16 V, 1812 (C883156) | main | The charger's BAT branch, between U5's BAT capacitors and J3's "+" (`CHG_BAT` to `PACK_IN`) |
+| C20 | 100 µF 16 V electrolytic, 6.3 × 5.8 mm (Panasonic EEE-FK1C101P, C128532) | main | Damps the pack lead's ring against the BAT branch's ceramics at plug-in; see [The USB-C charger](#the-usb-c-charger) |
+| D4, R33 | Red LED 0805 (NCD0805R1, C84256), 1.5 kΩ 0805 (C4310) | main | Charge status on U5's STAT: on while charging, off when done, blinking at 1 Hz on a fault |
 | J20 | USB-C receptacle, USB 2.0 16-pin (HRO TYPE-C-31-M-12, C165948) | main | Charge-only port at the right edge; not the XIAO's USB-C, and not connected to its 5V pin |
 | J21 | JST-XH 3-pin | main | Pack balance lead: only pin 2, the cells' midpoint, is wired |
 | J4 | JST VH 4-pin (B4P-VH), 3.96 mm | main | LM2596 module: IN+, IN−, OUT+, OUT−, at the rear edge turned 180° so IN+ is its right-hand pin, nearest F1; the silkscreen prints "O- O+ I- I+" above the pins, left to right, and "SET LM2596 TO 5.0V FIRST" beside it |
@@ -95,10 +99,11 @@ pin *n* to pin 17 − *n*. The pinout in
 [`idc-2x08-xiao-cable.toml`](../../../../../docs/reference/parts/idc-2x08-xiao-cable.toml)
 pairs each pin with one it can safely swap with: 5 V lands on 5 V, GND on GND,
 SDA on SCL, the pack divider's D3 (the one XIAO input) on the unconnected
-pin 9, and every other XIAO output (UART0 TX and the latch's HOLD included) on
-another main-board input. The ribbon grew from 14 to 16 ways for the power
+pin 9, and every other XIAO output on another main-board input. UART0 TX lands
+on the latch's HOLD and idles high, so a reversed plug latches the robot on and
+firmware cannot switch it off: unplug the pack. The ribbon grew from 14 to 16 ways for the power
 latch's HOLD and the divider (ADR-038, #1270), because the carrier's only spare
-XIAO pads, D3 and D7, are on the head and the switch is on the main board. **A reversed plug damages nothing and does not work.**
+XIAO pads, D3 and D7, are on the head and the switch is on the main board. **A reversed plug damages nothing and does not work, and the robot stays on until the pack is unplugged.**
 If the robot is dead after reassembly, check the plug orientation first: every
 header prints a pin-1 mark.
 
@@ -118,12 +123,14 @@ Q1, then Q2 and F1 to VBAT.
   current is about 0.2 W per FET (estimate). The block has no gate clamp, so it
   is 2S only; the balancebot's 3S/4S version is #1273.
 - **F1** is the 4 A hold part of #810 (the block's own is 3 A), now after the
-  FETs. A short between J3 and the FETs has no fuse ahead of it; the pack's BMS
-  covers that.
+  FETs. The 23 mm of `PACK_IN` from J3 to Q1's drain has no fuse ahead of it;
+  the pack's BMS covers a short there. The charger's branch off `PACK_IN` has
+  its own fuse, F2.
 - **Latch.** One button (J19, a chassis push button on a JST-XH lead) closes
   `PWR_BTN` to GND, which turns the pack on. The XIAO boots with the button still
-  held, and firmware drives HOLD (D7, GPIO44) high as early as it can; the 100 kΩ
-  pull-down R16 keeps it low while the MCU is unpowered. Driving HOLD low
+  held, and firmware drives HOLD (D7, GPIO44) high as early as it can; the 10 kΩ
+  pull-down R16 keeps it low while the MCU is unpowered, against GPIO44's
+  internal pull-up at reset. Driving HOLD low
   switches the robot off once the button is released. A firmware hang with HOLD
   high cannot be undone by the button: unplug the pack. Not measured: how long
   the button has to be held at boot.
@@ -138,7 +145,7 @@ Q1, then Q2 and F1 to VBAT.
   button, and the button cannot wake it from deep sleep; the pack-voltage cutoff
   does not need it.
 - **Divider.** R17 (100 kΩ, from VBAT after the switch) over R18 (22 kΩ), C9
-  100 nF at the pin, into D3 (GPIO4, ADC1_CH3) via ribbon pin 8: 8.4 V reads
+  100 nF at the ribbon's J1 end, into D3 (GPIO4, ADC1_CH3) via ribbon pin 8: 8.4 V reads
   1.51 V, 6.0 V reads 1.08 V, 69 µA at 8.4 V. The source impedance is 18 kΩ, so
   C9 supplies the sampling charge. The ratio is balancebot's rev3 ratio.
 
@@ -149,7 +156,7 @@ pin 8); `PWR_SENSE` is `POWER_BUTTON_EXPANDER_PIN`, MCP23017 GPB0 (pin 8).
 **Layout** (#1280). The pack path runs along the rear edge, right to left, all
 on F.Cu with no via: J3's "+" to Q1's drain on a fixed 2 mm track, Q1 and Q2
 facing each other (common source tied pin to pin, joined across by a 1.0 mm
-segment 0.58 mm from each gate pad), Q2's drain into F1 at 2 mm, and F1 into
+segment between the two gate pads), Q2's drain into F1 at 2 mm, and F1 into
 J4's IN+ at 2 mm. R14 and R15 sit north of the FETs; the gates sit at
 opposite corners of the pair, so PACK_GATE reaches Q1's through B.Cu. The latch
 (D2, D3, Q3, R16) and the button lead J19 are above J3; the divider (R17, R18,
@@ -170,9 +177,23 @@ comparison against the MP2672A, and every number below.
   (`RobocarChargerTests`) pins `CHG_VBUS` to those pins. J20's CC1 and CC2 each
   have a 5.1 kΩ pull-down (R30, R31): a sink that asks for 5 V and negotiates
   nothing. D+, D− and SBU are open. J20's shield and GND pins go to GND.
-- **BAT is on `PACK_IN`**, the pack side of Q1, so the pack charges with the
-  robot off, through J3 pin 2 and the pack's BMS. The charge current does not go
-  through F1 or the switch FETs.
+- **BAT reaches `PACK_IN` through F2**, on the pack side of Q1, so the pack
+  charges with the robot off, through J3 pin 2 and the pack's BMS. The charge
+  current does not go through F1 or the switch FETs.
+- **Plug-in ring.** With Q1 and Q2 off, about 86 µF of ceramic sits on
+  `CHG_BAT` (C16, C17, and C13–C15 through the charger's sense path). Against
+  the pack lead's inductance (about 0.3 µH, assumed) it rings at plug-in, to an
+  estimated 10–11 V against BAT's and SNS's 12 V absolute maximum (SLUSD89B
+  §7.1). C20, a 100 µF electrolytic (0.36 Ω at 100 kHz), adds lossy
+  capacitance across the ceramics; F2 in series does much of the damping. The
+  third review round's simulation puts the peak at 9.7–10.6 V with C20 against
+  11.1–13.0 V without, and 10.3–11.6 V with C20 cold. Simulated, not measured:
+  scope `PACK_IN` at XT30 insertion on the first board (#1307).
+- **Charge-status LED.** D4 lights from REGN through R33 (1.5 kΩ) into STAT,
+  which is open drain: on while charging, off when the charge ends or is
+  disabled, blinking at 1 Hz on any fault (SLUSD89B §6). About 1.9 mA, and
+  2.4 mA at most against STAT's 6 mA sink rating (§7.1). REGN is up only while
+  the port has power, so D4 is dark with no USB plugged in.
 - **Input and charge current.** R19 (820 Ω) caps the input at 1.35 A typical,
   1.56 A at the part's maximum (datasheet constant KILIM). That gives about
   0.83 A into the pack (0.96 A at the maximum), where ADR-038's estimate was
@@ -200,26 +221,51 @@ comparison against the MP2672A, and every number below.
   run of 100 does not fit. J20 (C165948) and L1 are extended. J21 is a loose
   B3B-XH-A (LCSC C144394), through-hole, hand-fitted.
 
-**Layout** (#1280). J20 sits at the right edge with U5 turned so its VBUS and
-PMID side faces the port. Every wide net meets U5's 0.5 mm-pitch pins through a
-fixed track no wider than 0.3 mm at the pin (`board.toml` says why for each):
+**Layout** (#1280, after SLUSD89B §11.1's priority list, with its Figure 81 as
+the pattern). U5 is unturned: its GND, PMID and VBUS pins face north, SW, SNS
+and BAT east, the setting pins south. J20 sits flush with the right edge.
+Every wide net meets U5's 0.5 mm-pitch pins through a fixed track no wider
+than 0.3 mm at the pin (`board.toml` gives the reason for each). Path lengths
+below are `just robocar::carrier-measure path` on the committed board:
 
-- PMID: C11 and C12 beside the PMID pins, their GND pads beside U5's GND pins
-  19 and 20, which tie to the exposed pad (vias in the pad);
-- VBUS: out between pin 24's GND tie and the PMID capacitors to C10, then to
-  the port's A9/B4 pad and down its west side to A4/B9;
-- SW: from pins 17 and 18 under the PMID capacitors to L1 and C19, about 9 mm
-  in all;
-- SNS and BAT: C13–C15 and C16–C17 in a row under their pins; BAT continues
-  1 mm wide to J3's "+".
+- SNS: pins 15 and 16 to C13, a 1210 just east of the SNS pins (2.77 mm from
+  U5:15), its GND pad at the GND corner, tied 1.0 mm wide to C11's GND; then
+  the bulk C14 and C15.
+- SW: pins 17 and 18 east under C13's body to L1 beside it (5.59 mm from
+  U5:17, 6.99 mm before the second review round), then on to C19.
+- PMID: C11 stands straight over the PMID pins, its GND pad over U5's GND pins
+  19 and 20, which tie into the exposed pad; the pad takes five 0.5/0.3 mm
+  vias. C12 stands beside L1's PMID pad, its GND pad tied to C13's. U5:21 to
+  L1:2 is 12.68 mm through both capacitors (18.68 mm before).
+- VBUS: pin 23 up beside the PMID capacitors to C10.
+- BAT: pins 13 and 14 down to C16 and C17, then on a fixed 1.0 mm F.Cu track
+  to F2 and C20, and J3's "+".
+- BTST: pin 12 and C19 sit on opposite sides of the BAT and SNS chains, so on
+  two layers BTST is fixed tracks through two fixed vias: down south of pin
+  12, east on B.Cu under the BAT capacitors, up beside C19 (9.33 mm, 2 vias).
+  A shorter loop would put C19 at pin 12 and run SW to it across BAT and SNS,
+  on B.Cu.
+- No routing on B.Cu under the power stage (U5, the PMID and SNS
+  capacitors, L1), except BTST's last stretch to its via by C19, which crosses
+  north-south under the SNS track.
 
-The setting resistors fan out west of pins 7–12 in pin order: TS, ILIM,
-MIDSENSE, a gap for CBSET to its column of four, then REGN's C18 (R19, R20 and
-C18 carry no reference on the silkscreen: no room). CC1 and CC2 run under the
-receptacle to R30 and R31. The pre-fab review still has to check the loop from
-C13–C15 (SNS) through U5 and L1 and back to GND, U5's thermal pad vias and the
-copper under it, J21's end pins away from every other pad, MID's route away
-from SW, and that J20 sits where a cable reaches.
+The setting resistors stand in a row 2 mm below U5's setting pins, in pin
+order, left to right: R19 (ILIM), R20 (MIDSENSE), R24, R23, R22, R21 (CBSET to
+MID), then C18 (REGN) below pin 11. The second row holds R27, R26 and R25 (the
+TS divider), the I2C pull-ups R28 and R29, and the STAT LED's R33 and D4. Of
+these only D4 carries a reference on the silkscreen (2.1 mm pitch; C11, C12
+and C16 have none either). CC1 and CC2 run to R30 and R31 north of the
+receptacle.
+
+Two of the setting nets are fixed tracks too, because Freerouting left them
+unrouted in most routes. CBSET runs from pin 10 along the bottom lane of the
+channel under U5, dropping into R21-R24; TS, ILIM and MIDSENSE leave on the
+lanes above it. REGN runs straight down from pin 11 to C18, then down the gap
+west of C18 and along the lane between the two rows to R25, R28, R29 and R33,
+all on F.Cu. C18's GND pad ties to C16's. With the pull-ups west of U5 (the
+first round), REGN had to cross the other setting nets on a B.Cu loop that,
+with BTST and a routed CHG_BAT, fenced the BAT and REGN capacitors' B.Cu
+return off from U5's pad.
 
 ## The GPIO expander
 
@@ -370,7 +416,7 @@ prints the layout figures quoted here.
 | 3 | Silkscreen under 1.0 mm | **Fixed where it fits:** R10, R11 and the HEAD 1 and HEAD 2 labels are now 1.0 mm. J18's labels, HEAD 3, the CJMCU-2317 pin names inside its socket and, since the TCA9548A clone's second row (2026-11-02), C5, R2–R9, R12, R13 and J7's and J8's labels stay at 0.8 mm: at 1.0 mm DRC finds them overlapping a neighbour's outline or pads. Text strokes are 0.15 mm or more, JLCPCB's minimum: 40 footprint texts (references, J3's "−" and "+", BZ1's "+") are 0.15 mm, the resized references and `[silk] texts` 0.16 mm. Footprint silkscreen lines are widened to 0.15 mm since `pcb/silk.py` (some were 0.10–0.127 mm) |
 | 4 | I2C pull-ups too weak for 400 kHz | **Fixed on the channels:** R2–R11 go from 10 kΩ to 2.2 kΩ (the reasoning is on them in `hardware.toml`). **Upstream** of the mux the breakout's 10 kΩ now has R12 and R13 (2.2 kΩ, fitted) in parallel, about 1.8 kΩ, across the 10–15 cm ribbon (N-4 below). Still probe SDA and SCL on J12 with a scope at the first power-up; if the 30–70 % rise time is over 300 ns, set `I2C_MASTER_FREQ_HZ` to 100 kHz (1000 ns allowed) |
 | 5 | No fuse on the pack input | **Fixed:** F1, a 4 A hold, 16 V PTC beside J3 (the 3 A part first fitted derated below the load, SF-4 below), ahead of the LM2596 lead and J11's VBAT pin |
-| 6 | No low-battery cutoff | **Fixed on the carrier in the netlist and schematic (ADR-038, #1270); the board is not regenerated yet.** The LM2596's ON/OFF pin (pin 5) is tied to ground on the common module's own board, and J4 carries only IN and OUT, so the carrier cuts the pack input instead: Q1/Q2 are a P-MOSFET switch driven by a push-button soft latch, firmware holds HOLD (D7) high and releases it to switch off, and a 100 kΩ / 22 kΩ divider (R17, R18) puts the switched pack on D3 for the firmware cutoff (#1271). The pack's BMS stays as the backup; see [The power switch](#the-power-switch) |
+| 6 | No low-battery cutoff | **Fixed on the carrier (ADR-038, #1270; laid out in #1280).** The LM2596's ON/OFF pin (pin 5) is tied to ground on the common module's own board, and J4 carries only IN and OUT, so the carrier cuts the pack input instead: Q1/Q2 are a P-MOSFET switch driven by a push-button soft latch, firmware holds HOLD (D7) high and releases it to switch off, and a 100 kΩ / 22 kΩ divider (R17, R18) puts the switched pack on D3 for the firmware cutoff (#1271). The pack's BMS stays as the backup; see [The power switch](#the-power-switch) |
 | 7 | Buck dropout | **Nothing to build.** WIRING.md's figure stands: the LM2596 needs about 1.25 V of headroom at 3 A (SNVS124G, Figure 7-6), so 5 V sags below about 6.3 V of pack |
 | 8 | RGB green and blue nearly dark | **Not applicable.** The LEDs are harness parts on the PCA9685's own 3-pin columns, not on the carrier. Their common anode goes to the column's V+ (5 V), so 5 V less a 3.0 V forward drop across the breakout's 220 Ω gives about 9 mA. Check brightness on the bench |
 | 9 | Decoupling far from its pins | **Kept.** C4 is 3.6 mm from the PCA9685's VCC pin and C5 5.3 mm from the TCA9548A's VIN (4.5 mm before the clone's second row moved it behind the socket, 2026-11-02), both measured to the socket pin: the breakouts carry their own decoupling at the chip; C6 is 5.5 mm from the CJMCU-2317's VCC pin. C3 is 6.9 mm of track from the MAX98357A's Vin. C1 and C2 are bulk on the 5V trunk, not beside the pins: 52.1 mm of track from the PCA9685's V+ (C1) and 36.8 mm from the TB6612FNG's VM (C2), with no via, because no 8 × 10.5 mm capacitor fits beside either pin (the modules' outlines and J5, J6 surround them). C7 and C8 sit beside U2 |
@@ -387,7 +433,7 @@ through-hole pads join the layers).
 |---|---|---|---|
 | BL-1 | The board said not to order it | "PROVISIONAL: do not order" on the silkscreen and in `board.toml` | Removed. Lauri's [bench checks](#pre-order-checks-still-owed-lauri) come before paying |
 | BL-2 | The ribbon put +5V straight on the XIAO's 5V pad, its USB-C VBUS: a USB cable and the LM2596 feed each other | J1:1 and J1:14 on +5V | D1, a B5819W (C8598), from +5V to a new `XIAO_5V` net on J1's 5V pins, 3.3 mm from J1:14. The XIAO sees 5V less about 0.4 V; USB reverse-biases D1 |
-| SF-1 | Every 5V path to the motors, servos and head changed layer through one 1.0/0.5 mm via, the LDO and amplifier through another | Via (42.35, 63.40) alone joined J4 to A1:8, A2:1, C1, C2, C7, J11 and J1; via (49.46, 73.75) to U2 and A4; via (36.41, 89.59) to C3. J4:3 to A1:8 76.2 mm, to A2:1 85.0 mm, to U2:3 30.7 mm, to A4:1 49.1 mm (0.6 mm at the narrowest) | A fixed F.Cu trunk ([`board.toml`](board.toml) `[[tracks]]`), no via: J4:3 to C1 to C2 at 1.5 mm, C2 to A1:8 at 2.0 mm, on to A2:1 at 1.5 mm; the LDO and amplifier branch at 1.0 mm from C2 by C7, U2:3, A4:3 and A4:1 to C3. J4:3 to A1:8 74.4 mm, to A2:1 79.9 mm, to U2:3 63.8 mm, to A4:1 85.2 mm, all 0 vias. The +5V vias left (4) are on the routed feed to D1 and J11 |
+| SF-1 | Every 5V path to the motors, servos and head changed layer through one 1.0/0.5 mm via, the LDO and amplifier through another | Via (42.35, 63.40) alone joined J4 to A1:8, A2:1, C1, C2, C7, J11 and J1; via (49.46, 73.75) to U2 and A4; via (36.41, 89.59) to C3. J4:3 to A1:8 76.2 mm, to A2:1 85.0 mm, to U2:3 30.7 mm, to A4:1 49.1 mm (0.6 mm at the narrowest) | A fixed F.Cu trunk ([`board.toml`](board.toml) `[[tracks]]`), no via: J4:3 to C1 to C2 at 1.5 mm, C2 to A1:8 at 2.0 mm, on to A2:1 at 1.5 mm; the LDO and amplifier branch at 1.0 mm from C2 by C7, U2:3, A4:3 and A4:1 to C3. J4:3 to A1:8 74.4 mm, to A2:1 79.9 mm, to U2:3 63.8 mm, to A4:1 85.2 mm, all 0 vias. The +5V vias left are on the routed feed to D1 and J11 |
 | SF-2 | The LM2596 lead was a JST XH, 3 A per contact on AWG 22 (JST XH sheet), under up to about 3.4 A on OUT+ with both motors stalled | XH 4, 2.5 mm | JST VH 4 (B4P-VH, 3.96 mm): 10 A AC/DC on AWG 16, wire AWG 22–16 (JST VH sheet, LCSC C160317's datasheet). Same pin order, registry `lm2596-buck-module-vh4` |
 | SF-3 | The TB6612FNG, MAX98357A and TCA9548A fit their sockets turned 180°, which puts a supply on GND | No pin names at the sockets | 1.0 mm names inside each outline: A1 "VM", "PWMA" (pads 8, 9) and "GND" (pads 1, 16); A4 "Vin", "LRC" (pads 1, 7); A3 "VIN", "SC7" (pads 1, 24) |
 | SF-4 | F1 derated below the load: BSMD1812-300-16V holds 2.55 A at 40 °C and 2.28 A at 50 °C (BHFUSE BSMD1812 datasheet, Thermal Derating Chart) against 2.4–3.1 A into the LM2596 at full load | 3 A hold, 6 A trip, C883162 | BSMD1812-400-16V, C47263807 (Extended, 15,582 in stock on 2026-10-21): 4 A hold, 8 A trip, 16 V; 3.48 A at 40 °C, 3.16 A at 50 °C. Same 1812 footprint, JLCPCB rotation 0. At 50 °C the 3.1 A full load leaves 2 % below the 3.16 A hold, so a hot robot at full load can trip it; not changed |
@@ -402,16 +448,20 @@ through-hole pads join the layers).
 The repo has no do-not-fit convention: every carrier part is in the BOM and
 CPL, so R12, R13 and C6 are fitted.
 
-`carrier-review` on the committed board (re-routed 2026-11-02 for the
-TCA9548A clone) reports five flags: C4, C5 and C6 are 3.6, 5.3 and 5.5 mm
-from their modules' pins (each module decouples at its chip), a head 3 track
-is 0.71 mm from the y 70.5 cut (row 2 above), and C3:2 has no via within
-2.5 mm; its fixed track to J13's through-hole pad does that job (`[fanout]
-exempt`). The stitching and fanout raised the main board's GND vias from 11 to
-82 (69 before the re-route, 86 before the 2 mm pack-input tracks; the stitching
-grid finds fewer points where both layers' pour holds a via). `carrier-measure
-plane` finds the main GND plane in one piece (three pieces, one over 5 mm²,
-before the re-route); HEAD2_GND is split as before.
+`carrier-review` on the committed board (#1280, after the second pre-fab
+review round) reports seven flags, none gating:
+
+- C10 (VBUS) sits 4.3 mm from U5:23, and C19 6.8 mm from U5:12 and 8.2 mm
+  from U5:17 (the bootstrap loop above).
+- C4, C5 and C6 are 3.6, 5.3 and 5.5 mm from their modules' pins (each module
+  decouples at its chip).
+- C6:2 and J20's four GND pads have no via within 2.5 mm. J20's pads tie to
+  its through-hole shield, which joins both layers, and join the pour solid
+  (`[pour] solid_pads`).
+
+The main board has 229 GND vias (stitching, fanout and the vias route_board
+puts in pockets of fill), and `carrier-measure plane` finds one GND plane
+component of 5 mm² or more.
 
 ## Assembly notes
 
@@ -482,18 +532,21 @@ paying for the order.
    In the Gerber preview check the outline and the `<sha7> <pcb8>` text under
    the title (it must match the zip's name).
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
-   CSVs. Ten LCSC numbers are Extended, so ten feeder fees: C1–C3 (C96179),
-   C7–C8 (C8020), F1 (C47263807), Q1–Q2 (C264098, 237 in stock), U5
-   (C2761614, 371 in stock), L1 (C435392), J20 (C165948), C19 (C107154), R25
-   (C17739) and R26 (C21841); the rest are Basic (`python3 -m kicad.lcsc
-   --project packages/robotics/robocar`, 2026-11-25). JLCPCB's stock and part status were checked on
+   CSVs. Fourteen LCSC numbers are Extended, so fourteen feeder fees: C1–C3
+   (C96179), C7–C8 (C8020), F1 (C47263807), F2 (C883156), Q1–Q2 (C264098, 237
+   in stock), D2–D3 (C3031887), U5 (C2761614, 371 in stock), L1 (C435392), J20
+   (C165948), C13–C15 (C309062), C19 (C107154), C20 (C128532), R25 (C17739)
+   and R26 (C21841); the rest are Basic or Preferred (`python3 -m kicad.lcsc
+   --project packages/robotics/robocar`, 2026-11-26). JLCPCB's stock and part status were checked on
    2026-10-16, the 2.2 kΩ pull-ups (C17520) on 2026-10-18, and F1, D1, C6,
    R12 and R13 on 2026-10-21 (the comments in `hardware.toml` record the
    figures). The CPL's rotations already include each LCSC part's offset
    from [`jlcpcb-rotations.toml`](../../../../../docs/reference/jlcpcb-rotations.toml)
    (`kicad.jlc`; U2 goes out at 270°, KiCad's 90° plus 180°). **Verify
    polarity in the placement preview** before confirming: each "+" on the pad
-   marked "+" on the silkscreen (C1–C3, C7, C8), D1's cathode bar on its pad toward the rear edge (pad 1, `XIAO_5V`),
+   marked "+" on the silkscreen (C1–C3, C7, C8, and C20's on its north
+   pad, `CHG_BAT`), D1's cathode bar on its pad toward the rear edge (pad 1,
+   `XIAO_5V`), D4's cathode (pad 1, the silkscreen's closed end) toward U5,
    and U2's tab toward C7.
 5. **Buy the through-hole parts**, soldered by hand either way:
 

@@ -1112,16 +1112,20 @@ class RobocarPowerSwitchTests(unittest.TestCase):
         # XT30 + -> reverse-polarity FET Q1; the switch FET Q2 and the fuse
         # follow; the latch drives the switch's gate net through D2.
         # The charger's BAT pins (U5 13 and 14) and its two BAT capacitors
-        # join the pack side of the input stage (#1272).
+        # join the pack side of the input stage (#1272) through their own PTC,
+        # F2, so a shorted BAT capacitor is fused (#1280).
         self.assertEqual(
-            set(self.nets["PACK_IN"]),
+            set(self.nets["PACK_IN"]), {("J3", "2"), ("Q1", "5"), ("F2", "1")}
+        )
+        self.assertEqual(
+            set(self.nets["CHG_BAT"]),
             {
-                ("J3", "2"),
-                ("Q1", "5"),
+                ("F2", "2"),
                 ("U5", "13"),
                 ("U5", "14"),
                 ("C16", "1"),
                 ("C17", "1"),
+                ("C20", "1"),
             },
         )
         self.assertIn(("D2", "2"), self.nets["PWR_SW"])
@@ -1129,10 +1133,13 @@ class RobocarPowerSwitchTests(unittest.TestCase):
 
     def test_the_button_sense_is_on_the_expander_not_the_mcu(self):
         # No MCU pad is left for it: SENSE is the MCP23017's GPB0 (A5) and the
-        # mirror header's matching pin.
+        # mirror header's matching pin, with R32 pulling it up to 3V3 against
+        # D2's leakage (#1280).
         self.assertEqual(
-            set(self.nets["PWR_SENSE"]), {("A5", "13"), ("D3", "2"), ("J18", "6")}
+            set(self.nets["PWR_SENSE"]),
+            {("A5", "13"), ("D3", "2"), ("J18", "6"), ("R32", "2")},
         )
+        self.assertIn(("R32", "1"), self.nets["+3V3"])
         self.assertNotIn("J1", {ref for ref, _ in self.nets["PWR_SENSE"]})
 
 
@@ -1163,6 +1170,13 @@ class RobocarChargerTests(unittest.TestCase):
         self.assertEqual(
             set(self.nets["CHG_VBUS"]), vbus | {("U5", "23"), ("C10", "1")}
         )
+
+    def test_the_status_led_lights_from_regn_into_stat(self):
+        # STAT is open drain, LOW while charging (SLUSD89B §6): REGN, R33, D4's
+        # anode, D4's cathode on STAT.
+        self.assertEqual(set(self.nets["CHG_STAT"]), {("U5", "2"), ("D4", "1")})
+        self.assertEqual(set(self.nets["CHG_STAT_LED"]), {("R33", "2"), ("D4", "2")})
+        self.assertEqual(self._net_of("R33", "1"), "CHG_REGN")
 
     def test_the_port_cc_pins_are_on_their_own_pull_downs(self):
         self.assertEqual(set(self.nets["CHG_CC1"]), {("J20", "A5"), ("R30", "1")})

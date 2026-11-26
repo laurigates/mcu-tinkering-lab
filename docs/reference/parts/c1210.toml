@@ -1,0 +1,18 @@
+# 1210 ceramic capacitor, hand-solderable pads. Value and LCSC number per instance.
+# For the bulk ceramics that must keep their capacitance under DC bias (the
+# BQ25887's SNS capacitors, #1280): a 1210 X7R holds more of its 22 uF at
+# 8.4 V than an 0805 X5R.
+[part]
+name = "Capacitor, 1210"
+source = "KiCad 10.0.6 library"
+symbol = "Device:C"
+footprint = "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder"
+
+[stock]
+category = "capacitor"
+package = "1210"
+needs = ["voltage", "dielectric"]
+
+[pins]
+A = 1
+B = 2

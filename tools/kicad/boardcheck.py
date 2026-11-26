@@ -245,12 +245,14 @@ TABLE_KEYS = {
     "keepouts": {"name", "rect"},
     "route_keepouts": {"name", "layer", "rect"},
     "tracks": {"name", "net", "layer", "width_mm", "points"},
+    "vias": {"name", "net", "at", "via_um"},
     "fanout": {
         "nets",
         "via_um",
         "track_um",
         "reach_mm",
         "in_pad",
+        "in_pad_vias",
         "exempt",
         "required",
         "own",
@@ -266,6 +268,7 @@ TABLE_KEYS = {
         "thermal_gap_mm",
         "spoke_mm",
         "stitch",
+        "solid_pads",
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
@@ -286,7 +289,14 @@ CUT_CLEARANCE_MM = 1.0
 # build_board.py keeps the stroke at 0.16 mm or more at any size.
 SILK_MIN_MM = 1.0
 SILK_HIGH_PRECISION_MIN_MM = 0.8
-LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
+LIST_TABLES = (
+    "net_classes",
+    "keepouts",
+    "route_keepouts",
+    "cutouts",
+    "tracks",
+    "vias",
+)
 SILK_LISTS = ("hidden_refs", "rects", "texts", "cut_lines")
 SILK_TABLES = ("ref_positions", "ref_sizes")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
@@ -476,6 +486,11 @@ def _validate_pour(
     where: str, pour: dict[str, Any], nl: netlist.Netlist, size: Any
 ) -> list[str]:
     errors = _validate_stitch(where, pour, size)
+    solid = pour.get("solid_pads", [])
+    if not isinstance(solid, list) or not all(
+        isinstance(n, str) and re.fullmatch(r"[A-Z]+\d+:\S+", n) for n in solid
+    ):
+        errors.append(f'{where}: [pour] solid_pads must be a list of "REF:PAD"')
     if "net" in pour and "regions" in pour:
         return [f"{where}: [pour] takes net or regions, not both"]
     if "net" not in pour and "regions" not in pour:
@@ -593,6 +608,44 @@ def _validate_tracks(
     return errors
 
 
+def _validate_vias(
+    where: str, data: dict[str, Any], nl: netlist.Netlist, size: Any
+) -> list[str]:
+    """[[vias]]: through vias laid down locked, where a fixed track changes layer.
+
+    A [[tracks]] end may sit on one of its net instead of a pad. `via_um` is
+    `[diameter, drill]`. A via may not enter a keepout.
+    """
+    errors = []
+    for v in data.get("vias", []):
+        name = v.get("name")
+        at = f"{where}: [[vias]] {name!r}"
+        if not isinstance(name, str) or not name:
+            errors.append(f"{where}: [[vias]] needs a name")
+            continue
+        if not _known_net(nl, v.get("net")):
+            errors.append(f"{at}: net {v.get('net')!r} is not in the netlist")
+        size_um = v.get("via_um")
+        if not (_numbers(size_um, 2) and 0 < size_um[1] < size_um[0]):
+            errors.append(f"{at}: via_um must be [diameter, drill], drill < diameter")
+            continue
+        p = v.get("at")
+        if not _numbers(p, 2):
+            errors.append(f"{at}: at must be [x, y]")
+            continue
+        if size is not None and not _inside(p + p, size):
+            errors.append(f"{at}: {p} is not inside [outline]")
+            continue
+        r = size_um[0] / 2000
+        for k in data.get("keepouts", []):
+            if (
+                _rect(k.get("rect"))
+                and _segment_rect(tuple(p), tuple(p), tuple(k["rect"])) < r
+            ):
+                errors.append(f"{at}: {p} enters keepout {k.get('name')!r}")
+    return errors
+
+
 def _validate_cut_clearance(where: str, data: dict[str, Any], size: Any) -> list[str]:
     """Each [pour] region stops CUT_CLEARANCE_MM short of every [silk] cut line."""
     lines = [
@@ -627,6 +680,7 @@ FANOUT_DEFAULTS = {
     "track_um": 300,
     "reach_mm": 2.0,
     "in_pad": [],
+    "in_pad_vias": {},
     "exempt": [],
     "required": [],
     "own": [],
@@ -654,7 +708,10 @@ def _validate_fanout(
     exposed pad) take their via inside the pad; `exempt` pads take none. An
     `own` pad takes a via of its own even where a chain of fixed tracks already
     reaches one (a regulator's GND pin, whose fixed track to its input
-    capacitor would otherwise satisfy it).
+    capacitor would otherwise satisfy it). `in_pad_vias` gives an `in_pad` pad
+    several vias of its own size, `{ "U5:25" = { via_um = [d, drill], at =
+    [[dx, dy], ...] } }` with offsets in mm in the footprint's frame (they turn
+    with the part); without it the pad takes one via at its centre.
     """
     fan = data.get("fanout")
     if fan is None:
@@ -693,6 +750,31 @@ def _validate_fanout(
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
+    vias = spec["in_pad_vias"]
+    if not isinstance(vias, dict):
+        return [*errors, f"{at} in_pad_vias must be a table of in_pad pads"]
+    for pad, table in vias.items():
+        here = f"{at} in_pad_vias {pad!r}"
+        if pad not in spec["in_pad"]:
+            errors.append(f"{here} is not an in_pad pad")
+        if not isinstance(table, dict):
+            errors.append(f"{here}: must be a table with via_um and at")
+            continue
+        extra = sorted(set(table) - {"via_um", "at"})
+        if extra:
+            errors.append(f"{here}: unknown key(s) {extra}")
+        size = table.get("via_um")
+        if not (_numbers(size, 2) and size[0] > size[1] > 0):
+            errors.append(
+                f"{here}: via_um must be [diameter, drill], diameter > drill > 0"
+            )
+        points = table.get("at")
+        if not (
+            isinstance(points, list)
+            and points
+            and all(_numbers(pt, 2) for pt in points)
+        ):
+            errors.append(f"{here}: at must be a non-empty list of [dx, dy] in mm")
     return errors
 
 
@@ -989,6 +1071,7 @@ def validate_config(
         errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
+    errors += _validate_vias(where, data, nl, size)
     errors += _validate_fanout(where, data, nl)
     errors += _validate_imu(where, data, nl, vendored)
     for text in silk.get("texts", []):

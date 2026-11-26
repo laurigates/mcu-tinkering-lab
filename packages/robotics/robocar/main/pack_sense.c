@@ -17,9 +17,10 @@ static const char *TAG = "pack_sense";
 /** Conversions averaged per reading. */
 #define PACK_SENSE_SAMPLES 16
 
-/** 6 dB: full scale a little above 1.5 V on the ESP32-S3, for the 1.51 V a full
- *  2S pack puts on the pad. A pack above about 9.7 V would clip; 12 dB covers
- *  more and resolves less of the 6.6 V cutoff (1.19 V). */
+/** 6 dB: the ESP32-S3 datasheet calibrates ATTEN2 over 0-1600 mV (Table 5-6),
+ *  for the 1.51 V a full 2S pack puts on the pad. A pack above about 8.87 V
+ *  leaves the calibrated range; 12 dB covers more and resolves less of the
+ *  6.6 V cutoff (1.19 V). */
 #define PACK_SENSE_ATTEN ADC_ATTEN_DB_6
 
 static adc_oneshot_unit_handle_t s_adc;

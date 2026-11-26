@@ -61,3 +61,17 @@ def candidates(cx, cy, half_w, half_h, via_r, gap, reach, step, prefer=(0.0, 0.0
             n += 1
     out.sort(key=lambda c: (c[0], c[1], c[2]))
     return [(x, y) for _, _, _, x, y in out]
+
+
+def in_pad_points(cx, cy, orientation_deg, offsets):
+    """Where `[fanout] in_pad_vias` puts its vias: each offset turned with the part.
+
+    `offsets` are [dx, dy] in mm in the footprint's own frame (y down), so
+    they follow the pad when the part turns. KiCad turns a footprint
+    counter-clockwise as seen with y down: a local (x, y) lands at
+    (x cos a + y sin a, -x sin a + y cos a) from the anchor. `cx`, `cy` and
+    the offsets share one unit (route_board passes mm); returns (x, y) in it.
+    """
+    a = math.radians(orientation_deg)
+    c, s = math.cos(a), math.sin(a)
+    return [(cx + dx * c + dy * s, cy - dx * s + dy * c) for dx, dy in offsets]

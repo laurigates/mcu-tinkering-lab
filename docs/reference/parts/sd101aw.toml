@@ -1,0 +1,18 @@
+# SD101AW small-signal Schottky, SOD-123: low reverse leakage where a B5819W's
+# would bias a high-impedance node (the soft latch's diodes, #1280). JSCJ
+# SD101AW datasheet (LCSC C3031887): IRM 0.2 uA max at VR 50 V, Ta 25 C; VF
+# 0.41 V max at IF 1 mA; IFM 15 mA continuous; VRWM 60 V.
+[part]
+name = "SD101AW Schottky diode"
+source = "KiCad 10.0.6 library"
+symbol = "Device:D_Schottky"
+footprint = "Diode_SMD:D_SOD-123"
+value = "SD101AW"
+lcsc = "C3031887"
+
+[stock]
+mpn = "SD101AW"
+
+[pins]
+K = 1
+A = 2

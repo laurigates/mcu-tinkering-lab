@@ -654,6 +654,59 @@ class ConfigTests(unittest.TestCase):
             "[fanout]: unknown key(s) ['stitch']",
         )
 
+    def test_fanout_in_pad_vias(self):
+        """[fanout] in_pad_vias: several vias of a given size in an exposed pad."""
+        ref, pin = self.nl.nets["GND"][0]
+        name = f"{ref}:{pin}"
+        vias = {name: {"via_um": [600, 300], "at": [[0, 0], [1.0, 0], [0, -1.0]]}}
+        fan = {
+            "nets": ["GND"],
+            "via_um": [1000, 500],
+            "in_pad": [name],
+            "in_pad_vias": vias,
+        }
+        ok = self.with_data(lambda d: d.update(fanout=fan))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(fanout={**fan, "in_pad": []}),
+            f"[fanout] in_pad_vias {name!r} is not an in_pad pad",
+        )
+        self.fails(
+            lambda d: d.update(
+                fanout={
+                    **fan,
+                    "in_pad_vias": {name: {"via_um": [300, 300], "at": [[0, 0]]}},
+                }
+            ),
+            f"[fanout] in_pad_vias {name!r}: via_um must be [diameter, drill]",
+        )
+        self.fails(
+            lambda d: d.update(
+                fanout={**fan, "in_pad_vias": {name: {"via_um": [600, 300], "at": []}}}
+            ),
+            f"[fanout] in_pad_vias {name!r}: at must be a non-empty list of [dx, dy]",
+        )
+        self.fails(
+            lambda d: d.update(
+                fanout={
+                    **fan,
+                    "in_pad_vias": {name: {"via_um": [600, 300], "at": [[0]]}},
+                }
+            ),
+            f"[fanout] in_pad_vias {name!r}: at must be a non-empty list of [dx, dy]",
+        )
+        self.fails(
+            lambda d: d.update(
+                fanout={
+                    **fan,
+                    "in_pad_vias": {
+                        name: {"via_um": [600, 300], "at": [[0, 0]], "x": 1}
+                    },
+                }
+            ),
+            f"[fanout] in_pad_vias {name!r}: unknown key(s) ['x']",
+        )
+
     def test_tracks(self):
         """[[tracks]]: pre-routed tracks (a power trunk) Freerouting keeps."""
         trunk = {
@@ -694,6 +747,43 @@ class ConfigTests(unittest.TestCase):
         self.fails(
             lambda d: d.update(tracks=[{**trunk, "colour": "red"}]),
             "[tracks]: unknown key(s) ['colour']",
+        )
+
+    def test_pour_solid_pads(self):
+        """[pour] solid_pads: pads joined to the pour without thermal spokes."""
+        ok = self.with_data(lambda d: d["pour"].update(solid_pads=["U2:1"]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d["pour"].update(solid_pads=["U2-1"]),
+            '[pour] solid_pads must be a list of "REF:PAD"',
+        )
+
+    def test_vias(self):
+        """[[vias]]: locked through vias where a fixed track changes layer."""
+        via = {"name": "down", "net": "GND", "at": [5, 30], "via_um": [600, 300]}
+        ok = self.with_data(lambda d: d.update(vias=[via]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(vias=[{**via, "net": "AGND"}]),
+            "[[vias]] 'down': net 'AGND' is not in the netlist",
+        )
+        self.fails(
+            lambda d: d.update(vias=[{**via, "via_um": [300, 600]}]),
+            "[[vias]] 'down': via_um must be [diameter, drill], drill < diameter",
+        )
+        self.fails(
+            lambda d: d.update(vias=[{**via, "at": [5, 99]}]),
+            "[[vias]] 'down': [5, 99] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d.update(
+                vias=[via], keepouts=[{"name": "band", "rect": [5.2, 28, 8, 32]}]
+            ),
+            "[[vias]] 'down': [5, 30] enters keepout 'band'",
+        )
+        self.fails(
+            lambda d: d.update(vias=[{**via, "layer": "F.Cu"}]),
+            "[vias]: unknown key(s) ['layer']",
         )
 
     def test_pour_regions_of_the_net_and_whole_board(self):

@@ -3,7 +3,8 @@
 # Every pad of the poured net (GND) is also routed with a track (route_board.py
 # checks this before pouring), so a thermal relief is a second connection, not
 # the only one. Between 2.54 mm-pitch header pins the routed tracks can leave
-# room for a single spoke.
+# room for a single spoke. KiCad 10's starved-thermal check reads the
+# .kicad_pro's min_resolved_spokes, not this rule, so that is 1 as well (#1280).
 (rule "Pour thermals may resolve to one spoke"
 	(condition "A.Type == 'Pad' && A.NetName == 'GND'")
 	(constraint min_resolved_spokes 1))
@@ -16,3 +17,11 @@
 (rule "silkscreen 0.15 mm clear of pads"
 	(condition "B.Type == 'Pad'")
 	(constraint silk_clearance (min 0.15mm)))
+
+# J21's pins 1 and 3 are the pack's raw cell terminals (left unwired on
+# purpose, hardware.toml): keep other copper, the GND pour above all, 1.5 mm
+# off them, so a hand-soldering bridge cannot bypass the pack's BMS (#1280
+# pre-fab review). Pin 2 (MID) beside them is the same part's, at 2.5 mm pitch.
+(rule "J21 raw cell pins 1.5 mm clear"
+	(condition "A.Type == 'Pad' && A.Parent.Reference == 'J21' && A.Pad_Number != '2' && B.Parent.Reference != 'J21'")
+	(constraint clearance (min 1.5mm)))

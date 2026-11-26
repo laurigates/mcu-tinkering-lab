@@ -1,5 +1,5 @@
 {
- "board_sha256": "76572be983c41b44fa966e34967cc7cf01b6b1dc187708c8dc484fd9997c056d",
+ "board_sha256": "fc411753ca650bde394ced349405691fc7a53b25341a5dbc063a81d73e967687",
  "kicad_cli_version": "10.0.8",
  "netlist": {
   "components": {
@@ -74,25 +74,25 @@
     "value": "10uF 25V"
    },
    "C13": {
-    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C45783",
+    "lcsc": "C309062",
     "lib_id": "Device:C",
-    "value": "22uF 25V"
+    "value": "22uF 25V X7R"
    },
    "C14": {
-    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C45783",
+    "lcsc": "C309062",
     "lib_id": "Device:C",
-    "value": "22uF 25V"
+    "value": "22uF 25V X7R"
    },
    "C15": {
-    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C45783",
+    "lcsc": "C309062",
     "lib_id": "Device:C",
-    "value": "22uF 25V"
+    "value": "22uF 25V X7R"
    },
    "C16": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -128,6 +128,13 @@
     "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
+   },
+   "C20": {
+    "footprint": "Capacitor_SMD:CP_Elec_6.3x5.8",
+    "in_bom": true,
+    "lcsc": "C128532",
+    "lib_id": "Device:C_Polarized",
+    "value": "100uF 16V"
    },
    "C3": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
@@ -188,16 +195,23 @@
    "D2": {
     "footprint": "Diode_SMD:D_SOD-123",
     "in_bom": true,
-    "lcsc": "C8598",
+    "lcsc": "C3031887",
     "lib_id": "Device:D_Schottky",
-    "value": "B5819W"
+    "value": "SD101AW"
    },
    "D3": {
     "footprint": "Diode_SMD:D_SOD-123",
     "in_bom": true,
-    "lcsc": "C8598",
+    "lcsc": "C3031887",
     "lib_id": "Device:D_Schottky",
-    "value": "B5819W"
+    "value": "SD101AW"
+   },
+   "D4": {
+    "footprint": "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C84256",
+    "lib_id": "Device:LED",
+    "value": "red"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -205,6 +219,13 @@
     "lcsc": "C47263807",
     "lib_id": "Device:Polyfuse",
     "value": "4A hold 16V"
+   },
+   "F2": {
+    "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C883156",
+    "lib_id": "Device:Polyfuse",
+    "value": "2A hold 16V"
    },
    "H1": {
     "footprint": "MountingHole:MountingHole_3.2mm_M3",
@@ -433,9 +454,9 @@
    "R16": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C149504",
+    "lcsc": "C17414",
     "lib_id": "Device:R",
-    "value": "100k"
+    "value": "10k"
    },
    "R17": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -555,6 +576,20 @@
     "lcsc": "C27834",
     "lib_id": "Device:R",
     "value": "5.1k"
+   },
+   "R32": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R33": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C4310",
+    "lib_id": "Device:R",
+    "value": "1.5k"
    },
    "R4": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -721,6 +756,10 @@
     ],
     [
      "R13",
+     "1"
+    ],
+    [
+     "R32",
      "1"
     ],
     [
@@ -958,6 +997,32 @@
      "2"
     ]
    ],
+   "CHG_BAT": [
+    [
+     "C16",
+     "1"
+    ],
+    [
+     "C17",
+     "1"
+    ],
+    [
+     "C20",
+     "1"
+    ],
+    [
+     "F2",
+     "2"
+    ],
+    [
+     "U5",
+     "13"
+    ],
+    [
+     "U5",
+     "14"
+    ]
+   ],
    "CHG_BTST": [
     [
      "C19",
@@ -1096,6 +1161,10 @@
      "1"
     ],
     [
+     "R33",
+     "1"
+    ],
+    [
      "U5",
      "11"
     ]
@@ -1140,6 +1209,26 @@
     [
      "U5",
      "16"
+    ]
+   ],
+   "CHG_STAT": [
+    [
+     "D4",
+     "1"
+    ],
+    [
+     "U5",
+     "2"
+    ]
+   ],
+   "CHG_STAT_LED": [
+    [
+     "D4",
+     "2"
+    ],
+    [
+     "R33",
+     "2"
     ]
    ],
    "CHG_SW": [
@@ -1500,6 +1589,10 @@
      "2"
     ],
     [
+     "C20",
+     "2"
+    ],
+    [
      "J1",
      "15"
     ],
@@ -1820,11 +1913,7 @@
    ],
    "PACK_IN": [
     [
-     "C16",
-     "1"
-    ],
-    [
-     "C17",
+     "F2",
      "1"
     ],
     [
@@ -1834,14 +1923,6 @@
     [
      "Q1",
      "5"
-    ],
-    [
-     "U5",
-     "13"
-    ],
-    [
-     "U5",
-     "14"
     ]
    ],
    "PACK_SENSE": [
@@ -1952,6 +2033,10 @@
     [
      "J18",
      "6"
+    ],
+    [
+     "R32",
+     "2"
     ]
    ],
    "PWR_SW": [
@@ -2100,10 +2185,6 @@
     "U5",
     "3"
    ],
-   "unconnected-(U5-STAT-Pad2)": [
-    "U5",
-    "2"
-   ],
    "unconnected-(U5-~{INT}-Pad6)": [
     "U5",
     "6"
@@ -2114,5 +2195,5 @@
    ]
   }
  },
- "schematic_sha256": "65d70d6c37286df8df59ead3c31a25a8677454376caa7e3dfa1ca2d83b52710c"
+ "schematic_sha256": "e2793788f1ac6641e554c2d6141e4f9eef6c1cf7c4f6d69a4df558eca2fc4a03"
 }

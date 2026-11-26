@@ -22,8 +22,9 @@ their lines are cut back to 0.15 mm from every pad's mask opening, where
 JLCPCB's CAM would delete them (clip_silk). Each silkscreen cut line
 is drawn on both silkscreen layers with a "CUT" label beside it. Each cutout
 is a circle on Edge.Cuts inside the outline: a hole milled through the board.
-Each board.toml [[tracks]] entry is laid down as locked segments, which the
-Specctra export marks protected, so Freerouting keeps them.
+Each board.toml [[tracks]] entry is laid down as locked segments and each
+[[vias]] entry as a locked via; the Specctra export writes them as fixed
+wiring, and Freerouting routes around them.
 
 With a mouse-bite panel (board.toml ``[panel] mode = "mousebites"``, #809) the
 cut lines are not drawn: each slot is a rectangle on Edge.Cuts, milled out, and
@@ -203,24 +204,71 @@ def mouse_bite_tab(board, origin, tab, hole_mm):
         pad.SetPosition(pcbnew.VECTOR2I(mm(x0 + hx), mm(y0 + hy)))
 
 
+def _segment(board, start, end, width, layer, net):
+    seg = pcbnew.PCB_TRACK(board)
+    seg.SetStart(start)
+    seg.SetEnd(end)
+    seg.SetWidth(width)
+    seg.SetLayer(layer)
+    seg.SetNet(net)
+    seg.SetLocked(True)
+    board.Add(seg)
+
+
+def _pad_under(board, at, net_name, layer):
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if (
+                pad.GetNetname() == net_name
+                and pad.IsOnLayer(layer)
+                and pad.HitTest(at)
+            ):
+                return pad
+    return None
+
+
 def fixed_track(board, origin, tr):
-    """board.toml [[tracks]] entry `tr`, as locked segments: Freerouting keeps
-    a locked track (the DSN marks it protected) and routes around it."""
+    """board.toml [[tracks]] entry `tr`, as locked segments: the DSN exports
+    them in (wiring ...) as fixed, and Freerouting routes around them.
+
+    An end on a pad of the track's net also gets a short segment on to the
+    pad's exact centre, no wider than the pad: Freerouting joins a wire to a
+    pin only where the wire ends on the pin's centre, and board.toml's points
+    are rounded (an 0805 pad sits at +-1.0375 mm), so without it every fixed
+    track counted as unconnected and Freerouting never finished a route
+    (#1280). The segment stays inside the pad, so the copper is unchanged.
+    """
     x0, y0 = origin
     net = board.FindNet(tr["net"])
     if net is None:
         sys.exit(f"[[tracks]] {tr['name']!r}: net {tr['net']!r} is not on the board")
     layer = board.GetLayerID(tr["layer"])
-    pts = tr["points"]
-    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
-        seg = pcbnew.PCB_TRACK(board)
-        seg.SetStart(pcbnew.VECTOR2I(mm(x0 + ax), mm(y0 + ay)))
-        seg.SetEnd(pcbnew.VECTOR2I(mm(x0 + bx), mm(y0 + by)))
-        seg.SetWidth(mm(tr["width_mm"]))
-        seg.SetLayer(layer)
-        seg.SetNet(net)
-        seg.SetLocked(True)
-        board.Add(seg)
+    width = mm(tr["width_mm"])
+    pts = [pcbnew.VECTOR2I(mm(x0 + x), mm(y0 + y)) for x, y in tr["points"]]
+    for a, b in zip(pts, pts[1:]):
+        _segment(board, a, b, width, layer, net)
+    for end in (pts[0], pts[-1]):
+        pad = _pad_under(board, end, tr["net"], layer)
+        if pad is None or pad.GetPosition() == end:
+            continue
+        size = pad.GetSize(layer)
+        _segment(board, end, pad.GetPosition(), min(width, size.x, size.y), layer, net)
+
+
+def fixed_via(board, origin, v):
+    """board.toml [[vias]] entry `v`, a locked through via: the DSN exports it
+    in (wiring ...) as fixed, beside the [[tracks]] segments that end on it."""
+    x0, y0 = origin
+    net = board.FindNet(v["net"])
+    if net is None:
+        sys.exit(f"[[vias]] {v['name']!r}: net {v['net']!r} is not on the board")
+    via = pcbnew.PCB_VIA(board)
+    via.SetPosition(pcbnew.VECTOR2I(mm(x0 + v["at"][0]), mm(y0 + v["at"][1])))
+    via.SetWidth(mm(v["via_um"][0] / 1000.0))
+    via.SetDrill(mm(v["via_um"][1] / 1000.0))
+    via.SetNet(net)
+    via.SetLocked(True)
+    board.Add(via)
 
 
 def cutout(board, origin, c):
@@ -353,6 +401,10 @@ def silk_lines(item):
     return None
 
 
+# How far inside the board outline clip_silk() keeps footprint silkscreen.
+EDGE_SILK_INSET_MM = 0.25
+
+
 def clip_silk(fp, board):
     """Cut every piece of a footprint's silkscreen lines that JLCPCB would delete.
 
@@ -363,9 +415,21 @@ def clip_silk(fp, board):
     is drawn as new line segments and the original moves to Cmts.User, not
     removed (Remove() breaks later SWIG calls, the carrier-pcb skill's trap 1).
     Arcs and circles are left alone; the DRC rule reports any that come too
-    close. Returns how many shapes were cut.
+    close. A line also loses whatever lies outside the board outline less
+    EDGE_SILK_INSET_MM: a part that overhangs an edge on purpose (a USB-C
+    receptacle flush with it, #1280) would otherwise fail DRC's
+    silk_edge_clearance. Returns how many shapes were cut.
     """
     n = 0
+    edge = board.GetBoardEdgesBoundingBox()
+    inset = mm(EDGE_SILK_INSET_MM)
+    edge.Inflate(-inset)
+
+    def off_board(a, b):
+        return not (
+            edge.Contains(pcbnew.VECTOR2I(*a)) and edge.Contains(pcbnew.VECTOR2I(*b))
+        )
+
     for silk_layer, mask_layer in SILK_MASK:
         box = fp.GetBoundingBox(False)
         box.Inflate(mm(1))
@@ -374,7 +438,7 @@ def clip_silk(fp, board):
             for p in board.GetPads()
             if p.IsOnLayer(mask_layer) and box.Intersects(p.GetBoundingBox())
         ]
-        if not pads:
+        if not pads and edge.Contains(fp.GetBoundingBox(False)):
             continue
         for item in list(fp.GraphicalItems()):
             if item.GetClass() != "PCB_SHAPE" or item.GetLayer() != silk_layer:
@@ -394,6 +458,8 @@ def clip_silk(fp, board):
             ]
 
             def blocked(a, b, shapes=shapes):
+                if off_board(a, b):
+                    return True
                 seg = pcbnew.SEG(pcbnew.VECTOR2I(*a), pcbnew.VECTOR2I(*b))
                 return any(shape.Collide(seg, gap) for shape, gap in shapes)
 
@@ -417,7 +483,10 @@ def clip_silk(fp, board):
     if n:
         # KiCad now reports the footprint as differing from its library copy;
         # kicad.check excuses that for footprints carrying this field.
-        fp.SetField(SILK_FIELD, "clipped 0.15 mm clear of pads (build_board.clip_silk)")
+        fp.SetField(
+            SILK_FIELD,
+            "clipped 0.15 mm clear of pads and inside the edge (build_board.clip_silk)",
+        )
         fp.GetField(SILK_FIELD).SetLayer(pcbnew.F_Fab)
         fp.GetField(SILK_FIELD).SetVisible(False)
     return n
@@ -491,6 +560,8 @@ def build(spec):
             keepout(board, origin, k, clears)
         for tr in spec.get("tracks", []):
             fixed_track(board, origin, tr)
+        for v in spec.get("vias", []):
+            fixed_via(board, origin, v)
         save(board, spec["pcb"])
     finally:
         shutil.rmtree(scratch)
