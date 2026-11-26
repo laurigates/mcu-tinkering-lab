@@ -1,13 +1,15 @@
-// The run log's flash region (ADR-037): a header sector at LOG_FLASH_OFFSET,
-// then the rows, sector by sector. Writes go through flash_safe_execute(),
-// one sector erase or program per call with the watchdog fed before each, and
-// MUST only happen while the motors are disarmed. Called from core 0.
+// The run log's flash region (ADR-037): LOG_SLOTS slots at LOG_FLASH_OFFSET,
+// each a header sector then the rows of one run, sector by sector (#1277).
+// Writes go through flash_safe_execute(), one sector erase or program per call
+// with the watchdog fed before each, and MUST only happen while the motors are
+// disarmed. Called from core 0.
 #ifndef BALANCEBOT_LOG_STORE_H
 #define BALANCEBOT_LOG_STORE_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "config.h"
 #include "log_record.h"
 
 typedef enum {
@@ -21,21 +23,27 @@ typedef enum {
 // Called before every flash operation; returning true stops the save.
 typedef bool (*log_store_abort_fn)(void);
 
-// Write the ring's rows and then `h`, whose rate_hz, overwritten, save_seq
-// and end_state the caller fills in (row_count and the CRCs are set here).
-// The old log is invalidated first, so an interrupted save leaves none.
+// Write the ring's rows and then `h` into the slot log_slots_next() picks
+// (an empty slot, else the oldest run's). The caller fills in rate_hz,
+// overwritten, save_seq and end_state; row_count and the CRCs are set here.
+// That slot's old run is invalidated first, so an interrupted save leaves it
+// empty and the other slots untouched. *slot_out, when not NULL, is the slot
+// used.
 log_save_result_t log_store_save(const log_ring_t *ring, log_header_t *h,
-                                 log_store_abort_fn abort_fn);
+                                 log_store_abort_fn abort_fn, unsigned *slot_out);
 
-// The header in flash, if one is valid.
-bool log_store_header(log_header_t *out);
+// Read every slot's header (no row CRC).
+void log_store_scan(log_slot_info_t slots[LOG_SLOTS]);
 
-// The rows in flash (XIP), valid for the row_count of a header that
+// Slot `slot`'s header, if it holds a valid one.
+bool log_store_header(unsigned slot, log_header_t *out);
+
+// Slot `slot`'s rows (XIP), valid for the row_count of a header that
 // log_store_rows_ok() accepts.
-const log_row_t *log_store_rows(void);
+const log_row_t *log_store_rows(unsigned slot);
 
-// True when the rows in flash match the header's CRC.
-bool log_store_rows_ok(const log_header_t *h);
+// True when slot `slot`'s rows match the header's CRC.
+bool log_store_rows_ok(unsigned slot, const log_header_t *h);
 
 // False when the firmware image reaches into the log region.
 bool log_store_fits(void);

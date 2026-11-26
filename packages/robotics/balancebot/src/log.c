@@ -34,8 +34,9 @@ void log_init(void)
     rate_hz = LOG_DEFAULT_HZ;
     interval_us = 1000000u / rate_hz;
     log_session_init(&session, rows, LOG_CAPACITY_ROWS, tail_rows());
-    log_header_t h;
-    next_seq = log_store_header(&h) ? h.save_seq + 1u : 1u;
+    log_slot_info_t slots[LOG_SLOTS];
+    log_store_scan(slots);
+    next_seq = log_slots_next_seq(slots, LOG_SLOTS);
     next_due = get_absolute_time();
 }
 
@@ -117,7 +118,7 @@ static void save_run(void)
         .save_seq = next_seq,
         .end_state = session.end_state,
     };
-    last = log_store_save(&session.ring, &h, robot_armed);
+    last = log_store_save(&session.ring, &h, robot_armed, NULL);
     if (last == LOG_SAVE_OK) {
         next_seq++;
     }

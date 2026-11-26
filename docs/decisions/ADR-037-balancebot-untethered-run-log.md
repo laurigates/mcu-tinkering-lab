@@ -73,8 +73,11 @@ ends:
 1. **Hold off the auto-arm gesture** for 1 s plus 0.1 s per sector, and wait
    for core 1 to apply it. Core 0 is busy for the whole save, so `arm` cannot
    arrive. With the gesture held off, nothing else can enter RUN either.
-2. **Erase the header sector.** From here until step 4, a power cut leaves no
-   log rather than a mix of two.
+2. **Pick a slot and erase its header sector.** The save writes into the
+   first slot that holds no valid run, or else the one with the oldest save
+   sequence number (`log_slots_next()`, `src/log_record.c`). From here until
+   step 4, a power cut leaves that slot empty rather than a mix of two runs;
+   the other five keep theirs.
 3. **Write the rows** one sector at a time: an erase, then a program of only
    the pages used. Each is its own `flash_safe_execute()` call, with
    `watchdog_update()` before it. A sector is about 45 ms of erase and a few ms
@@ -85,20 +88,25 @@ ends:
    over the rows and one over the header.
 5. **Read back** the header and the rows' CRC through XIP.
 
-**Region**: 65 sectors (260 KB) directly below the param sector
-(`LOG_FLASH_OFFSET`). It is not in the last block, which the RP2350-E10 UF2
-workaround erases. It sits far above the firmware image, and
-`log_store_fits()` refuses a save if the image ever grows into it. Only the
-newest run is kept.
+**Region**: six slots of 65 sectors (260 KB) each, 1560 KB directly below the
+param sector (`LOG_FLASH_OFFSET`, from 0x78000). It is not in the last block,
+which the RP2350-E10 UF2 workaround erases. It sits above the firmware image
+(which ends near 0x1F700), and `log_store_fits()` refuses a save if the image
+ever grows into it. The newest six runs are kept (#1277, 2026-11-26). Until
+then the region was one slot; that slot is now the top one, so a run saved by
+the older firmware reads as one of the six.
 
 ### Reading
 
 - `log` shows the state: on or off, rate, recording or not, the last save's
   result, and the stored log with its rows CRC checked. `stat` shows the same
   without the CRC check.
-- `log dump` (disarmed only) prints a `#` summary line, the CSV header, the
-  rows, and `log end`.
-- `just balancebot::log-dump` records the dump to
+- `log list` prints one line per slot that holds a run, newest first, with its
+  run number (the save sequence number), rows, rate and how it ended.
+- `log dump` (disarmed only) prints the newest run as a `#` summary line, the
+  CSV header, the rows, and `log end`. `log dump <n>` prints run `n` from
+  `log list`.
+- `just balancebot::log-dump [n]` records the dump (run `n` if given) to
   `tmp/balancebot/log-<time>.csv`. It uses `tools/serial-capture.py` with
   `--send "log dump" --until "log end"`, and fails without writing a file if
   the end marker does not arrive. `analyze` reads the result unchanged.
@@ -137,9 +145,9 @@ newest run is kept.
 - **Rows are sampled by core 0, not taken on control ticks.** A blocking CLI
   command leaves a gap, visible in `t_ms`. This matches what a USB capture has
   always had.
-- **Flash wear.** Each saved run erases the header sector and the sectors its
-  rows use. Typical NOR endurance (about 100k cycles per sector) allows tens
-  of thousands of runs.
+- **Flash wear.** Each saved run erases its slot's header sector and the
+  sectors its rows use. The slots take turns, so typical NOR endurance (about
+  100k cycles per sector) allows hundreds of thousands of runs.
 
 ## Alternatives Considered
 

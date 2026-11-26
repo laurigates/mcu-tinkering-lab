@@ -102,14 +102,16 @@ capture seconds="20" out="": require-port
     uvx --from pyserial python3 -I ../../../tools/serial-capture.py "{{port}}" "{{seconds}}" "$out"
 
 # Disarmed only; the CSV goes to tmp/balancebot/log-<time>.csv at the repo root by default.
-# Read the run log saved in flash (ADR-037) to a CSV that `analyze` reads
+# Read a run saved in flash (ADR-037) to a CSV that `analyze` reads: the newest, or run n from `log list`
 [group: "device"]
-log-dump out="": require-port
+log-dump out="" n="": require-port
     #!/usr/bin/env bash
     set -euo pipefail
     out="{{out}}"
+    n="{{n}}"
+    case "$n" in ''|*[!0-9]*) [ -z "$n" ] || { echo "n must be a run number from 'log list'" >&2; exit 2; } ;; esac
     [ -n "$out" ] || out="../../../tmp/balancebot/log-$(date +%Y%m%d-%H%M%S).csv"
-    uvx --from pyserial python3 -I ../../../tools/serial-capture.py "{{port}}" 60 "$out" --send "log dump" --until "log end"
+    uvx --from pyserial python3 -I ../../../tools/serial-capture.py "{{port}}" 60 "$out" --send "log dump${n:+ $n}" --until "log end"
 
 # Fit l_eff_m (and the pitch offset) from a capture of the robot balancing on its own
 [group: "tune"]

@@ -123,9 +123,15 @@
 // Seconds of auto-arm hold-off asked for per flash sector written, over a
 // 1 s floor: a 4 KB erase is ~45 ms typical, the program a few ms more.
 #define LOG_SAVE_HOLDOFF_S_PER_SECTOR 0.1f
-// The log's flash region: one header sector, then the rows, ending where the
-// param sector begins. 65 sectors (260 KB) below PARAM_FLASH_OFFSET.
-#define LOG_FLASH_SIZE (4096u + LOG_CAPACITY_ROWS * 32u)
+// The log's flash region, ending where the param sector begins: LOG_SLOTS
+// slots, each one header sector then the rows of one run, 65 sectors (260 KB).
+// The newest LOG_SLOTS runs are kept; a save overwrites the oldest (#1277).
+// Six slots are 1560 KB, from 0x78000; the image ends near 0x1F700. The top
+// slot sits where the single-run log was, so a log saved before #1277 reads
+// as one of the six.
+#define LOG_SLOT_SIZE (4096u + LOG_CAPACITY_ROWS * 32u)
+#define LOG_SLOTS 6u
+#define LOG_FLASH_SIZE (LOG_SLOTS * LOG_SLOT_SIZE)
 #define LOG_FLASH_OFFSET (PARAM_FLASH_OFFSET - LOG_FLASH_SIZE)
 
 #endif  // BALANCEBOT_CONFIG_H
