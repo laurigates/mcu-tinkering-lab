@@ -119,6 +119,18 @@ add_executable(test_cliff_core
 add_test(NAME cliff_core COMMAND test_cliff_core)
 
 # -----------------------------------------------------------------------------
+# Drive/rotate time bound (ADR-029 section 4, issue #1057)
+#
+# motion_bound_core.c compiled unmodified: the derived durations, the 3 s cap,
+# a timer per goal_state write, and the millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_motion_bound_core
+    "${MAIN_SRC_DIR}/motion_bound_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_motion_bound_core.c"
+)
+add_test(NAME motion_bound_core COMMAND test_motion_bound_core)
+
+# -----------------------------------------------------------------------------
 # Pack cutoff and power button (ADR-038, issue #1271)
 #
 # power_core.c compiled unmodified: the divider ratio, the low-pack threshold
@@ -145,6 +157,7 @@ add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/reactive_controller.c"
     "${MAIN_SRC_DIR}/cliff_core.c"
     "${MAIN_SRC_DIR}/cliff_sensor.c"
+    "${MAIN_SRC_DIR}/motion_bound_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
@@ -171,6 +184,7 @@ add_executable(test_reflex_latency
     "${MAIN_SRC_DIR}/reactive_controller.c"
     "${MAIN_SRC_DIR}/cliff_core.c"
     "${MAIN_SRC_DIR}/cliff_sensor.c"
+    "${MAIN_SRC_DIR}/motion_bound_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"
