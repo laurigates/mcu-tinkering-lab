@@ -11,10 +11,15 @@ one-line form of each rule below and links here for the reasoning.
   the frame the planner saw (0 forward, 90 right, -90 left, 180 backward) and
   becomes a turn bias, not a compass heading: up to ±90 the robot drives
   forward and curves; past ±90 it reverses, curving to the same side (135 backs
-  up to the right). `distance_cm` is ignored; the robot drives until the next
-  goal (`execute_drive()`, #1025)
+  up to the right) (`execute_drive()`, #1025). `distance_cm` sets how long it
+  drives: open loop at `MOTION_DRIVE_CM_PER_S_FULL` scaled by the speed, then
+  the wheels coast (`motion_bound_core.h`, ADR-029 §4, #1057)
 - `track(box_2d, max_speed_pct)` — visual servo toward a bounding box
-- `rotate(angle_deg)` — spin in place
+- `rotate(angle_deg)` — spin in place, for the time the angle takes at
+  `MOTION_ROTATE_DEG_PER_S`, then coast
+
+Neither `drive` nor `rotate` runs longer than `MOTION_BOUND_CAP_MS` (3 s); both
+speed constants are estimates until timed on the bench.
 - `stop()` — hold position
 
 - `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call

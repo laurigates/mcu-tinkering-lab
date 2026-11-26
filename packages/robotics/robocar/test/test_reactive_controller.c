@@ -15,6 +15,7 @@
 #include "cliff_sensor.h"
 #include "goal_state.h"
 #include "head_aim.h"
+#include "motion_bound_core.h"
 #include "motor_controller.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
@@ -405,6 +406,53 @@ static void test_rotate_ccw(void)
     /* motor_rotate_ccw stub: left=0 (back), right=1 (fwd) */
     ASSERT(ld == 0);
     ASSERT(rd == 1);
+}
+
+/* #1057: a rotate goal runs for the time its angle takes at the estimated yaw
+ * rate (90 deg at 180 deg/s = 500 ms), then coasts under the same goal. */
+static void test_rotate_stops_after_its_angle(void)
+{
+    setup();
+    goal_t rot = {.kind = GOAL_KIND_ROTATE, .params.rotate = {.angle_deg = 90}};
+    ASSERT(goal_state_write(&rot, 60000) == ESP_OK);
+
+    /* Tick k runs at k * 33 ms: ticks 0..15 end at 495 ms, tick 16 at 528 ms. */
+    const uint32_t ticks = motion_bound_rotate_ms(90) / REACTIVE_LOOP_PERIOD_MS + 1u; /* 16 */
+    for (uint32_t i = 0; i < ticks; i++) {
+        reactive_controller_tick_for_test();
+    }
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > 0 && rs > 0 && ld == 1 && rd == 0); /* 495 ms: still turning CW */
+    reactive_controller_tick_for_test();            /* 528 ms: past the bound */
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 0 && rs == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+    for (int i = 0; i < 100; i++) {
+        reactive_controller_tick_for_test();
+    }
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+}
+
+/* #1057: no drive runs past MOTION_BOUND_CAP_MS, and a new goal_state write
+ * starts its own bound. */
+static void test_drive_capped_and_new_goal_restarts(void)
+{
+    setup();
+    goal_t drv = {.kind = GOAL_KIND_DRIVE,
+                  .params.drive = {.heading_deg = 0, .distance_cm = 1000, .speed_pct = 50}};
+    ASSERT(goal_state_write(&drv, 60000) == ESP_OK);
+    const uint32_t cap_ticks = MOTION_BOUND_CAP_MS / REACTIVE_LOOP_PERIOD_MS + 1u; /* to 2970 ms */
+    for (uint32_t i = 0; i < cap_ticks; i++) {
+        reactive_controller_tick_for_test();
+    }
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+
+    ASSERT(goal_state_write(&drv, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
 }
 
 /* Stale goal (TTL expired) → motor_stop. */
@@ -1670,6 +1718,8 @@ int main(void)
     test_run("drive_heading_90_stays_forward", test_drive_heading_90_stays_forward);
     test_run("rotate_cw", test_rotate_cw);
     test_run("rotate_ccw", test_rotate_ccw);
+    test_run("rotate_stops_after_its_angle", test_rotate_stops_after_its_angle);
+    test_run("drive_capped_and_new_goal_restarts", test_drive_capped_and_new_goal_restarts);
     test_run("stale_goal_stops", test_stale_goal_stops);
     test_run("manual_overrides_goal", test_manual_overrides_goal);
     test_run("reflex_overrides_manual", test_reflex_overrides_manual);

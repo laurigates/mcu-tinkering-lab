@@ -82,6 +82,7 @@
 #include "goal_state.h"
 #include "head_aim.h"
 #include "idle_gaze.h"
+#include "motion_bound_core.h"
 #include "motor_controller.h"
 #include "servo_controller.h"
 #include "ultrasonic.h"
@@ -195,9 +196,9 @@ static int16_t clamp_i16(int32_t v, int16_t lo, int16_t hi)
  * NOTE: motor_set_individual() takes (left_speed, right_speed, left_dir,
  * right_dir).  Direction 1 = forward.
  *
- * Shortcut noted: we ignore drive.distance_cm — the robot drives until the
- * planner emits a new goal.  Closed-loop distance requires odometry, which is
- * not available in this phase.
+ * drive.distance_cm sets how long the goal runs, open loop, at an estimated
+ * speed and capped (motion_bound_core.h, ADR-029 §4, #1057); there is no
+ * odometry to close it.
  */
 /** Past ±90 a drive goal means backward (the drive tool says 180 = backward).
  *  The one place that rule lives: execute_drive() and goal_motion() both ask. */
@@ -296,10 +297,9 @@ static void execute_track_head_led(const goal_t *goal, head_body_t body)
 /**
  * @brief Apply in-place rotation.
  *
- * Direction is determined by the sign of angle_deg.  Magnitude is ignored —
- * we have no IMU to close the angle loop.  The planner must emit a stop/drive
- * goal when the desired heading is reached (e.g. by inspecting the next camera
- * frame).
+ * Direction is determined by the sign of angle_deg. The magnitude sets how
+ * long the turn runs, open loop at an estimated yaw rate and capped
+ * (motion_bound_core.h, #1057); there is no IMU to close the angle loop.
  *
  * Rotation speed is fixed at ~60 % to give the planner time to react.
  */
@@ -457,6 +457,35 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
         head_aim_note_write(&s_head_aim, cmd, now_ms, write_head(cmd, now, full));
     }
     return mode;
+}
+
+/* -------------------------------------------------------------------------
+ * Drive/rotate time bound (ADR-029 §4, #1057)
+ * -------------------------------------------------------------------------
+ * A drive or rotate goal runs for the time its distance or angle takes, then
+ * the wheels coast until the next goal. The head is not affected.
+ */
+static motion_bound_t s_motion_bound;
+
+static uint32_t goal_bound_ms(const goal_t *goal)
+{
+    switch (goal->kind) {
+        case GOAL_KIND_DRIVE:
+            return motion_bound_drive_ms(goal->params.drive.distance_cm,
+                                         goal->params.drive.speed_pct);
+        case GOAL_KIND_ROTATE:
+            return motion_bound_rotate_ms(goal->params.rotate.angle_deg);
+        default:
+            return MOTION_BOUND_NONE;
+    }
+}
+
+/** Whether the goal may still move the wheels: fresh and within its bound. */
+static bool goal_wheels_fresh(const goal_t *goal, bool fresh, uint32_t goal_seq, uint32_t now_ms)
+{
+    const bool expired =
+        motion_bound_expired(&s_motion_bound, goal_seq, goal_bound_ms(goal), now_ms);
+    return fresh && !expired;
 }
 
 /** Motors for the planner's goal, once the reflex and manual lease have passed. */
@@ -1042,8 +1071,10 @@ static void reactive_task(void *arg)
         };
         bool braked = false;
         bool cliff_refused = false;
+        const bool wheels_fresh =
+            goal_wheels_fresh(&goal, fresh, goal_seq, (uint32_t)(now_us / 1000));
         const wheels_motion_t motion =
-            apply_wheels(&layers, &goal, fresh, head_mode, body, &braked, &cliff_refused);
+            apply_wheels(&layers, &goal, wheels_fresh, head_mode, body, &braked, &cliff_refused);
 
         /* ---- 6b. Polite horn when a reflex stops a drive ----
          * Only when a reflex is holding back motion somebody asked for (a
@@ -1499,7 +1530,9 @@ void reactive_controller_tick_for_test(void)
     };
     bool braked = false;
     bool cliff_refused = false;
-    (void)apply_wheels(&layers, &goal, fresh, head_mode, body, &braked, &cliff_refused);
+    const bool wheels_fresh =
+        goal_wheels_fresh(&goal, fresh, goal_seq, s_ticks * REACTIVE_LOOP_PERIOD_MS);
+    (void)apply_wheels(&layers, &goal, wheels_fresh, head_mode, body, &braked, &cliff_refused);
 
     s_telemetry.distance_cm = dist;
     s_telemetry.distance_valid = s_rangers.front_seen;
@@ -1537,6 +1570,7 @@ esp_err_t reactive_controller_init(void)
     s_cliff_armed = false;
     s_cliff_enabled = CLIFF_REFLEX_AT_BOOT;
     memset(&s_cliff, 0, sizeof(s_cliff));
+    motion_bound_reset(&s_motion_bound);
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

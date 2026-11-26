@@ -56,6 +56,7 @@ idf_component_register(
         "idle_gaze.c"
         "reactive_controller.c"
         "cliff_core.c"
+        "motion_bound_core.c"
         "cliff_sensor.c"
         "planner_task.c"
         "planner_cycle_core.c"
