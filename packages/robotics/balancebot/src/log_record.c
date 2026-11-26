@@ -173,3 +173,62 @@ bool log_header_decode(const uint8_t *buf, size_t len, uint32_t max_rows, log_he
     *out = h;
     return true;
 }
+
+int log_slots_newest(const log_slot_info_t *slots, unsigned n)
+{
+    int best = -1;
+    for (unsigned i = 0; i < n; i++) {
+        if (slots[i].valid && (best < 0 || slots[i].save_seq > slots[best].save_seq)) {
+            best = (int)i;
+        }
+    }
+    return best;
+}
+
+unsigned log_slots_next(const log_slot_info_t *slots, unsigned n)
+{
+    unsigned oldest = 0;
+    for (unsigned i = 0; i < n; i++) {
+        if (!slots[i].valid) {
+            return i;
+        }
+        if (slots[i].save_seq < slots[oldest].save_seq) {
+            oldest = i;
+        }
+    }
+    return oldest;
+}
+
+uint32_t log_slots_next_seq(const log_slot_info_t *slots, unsigned n)
+{
+    const int newest = log_slots_newest(slots, n);
+    return newest < 0 ? 1u : slots[newest].save_seq + 1u;
+}
+
+int log_slots_find(const log_slot_info_t *slots, unsigned n, uint32_t save_seq)
+{
+    for (unsigned i = 0; i < n; i++) {
+        if (slots[i].valid && slots[i].save_seq == save_seq) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+unsigned log_slots_order(const log_slot_info_t *slots, unsigned n, unsigned *order)
+{
+    unsigned count = 0;
+    for (unsigned i = 0; i < n; i++) {
+        if (!slots[i].valid) {
+            continue;
+        }
+        // Insertion sort, newest first: n is a handful.
+        unsigned j = count++;
+        while (j > 0 && slots[order[j - 1]].save_seq < slots[i].save_seq) {
+            order[j] = order[j - 1];
+            j--;
+        }
+        order[j] = i;
+    }
+    return count;
+}

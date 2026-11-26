@@ -120,4 +120,28 @@ size_t log_header_encode(log_header_t *h, uint8_t *buf, size_t len);
 // row_count fits max_rows. The rows' CRC is the caller's to check.
 bool log_header_decode(const uint8_t *buf, size_t len, uint32_t max_rows, log_header_t *out);
 
+// ---- Slots (#1277): the flash keeps several runs, one per slot, each a
+// header sector and its rows. What a slot holds is read from its header; the
+// newest run is the one with the highest save_seq.
+typedef struct {
+    bool valid;         // the header decodes (the rows' CRC is checked on read)
+    uint32_t save_seq;  // meaningful when valid
+} log_slot_info_t;
+
+// The slot of the newest run, or -1 when no slot holds one.
+int log_slots_newest(const log_slot_info_t *slots, unsigned n);
+
+// The slot the next save goes to: the first that holds no run, otherwise the
+// one with the oldest run, so each save overwrites the oldest.
+unsigned log_slots_next(const log_slot_info_t *slots, unsigned n);
+
+// The save_seq the next save takes: one above the newest, or 1.
+uint32_t log_slots_next_seq(const log_slot_info_t *slots, unsigned n);
+
+// The slot holding run `save_seq`, or -1.
+int log_slots_find(const log_slot_info_t *slots, unsigned n, uint32_t save_seq);
+
+// Fill `order` with the valid slots, newest first. Returns how many.
+unsigned log_slots_order(const log_slot_info_t *slots, unsigned n, unsigned *order);
+
 #endif  // BALANCEBOT_LOG_RECORD_H

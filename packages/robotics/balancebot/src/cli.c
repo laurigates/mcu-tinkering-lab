@@ -791,31 +791,63 @@ static const char *log_phase_name(uint8_t p)
 }
 
 // Seconds from the first to the last row of a log in flash.
-static float log_span_s(const log_header_t *h)
+static float log_span_s(unsigned slot, const log_header_t *h)
 {
-    const log_row_t *rows = log_store_rows();
+    const log_row_t *rows = log_store_rows(slot);
     return (float)(rows[h->row_count - 1u].t_ms - rows[0].t_ms) / 1000.0f;
 }
 
-// One line on the log in flash. check_rows reads every row for the CRC.
-static void print_log_flash(bool check_rows)
+// One line on the run in `slot`, after `prefix`. check_rows reads every row
+// for the CRC.
+static void print_log_slot(const char *prefix, unsigned slot, bool check_rows)
 {
     log_header_t h;
-    if (!log_store_header(&h)) {
-        printf("log flash: none\n");
+    if (!log_store_header(slot, &h)) {
+        printf("%snone\n", prefix);
         return;
     }
-    if (check_rows && !log_store_rows_ok(&h)) {
-        printf("log flash: log %lu fails its rows CRC\n", (unsigned long)h.save_seq);
+    if (check_rows && !log_store_rows_ok(slot, &h)) {
+        printf("%slog %lu fails its rows CRC\n", prefix, (unsigned long)h.save_seq);
         return;
     }
-    printf("log flash: log %lu, %lu rows (%.1f s at %lu Hz), ended %s", (unsigned long)h.save_seq,
-           (unsigned long)h.row_count, (double)log_span_s(&h), (unsigned long)h.rate_hz,
+    printf("%slog %lu, %lu rows (%.1f s at %lu Hz), ended %s", prefix, (unsigned long)h.save_seq,
+           (unsigned long)h.row_count, (double)log_span_s(slot, &h), (unsigned long)h.rate_hz,
            state_name(h.end_state));
     if (h.overwritten != 0) {
         printf(", first %lu rows overwritten", (unsigned long)h.overwritten);
     }
     printf("\n");
+}
+
+// The newest run in flash, and how many are kept.
+static void print_log_flash(bool check_rows)
+{
+    log_slot_info_t slots[LOG_SLOTS];
+    log_store_scan(slots);
+    unsigned order[LOG_SLOTS];
+    const unsigned n = log_slots_order(slots, LOG_SLOTS, order);
+    if (n == 0) {
+        printf("log flash: none\n");
+        return;
+    }
+    print_log_slot("log flash: newest ", order[0], check_rows);
+    printf("log flash: %u of %u slots hold a run (`log list`)\n", n, (unsigned)LOG_SLOTS);
+}
+
+// Every run in flash, newest first, with its rows checked.
+static void cmd_log_list(void)
+{
+    log_slot_info_t slots[LOG_SLOTS];
+    log_store_scan(slots);
+    unsigned order[LOG_SLOTS];
+    const unsigned n = log_slots_order(slots, LOG_SLOTS, order);
+    if (n == 0) {
+        printf("log flash: none\n");
+        return;
+    }
+    for (unsigned i = 0; i < n; i++) {
+        print_log_slot("  ", order[i], true);
+    }
 }
 
 static void print_log_status(bool check_rows)
@@ -845,7 +877,9 @@ static void print_log_status(bool check_rows)
     print_log_flash(check_rows);
 }
 
-static void cmd_log_dump(void)
+// `log dump` prints the newest run, `log dump <n>` run n (as `log list`
+// numbers them).
+static void cmd_log_dump(const char *seq_str)
 {
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
@@ -854,20 +888,40 @@ static void cmd_log_dump(void)
         printf("ERR: disarm first\n");
         return;
     }
+    log_slot_info_t slots[LOG_SLOTS];
+    log_store_scan(slots);
+    int slot;
+    if (seq_str == NULL) {
+        slot = log_slots_newest(slots, LOG_SLOTS);
+        if (slot < 0) {
+            printf("ERR: no log in flash\n");
+            return;
+        }
+    } else {
+        char *end = NULL;
+        const unsigned long seq = strtoul(seq_str, &end, 10);
+        slot =
+            (end != seq_str && *end == '\0') ? log_slots_find(slots, LOG_SLOTS, (uint32_t)seq) : -1;
+        if (slot < 0) {
+            printf("ERR: no log %s in flash (`log list`)\n", seq_str);
+            return;
+        }
+    }
     log_header_t h;
-    if (!log_store_header(&h)) {
+    if (!log_store_header((unsigned)slot, &h)) {
         printf("ERR: no log in flash\n");
         return;
     }
-    if (!log_store_rows_ok(&h)) {
+    if (!log_store_rows_ok((unsigned)slot, &h)) {
         printf("ERR: log %lu fails its rows CRC; nothing dumped\n", (unsigned long)h.save_seq);
         return;
     }
     printf("# log %lu: %lu rows at %lu Hz, %.1f s, ended %s, %lu earlier rows overwritten\n",
            (unsigned long)h.save_seq, (unsigned long)h.row_count, (unsigned long)h.rate_hz,
-           (double)log_span_s(&h), state_name(h.end_state), (unsigned long)h.overwritten);
+           (double)log_span_s((unsigned)slot, &h), state_name(h.end_state),
+           (unsigned long)h.overwritten);
     printf("%s\n", LOG_CSV_HEADER);
-    const log_row_t *rows = log_store_rows();
+    const log_row_t *rows = log_store_rows((unsigned)slot);
     char buf[LOG_CSV_LINE_MAX];
     for (uint32_t i = 0; i < h.row_count; i++) {
         if (log_row_format_csv(&rows[i], buf, sizeof buf) != 0) {
@@ -877,20 +931,22 @@ static void cmd_log_dump(void)
     printf("log end\n");
 }
 
-static void cmd_log(const char *arg, const char *hz_str)
+static void cmd_log(const char *arg, const char *arg2)
 {
     if (arg == NULL) {
         print_log_status(true);
     } else if (strcmp(arg, "on") == 0) {
-        log_set_enabled(true, hz_str != NULL ? atoi(hz_str) : 0);
+        log_set_enabled(true, arg2 != NULL ? atoi(arg2) : 0);
         print_log_status(false);
     } else if (strcmp(arg, "off") == 0) {
         log_set_enabled(false, 0);
         printf("OK log off\n");
     } else if (strcmp(arg, "dump") == 0) {
-        cmd_log_dump();
+        cmd_log_dump(arg2);
+    } else if (strcmp(arg, "list") == 0) {
+        cmd_log_list();
     } else {
-        printf("usage: log [on [hz] | off | dump]\n");
+        printf("usage: log [on [hz] | off | list | dump [n]]\n");
     }
 }
 
@@ -1022,7 +1078,9 @@ static void cmd_help(void)
            LOG_DEFAULT_HZ);
     printf("                       and %.0f s after it are saved to flash when it ends\n",
            (double)LOG_TAIL_S);
-    printf("  log dump             print the saved run as CSV (disarmed)\n");
+    printf("                       (the newest %u runs are kept)\n", (unsigned)LOG_SLOTS);
+    printf("  log list             the runs in flash, newest first\n");
+    printf("  log dump [n]         print the newest run, or run n, as CSV (disarmed)\n");
     printf("  arm | disarm         start/stop balancing\n");
     printf("  drive <m/s> [turn m/s] [s]  drive while balancing; turn > 0 = clockwise,\n");
     printf("                       left wheel +turn, right -turn (drive 0 0.1 spins);\n");

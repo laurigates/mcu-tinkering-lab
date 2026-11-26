@@ -277,6 +277,46 @@ static void test_header_rejects_bad_records(void)
     assert(!log_header_decode(buf, LOG_HEADER_SIZE - 1, 1000, &out));
 }
 
+// #1277: several runs in a ring of slots, newest by save_seq.
+static void test_slots_fill_then_overwrite_oldest(void)
+{
+    log_slot_info_t sl[4] = {{0}};
+    assert(log_slots_newest(sl, 4) == -1);
+    assert(log_slots_next_seq(sl, 4) == 1u);
+    assert(log_slots_next(sl, 4) == 0u);
+
+    // Six saves into four slots: 1..4 fill them, 5 and 6 replace 1 and 2.
+    for (uint32_t seq = 1; seq <= 6; seq++) {
+        assert(log_slots_next_seq(sl, 4) == seq);
+        const unsigned k = log_slots_next(sl, 4);
+        sl[k].valid = true;
+        sl[k].save_seq = seq;
+    }
+    assert(sl[0].save_seq == 5u && sl[1].save_seq == 6u);
+    assert(sl[2].save_seq == 3u && sl[3].save_seq == 4u);
+    assert(log_slots_newest(sl, 4) == 1);
+    assert(log_slots_next(sl, 4) == 2u);  // the oldest, run 3
+    assert(log_slots_find(sl, 4, 4u) == 3);
+    assert(log_slots_find(sl, 4, 1u) == -1);  // overwritten
+
+    unsigned order[4];
+    assert(log_slots_order(sl, 4, order) == 4u);
+    assert(order[0] == 1u && order[1] == 0u && order[2] == 3u && order[3] == 2u);
+}
+
+// A slot whose save was interrupted reads as empty and is the next one used,
+// before any run is overwritten.
+static void test_slots_reuse_an_empty_slot_first(void)
+{
+    log_slot_info_t sl[3] = {{true, 7u}, {false, 0u}, {true, 8u}};
+    assert(log_slots_next(sl, 3) == 1u);
+    assert(log_slots_newest(sl, 3) == 2);
+    assert(log_slots_next_seq(sl, 3) == 9u);
+    unsigned order[3];
+    assert(log_slots_order(sl, 3, order) == 2u);
+    assert(order[0] == 2u && order[1] == 0u);
+}
+
 int main(void)
 {
     test_csv_matches_stream_format();
@@ -289,6 +329,8 @@ int main(void)
     test_session_long_run_keeps_newest();
     test_header_round_trip();
     test_header_rejects_bad_records();
+    test_slots_fill_then_overwrite_oldest();
+    test_slots_reuse_an_empty_slot_first();
     printf("test_log_record: OK\n");
     return 0;
 }

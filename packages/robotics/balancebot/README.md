@@ -83,7 +83,8 @@ help                 # command list
 stat                 # firmware, state, gains, maxrate, model, calibration, angle, battery, pack, loop time
 stream on 50         # CSV telemetry at 50 Hz (plot with any serial plotter)
 log                  # run log: on/off, rate, last save, the run stored in flash (see "Untethered run log")
-log dump             # print the stored run as CSV (disarmed only)
+log list             # the runs kept in flash (newest six), newest first
+log dump             # print the newest run as CSV (disarmed only); `log dump <n>` prints run n
 set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual
 ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
@@ -330,8 +331,8 @@ the same columns as `stream` into RAM, at 100 Hz by default (`log on 200` for
 200 Hz, `log off` to stop). When the run ends it copies it to flash, which takes
 about 0.06 s per 1.3 s of run. The CLI and LED pause meanwhile, and the auto-arm
 gesture is held off until it is done. RAM holds the last 82 s at 100 Hz (41 s at
-200 Hz). A longer run keeps its end, including the fall. Flash keeps only the
-newest run.
+200 Hz). A longer run keeps its end, including the fall. Flash keeps the newest six
+runs; `log list` shows them with their run numbers.
 
 1. With USB and the pack connected (USB first, #1230), check `log` says `on`,
    then unplug USB.
@@ -340,7 +341,8 @@ newest run.
 4. Plug in USB (the XIAO runs from USB alone) and read the run:
 
    ```bash
-   just balancebot::log-dump                     # -> tmp/balancebot/log-<time>.csv
+   just balancebot::log-dump                     # newest run -> tmp/balancebot/log-<time>.csv
+   just balancebot::log-dump n=12                # run 12 from `log list`
    just balancebot::analyze tmp/balancebot/log-<time>.csv
    ```
 
