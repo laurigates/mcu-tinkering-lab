@@ -287,7 +287,7 @@ def build(data: dict[str, Any]) -> Panel | None:
     overrides = {tuple(e["line"]): e for e in s.get("lines", [])}
     errors: list[str] = []
     if not raws:
-        errors.append("[panel] mousebites needs [silk] cut_lines to cut along")
+        errors.append("mousebites needs [silk] cut_lines to cut along")
     for raw in raws:
         if abs(raw[0] - raw[2]) > EPS and abs(raw[1] - raw[3]) > EPS:
             errors.append(
