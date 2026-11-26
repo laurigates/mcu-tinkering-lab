@@ -21,10 +21,16 @@ difference. For one that spans components it decides what gets released.
   `git show --format= --name-only <commit>` against the component's path and
   its `exclude-paths`.
 
+## Merge by the label
+
+Merge the way the `merge-method` check's label says: `merge:squash` squashes,
+`merge:rebase` rebases. Do not pick a method by hand (decided on #1202,
+2026-11-26).
+
 A rebase merge can still credit the PR's whole file list to its last commit
-(#1202). For a PR that spans packages, choose: squash when one type fits every
-package, or rebase with a last commit of a type that releases nothing; the
-skill has the details.
+(#1202). So on a `merge:rebase` PR whose commits touch more than one package,
+make the last commit one whose type releases nothing (`test`, `ci`, `build`,
+`style`, `refactor`); the skill has the details.
 
 The merge-method rules (what turns a PR to squash), the force-push procedure
 and the check for a red check inherited from `main` are in the `pr-landing`

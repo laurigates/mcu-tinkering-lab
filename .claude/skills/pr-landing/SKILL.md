@@ -53,17 +53,16 @@ credit a rebase-merged PR's whole file list to its top commit when no other
 commit of the PR falls in the same page of 10. Whether it happens depends on
 the paging, so two runs on the same base gave the release PR 29 and 35 files.
 
+The merge method follows the `merge-method` label (`.claude/rules/pr-landing.md`).
 For a PR whose commits touch more than one release-please package:
 
-- **Squash** when one type for every package is right: the squash commit's
-  files are the PR's files, so the attribution is exact. It costs what the
-  #1149 example above shows.
-- **Rebase** when the packages need different types, and make the last commit
-  one whose type releases nothing (`test`, `ci`, `build`, `style`,
-  `refactor`; only `feat`, `fix`, `perf`, `docs` and `chore` are visible in
-  `release-please-config.json`). Crediting it with the PR's files then adds
-  no release. This follows from the reported cause and has not been seen on a
-  release PR.
+- **`merge:squash`**: the squash commit's files are the PR's files, so the
+  attribution is exact. It costs what the #1149 example above shows.
+- **`merge:rebase`**: make the last commit one whose type releases nothing
+  (`test`, `ci`, `build`, `style`, `refactor`; only `feat`, `fix`, `perf`,
+  `docs` and `chore` are visible in `release-please-config.json`). Crediting
+  it with the PR's files then adds no release. This follows from the reported
+  cause and has not been seen on a release PR.
 - **After the merge**, read the release PR's component list for a package
   none of the PR's releasing commits touched.
 
