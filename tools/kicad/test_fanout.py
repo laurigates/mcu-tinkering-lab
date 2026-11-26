@@ -86,6 +86,38 @@ class CandidateTests(unittest.TestCase):
         ring = fanout.DIRECTIONS
         self.assertEqual(sorted(c[:ring]), sorted(plain[:ring]))
 
+    def test_every_candidate_clears_the_pad_by_gap(self):
+        """#825: on a diagonal ray, gap + radius past the edge along the ray
+        left less than `gap` between the via ring and the pad's corner (C3:2
+        on #823 came 0.01 mm over)."""
+        for half_w, half_h in ((1.0, 0.5), (0.6, 0.725), (0.125, 0.41), (1.0, 1.0)):
+            via_r, gap = 0.5, 0.2
+            c = fanout.candidates(0.0, 0.0, half_w, half_h, via_r, gap, 2.0, 0.25)
+            ring = c[: fanout.DIRECTIONS]
+            with self.subTest(pad=(half_w, half_h)):
+                for x, y in c:
+                    self.assertGreaterEqual(
+                        fanout.box_distance(half_w, half_h, x, y), gap + via_r - 1e-9
+                    )
+                for x, y in ring:  # and the first ring sits at exactly that
+                    self.assertAlmostEqual(
+                        fanout.box_distance(half_w, half_h, x, y), gap + via_r
+                    )
+
+    def test_diagonal_ray_beside_a_corner(self):
+        # ray 1 (22.5 degrees) leaves a 1.0 x 0.5 box through its right edge
+        # near the corner; along the ray, 0.5 past it is 0.46 mm from the edge
+        half_w, half_h = 1.0, 0.5
+        a = 2 * math.pi / fanout.DIRECTIONS
+        dx, dy = math.cos(a), math.sin(a)
+        edge = fanout.edge_distance(half_w, half_h, dx, dy)
+        along = fanout.box_distance(
+            half_w, half_h, dx * (edge + 0.5), dy * (edge + 0.5)
+        )
+        self.assertLess(along, 0.5 - 0.01)
+        x, y = fanout.candidates(0.0, 0.0, half_w, half_h, 0.3, 0.2, 2.0, 0.25)[1]
+        self.assertAlmostEqual(fanout.box_distance(half_w, half_h, x, y), 0.5)
+
     def test_deterministic(self):
         args = (3.0, 4.0, 0.6, 0.7, 0.3, 0.2, 1.5, 0.25)
         self.assertEqual(fanout.candidates(*args), fanout.candidates(*args))
