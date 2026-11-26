@@ -407,3 +407,29 @@ lcsc_footprint = "F1812"
 rotation = 0
 max_err_mm = 0.37
 checked = "2026-11-25"
+
+# LCSC's footprint marks pad 1 as the cathode: a "-" beside pad 1 (x 3976.1)
+# and a "+" beside pad 2 on its marking layer, and the silkscreen's chamfered
+# corners at the pad 1 end, as KiCad's LED pad 1 = K (checked 2026-11-26).
+[C84256] # NCD0805R1 (LCSC's footprint title: FC-2012HRK-620D)
+footprint = "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
+lcsc_footprint = "LED0805-RD"
+rotation = 0
+max_err_mm = 0.08
+checked = "2026-11-26"
+
+# The silkscreen "+" sits beside pad 1 (x 3989.5), the "-" beside pad 2, as
+# KiCad's electrolytic pad 1 = + (checked 2026-11-26).
+[C128532] # EEEFK1C101P
+footprint = "Capacitor_SMD:CP_Elec_6.3x5.8"
+lcsc_footprint = "CAP-SMD_BD6.3-L6.6-W6.6-FD"
+rotation = 0
+max_err_mm = 0.03
+checked = "2026-11-26"
+
+[C4310] # 0805W8F1501T5E
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-26"

@@ -1,0 +1,23 @@
+# Aluminium electrolytic, 6.3 x 5.8 mm SMD can. Value and LCSC number per instance.
+# For damping rather than bulk: the robocar charger's BAT branch takes a
+# Panasonic EEE-FK1C101P here (100 uF 16 V, 0.36 ohm impedance at 100 kHz, FK
+# series table, LCSC C128532), whose ESR damps the ring of the pack lead
+# against the branch's ceramics at hot-plug (#1280 pre-fab review).
+[part]
+name = "Electrolytic capacitor, 6.3 x 5.8 mm SMD"
+source = "KiCad 10.0.6 library"
+symbol = "Device:C_Polarized"
+footprint = "Capacitor_SMD:CP_Elec_6.3x5.8"
+
+[stock]
+category = "capacitor"
+package = "6.3x5.8"
+needs = ["voltage"]
+
+[pins]
+"+" = 1
+"-" = 2
+
+[perfboard]
+footprint = "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm"
+height = "tall"

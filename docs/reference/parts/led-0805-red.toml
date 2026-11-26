@@ -1,0 +1,17 @@
+# Red LED, 0805: the robocar carrier's charge-status indicator on the BQ25887's
+# STAT pin (#1280). Foshan NationStar NCD0805R1 datasheet (LCSC C84256): VF
+# 1.5-2.6 V (2.0 V typical), IF 25 mA maximum, 615-630 nm. JLCPCB Basic part.
+[part]
+name = "Red LED, 0805"
+source = "KiCad 10.0.6 library"
+symbol = "Device:LED"
+footprint = "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
+value = "red"
+lcsc = "C84256"
+
+[stock]
+mpn = "NCD0805R1"
+
+[pins]
+K = 1
+A = 2

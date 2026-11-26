@@ -55,7 +55,7 @@ class CommittedSubtreeTests(unittest.TestCase):
         self.assertEqual(have.symbols, want.symbols)
         self.assertEqual(have.footprints, want.footprints)
         self.assertIn("power:PWR_FLAG", have.symbols)
-        self.assertEqual((len(have.symbols), len(have.footprints)), (41, 46))
+        self.assertEqual((len(have.symbols), len(have.footprints)), (42, 48))
 
     def test_licence_and_readme(self):
         self.assertEqual(vendor.sha256(STOCK / "LICENSE.md"), UPSTREAM_LICENSE_SHA256)
@@ -87,7 +87,7 @@ class CommittedSubtreeTests(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(vendor.main(["--check"]), 0)
-        self.assertIn("41 symbols, 46 footprints, 61 files pinned", out.getvalue())
+        self.assertIn("42 symbols, 48 footprints, 63 files pinned", out.getvalue())
         self.assertIn(
             "seeed-xiao: 6 files pinned at OSHW-XIAO-Series cc7f3bb", out.getvalue()
         )
@@ -237,10 +237,10 @@ class MutationTests(unittest.TestCase):
 
     def test_referenced_but_not_vendored(self):
         want = vendor.referenced()
-        want = vendor.Referenced(want.symbols | {"Device:LED"}, want.footprints)
+        want = vendor.Referenced(want.symbols | {"Device:Crystal"}, want.footprints)
         self.assertEqual(
             vendor.check(self.root, want),
-            ["symbol Device:LED: referenced but not vendored"],
+            ["symbol Device:Crystal: referenced but not vendored"],
         )
 
     def test_perfboard_swap_footprint_is_referenced(self):
