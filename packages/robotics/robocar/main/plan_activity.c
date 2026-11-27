@@ -143,6 +143,11 @@ static void verdict_set(bool woken, bool moving, bool view, bool audio, bool ran
     s_verdict[n] = '\0';
 }
 
+bool plan_activity_view_changed(void)
+{
+    return strchr(s_verdict, 'V') != NULL;
+}
+
 bool plan_activity_should_call(const plan_evidence_t *ev, uint32_t now_ms)
 {
     if (!ev) {

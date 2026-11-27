@@ -25,6 +25,7 @@ speed constants are estimates until timed on the bench.
 - `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
 - `sound(name)` — play a prebuilt clip (`horn`, `aoogah`, `bell`, `boing`), offered only when `speak` is; the parser puts it at the front of the line as a `[name]` tag (see [voice.md](voice.md#sound-clips))
 - `note(kind, text)` — a note to the developers, sent to GlitchTip and never spoken, offered only after a trigger (see [Planner notes](#planner-notes))
+- `log_discovery(text)` and `quest_done(achieved, outcome)` — write to the active quest, offered only while one is active and only on evidence (see [Quest log](#quest-log))
 
 Each request carries the frame and, beside it, what the front and rear rangefinders measured and whether the obstacle reflex is holding (`planner_range.c`). The model is told to judge distance from those numbers rather than from the image: the camera sits low, so anything near fills the frame, and without them the planner took obstacles for closer than they were. A sensor that has stopped answering is stated as unavailable, never as a reading, because the executor then holds its last good reading.
 
@@ -217,9 +218,10 @@ just robocar::test   # + test_plan_activity, test_plan_budget
 ## Quest log
 
 Teuvo's quest log ([ADR-039](../../../../../docs/decisions/ADR-039-teuvo-quest-log.md))
-is kept on the robot. Step 1 is the log itself: no model reads or writes it
-yet, and quests are opened and noted by hand with the `quest` console command
-([console-and-mqtt.md](console-and-mqtt.md)).
+is kept on the robot. Quests are still opened and made active by hand with the
+`quest` console command ([console-and-mqtt.md](console-and-mqtt.md)); the
+curator that chooses them is step 3. The planner pursues the active one (step 2,
+below).
 
 - **Records and caps** live in `quest_log_core.c`, pure C with an injected
   clock: at most 8 quests open, 24 kept, 12 notes per quest and 96 in total;
@@ -242,6 +244,41 @@ yet, and quests are opened and noted by hand with the `quest` console command
 `test_quest_log_core.c` holds the caps, the pruning, the near-repeat check and
 the parse of a log cut at every byte offset.
 
+### The planner pursues the active quest
+
+`quest_prompt.c` builds one clause per request while a quest is active: its
+kind, title and why, a line on how to pursue it, and its two newest notes,
+dropped whole (oldest first) to stay within `QUEST_CLAUSE_MAX` (1024 bytes,
+counted in `GEMINI_SYSTEM_PROMPT_MAX` and in the planner stack). An `ask`
+quest gets no clause, since the planner never hears a person. Two tools are
+declared only when the firmware will take them, and the clause names each and
+says why it is there:
+
+| Tool | Offered when |
+|---|---|
+| `log_discovery(text)` | the view changed this cycle (`why:` holds `V`, `plan_activity_view_changed()`), or the previous request's goal was `track` |
+| `quest_done(achieved, outcome)` | discovery is offered, or the quest already has a note, or `QUEST_DONE_AFTER_REQUESTS` (24) requests have carried it |
+
+The firmware stores a discovery as a note with the frame's dwell pose and the
+wall time, so a near-repeat of one of the quest's notes is refused there.
+`achieved=true` closes the quest as done, `false` as dropped. The reply is
+applied only if the quest it named is still the active one, because the
+console can change the log during a request, and a quest call the request
+did not offer is dropped. The parser never takes either call as the motion
+goal. The request count is kept in RAM, per active quest, and restarts on a
+reboot; step 3 adds the per-quest ration (`QUEST_TOTAL_REQUESTS`).
+
+The log reads, for example:
+
+```
+Quest #3 in the prompt (request 4), offering log_discovery quest_done
+Quest #3 noted (L): "a red cup on the shelf beside the lamp"
+Quest #3 closed as done: "found the red cup by the lamp"
+```
+
+`test_quest_prompt.c` holds the offer rules, the clause at every cap, and the
+reply applied after the console changed or closed the quest.
+
 ## Don't
 
 - Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
@@ -253,5 +290,6 @@ the parse of a log cut at every byte offset.
 - Don't offer the `note` tool on every request, or word the clause to ask for restraint instead. The model cannot know what happened since its last note; `note_gate` decides on-device and the clause names the trigger (stateless-model-gating.md). Keep the trigger logic in `planner_cycle_core.c`, where the twin runs it
 - Don't give the note gate's per-boot count an auto-reset, for the same reason as the spend fuse
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
+- Don't offer `log_discovery` on every request while a quest is active. A frame that has not changed would be noted again each cycle; the near-repeat check catches the same words, not the same view in other words. The offer waits for view evidence or a `track` (ADR-039 §3)
 - Don't write the quest log in place or append to it. `quest_store.c` writes `log.new` and renames it over `log.tsv`, so a power loss leaves either file whole, and `quest_log_parse()` still skips a torn last line rather than loading a shortened text (`a_log_cut_at_any_byte_loads_only_whole_lines`)
 - Don't resurrect `claude_*` or `ollama_*` source files. If a second backend becomes necessary, design an abstraction; old code paths are not a foundation

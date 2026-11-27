@@ -64,6 +64,14 @@ static const char *TAG GP_MAYBE_UNUSED = "gemini_parse";
  *  land between the planner's parse and the planner's read. */
 static gemini_usage_t s_last_usage;
 static gemini_note_t s_last_note;
+static quest_reply_t s_last_quest;
+
+void gemini_parse_last_quest(quest_reply_t *out)
+{
+    if (out) {
+        *out = s_last_quest;
+    }
+}
 
 void gemini_parse_last_note(gemini_note_t *out)
 {
@@ -104,6 +112,7 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
     s_last_usage = (gemini_usage_t){.prompt = -1, .output = -1, .total = -1, .present = false};
     s_last_note.kind = NOTE_KIND_NONE;
     s_last_note.text[0] = '\0';
+    memset(&s_last_quest, 0, sizeof(s_last_quest)); /* no link to quest_prompt.c */
 
     cJSON *root = cJSON_Parse(json_text);
     if (!root) {
@@ -181,6 +190,33 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
                 } else if (note_text_clean(s_last_note.text, sizeof(s_last_note.text),
                                            n_text->valuestring) > 0) {
                     s_last_note.kind = kind;
+                }
+            }
+            continue;
+        }
+
+        /* The quest tools are side channels too (ADR-039 §3). note_text_clean()
+         * gives the one-line, UTF-8-safe cut; quest_log_core cleans again on
+         * the way into the log. */
+        if (strcmp(fc_name->valuestring, "log_discovery") == 0) {
+            cJSON *d_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *d_text = d_args ? cJSON_GetObjectItem(d_args, "text") : NULL;
+            if (s_last_quest.discovery[0] == '\0' && cJSON_IsString(d_text)) {
+                (void)note_text_clean(s_last_quest.discovery, sizeof(s_last_quest.discovery),
+                                      d_text->valuestring);
+            }
+            continue;
+        }
+        if (strcmp(fc_name->valuestring, "quest_done") == 0) {
+            if (!s_last_quest.done) {
+                cJSON *q_args = cJSON_GetObjectItem(fc, "args");
+                cJSON *q_outcome = q_args ? cJSON_GetObjectItem(q_args, "outcome") : NULL;
+                cJSON *q_achieved = q_args ? cJSON_GetObjectItem(q_args, "achieved") : NULL;
+                s_last_quest.done = true;
+                s_last_quest.achieved = !cJSON_IsBool(q_achieved) || cJSON_IsTrue(q_achieved);
+                if (cJSON_IsString(q_outcome)) {
+                    (void)note_text_clean(s_last_quest.outcome, sizeof(s_last_quest.outcome),
+                                          q_outcome->valuestring);
                 }
             }
             continue;

@@ -105,10 +105,11 @@ static const char *TAG = "gemini_backend";
  *  generously: ~800 bytes of fixed instruction, the rangefinder clause (up to
  *  PLANNER_RANGE_CLAUSE_MAX), plus the persona's text_brief
  *  (~450) and tag_brief (~420 with the sound-effect tags), plus a variation directive (up to
- *  DIALOGUE_STYLE_MAX) and the recalled-lines clause (GEMINI_RECALL_LIST_MAX).
+ *  DIALOGUE_STYLE_MAX), the recalled-lines clause (GEMINI_RECALL_LIST_MAX) and the
+ *  active quest's clause (QUEST_CLAUSE_MAX, ADR-039 §3).
  *  PLANNER_TASK_STACK_SIZE is set with this frame in mind — grow them together.
  */
-#define GEMINI_SYSTEM_PROMPT_MAX (3072 + PLANNER_RANGE_CLAUSE_MAX)
+#define GEMINI_SYSTEM_PROMPT_MAX (3072 + PLANNER_RANGE_CLAUSE_MAX + QUEST_CLAUSE_MAX)
 
 /** Cap on the rendered "you already said these" list.
  *
@@ -196,7 +197,65 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
  * Box coordinates use Gemini's convention: [ymin, xmin, ymax, xmax]
  * integers normalised 0..1000.
  */
-static cJSON *build_tools(bool allow_speak, bool allow_note)
+/* ---- log_discovery / quest_done ----
+ * Declared only on a request whose quest offer allows them (quest_prompt.h,
+ * ADR-039 §3); the clause says why. The parser keeps both out of the motion
+ * goal, and quest_prompt_apply() drops a call the offer did not allow. */
+static void add_quest_tools(cJSON *tools_arr, const quest_offer_t *quest)
+{
+    if (quest == NULL || quest->quest_id == 0) {
+        return;
+    }
+    if (quest->offer_discovery) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "log_discovery");
+        cJSON_AddStringToObject(fn, "description",
+                                "Add one line to your quest log: what you see that bears on the "
+                                "active quest and what is near it. Call this IN ADDITION to a "
+                                "movement function.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+        cJSON *text = cJSON_CreateObject();
+        cJSON_AddStringToObject(text, "type", "STRING");
+        cJSON_AddStringToObject(text, "description",
+                                "At most 160 characters of plain English about what is in view. "
+                                "No markdown.");
+        cJSON_AddItemToObject(props, "text", text);
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
+        cJSON_AddItemToObject(params, "required", required);
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+    if (quest->offer_done) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "quest_done");
+        cJSON_AddStringToObject(fn, "description",
+                                "Close the active quest. Call this IN ADDITION to a movement "
+                                "function.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+        cJSON *achieved = cJSON_CreateObject();
+        cJSON_AddStringToObject(achieved, "type", "BOOLEAN");
+        cJSON_AddStringToObject(achieved, "description",
+                                "true when the quest is done; false when it cannot be done from "
+                                "here.");
+        cJSON_AddItemToObject(props, "achieved", achieved);
+        cJSON *outcome = cJSON_CreateObject();
+        cJSON_AddStringToObject(outcome, "type", "STRING");
+        cJSON_AddStringToObject(outcome, "description",
+                                "At most 120 characters: what you found, or why not.");
+        cJSON_AddItemToObject(props, "outcome", outcome);
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("achieved"));
+        cJSON_AddItemToArray(required, cJSON_CreateString("outcome"));
+        cJSON_AddItemToObject(params, "required", required);
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+}
+
+static cJSON *build_tools(bool allow_speak, bool allow_note, const quest_offer_t *quest)
 {
     cJSON *tools_arr = cJSON_CreateArray();
 
@@ -421,6 +480,7 @@ static cJSON *build_tools(bool allow_speak, bool allow_note)
         cJSON_AddItemToArray(tools_arr, fn);
     }
 
+    add_quest_tools(tools_arr, quest);
     return tools_arr;
 }
 
@@ -457,7 +517,8 @@ __attribute__((format(printf, 4, 5))) static size_t append_prompt(char *buf, siz
     return (pos + (size_t)n >= cap) ? (cap - 1u) : (pos + (size_t)n);
 }
 
-static char *build_request_json(const char *b64_image, note_trigger_t note_offer)
+static char *build_request_json(const char *b64_image, note_trigger_t note_offer,
+                                const quest_offer_t *quest)
 {
     /* Built per call rather than static: the spoken register follows the active
      * persona, which is switchable at runtime. The cadence is stated from
@@ -529,6 +590,12 @@ static char *build_request_json(const char *b64_image, note_trigger_t note_offer
         if (planner_range_clause(&range, range_clause, sizeof(range_clause)) > 0) {
             pos = append_prompt(system_prompt, sizeof(system_prompt), pos, "%s", range_clause);
         }
+    }
+
+    /* The quest clause (ADR-039 §3), bounded by QUEST_CLAUSE_MAX and counted in
+     * GEMINI_SYSTEM_PROMPT_MAX, so it never eats the closing reserve. */
+    if (quest != NULL && quest->quest_id != 0 && quest->clause[0] != '\0') {
+        pos = append_prompt(system_prompt, sizeof(system_prompt), pos, "%s", quest->clause);
     }
 
     /* The note clause goes BEFORE the speech half, so the recall list below is
@@ -649,7 +716,7 @@ static char *build_request_json(const char *b64_image, note_trigger_t note_offer
     /* tools — one tool object containing all five function declarations */
     cJSON *tools_arr = cJSON_AddArrayToObject(root, "tools");
     cJSON *tool_obj = cJSON_CreateObject();
-    cJSON *fn_decls = build_tools(may_speak, note_offer != NOTE_TRIGGER_NONE);
+    cJSON *fn_decls = build_tools(may_speak, note_offer != NOTE_TRIGGER_NONE, quest);
     cJSON_AddItemToObject(tool_obj, "functionDeclarations", fn_decls);
     cJSON_AddItemToArray(tools_arr, tool_obj);
 
@@ -705,7 +772,8 @@ esp_err_t gemini_backend_init(void)
 
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
                               uint32_t *latency_ms_out, char *out_speech, size_t speech_cap,
-                              note_trigger_t note_offer, gemini_note_t *out_note)
+                              note_trigger_t note_offer, gemini_note_t *out_note,
+                              const quest_offer_t *quest, quest_reply_t *out_quest)
 {
     if (!jpeg || jpeg_len == 0 || !out_goal) {
         return ESP_ERR_INVALID_ARG;
@@ -718,6 +786,9 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     if (out_note) {
         out_note->kind = NOTE_KIND_NONE;
         out_note->text[0] = '\0';
+    }
+    if (out_quest) {
+        quest_reply_clear(out_quest);
     }
     if (!s_response_buf) {
         ESP_LOGE(TAG, "gemini_backend_plan() called before gemini_backend_init()");
@@ -767,7 +838,7 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     }
 
     /* ---- Build request body ---- */
-    char *request_body = build_request_json(b64, note_offer);
+    char *request_body = build_request_json(b64, note_offer, quest);
     free(b64);
     b64 = NULL;
 
@@ -836,6 +907,11 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
             out_note->kind = NOTE_KIND_NONE;
             out_note->text[0] = '\0';
         }
+    }
+
+    /* Handed back as parsed: quest_prompt_apply() checks it against the offer. */
+    if (out_quest) {
+        gemini_parse_last_quest(out_quest);
     }
 
     if (err != ESP_OK) {

@@ -67,11 +67,17 @@ esp_err_t gemini_backend_init(void);
  *                      the `note` tool and its prompt clause out.
  * @param out_note      Receives an offered note the reply carried, or
  *                      NOTE_KIND_NONE; cleared on every path. May be NULL.
+ * @param quest         The quest offer for this request (quest_prompt_build());
+ *                      NULL or quest_id 0 leaves the quest clause and tools out.
+ * @param out_quest     Receives the reply's `log_discovery`/`quest_done` calls
+ *                      as parsed, unfiltered (quest_prompt_apply() checks them
+ *                      against the offer); cleared on every path. May be NULL.
  * @return ESP_OK on success, ESP_FAIL on recoverable error.
  */
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
                               uint32_t *latency_ms_out, char *out_speech, size_t speech_cap,
-                              note_trigger_t note_offer, gemini_note_t *out_note);
+                              note_trigger_t note_offer, gemini_note_t *out_note,
+                              const quest_offer_t *quest, quest_reply_t *out_quest);
 
 /**
  * @brief Phrase on-device status facts into one short spoken line via Gemini.

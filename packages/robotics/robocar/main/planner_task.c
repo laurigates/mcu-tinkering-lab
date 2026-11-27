@@ -12,6 +12,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "ambient_audio.h"
 #include "camera.h"
@@ -27,6 +28,8 @@
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_cycle_core.h"
+#include "quest_prompt.h"
+#include "quest_store.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
 #include "servo_controller.h"
@@ -34,6 +37,7 @@
 #include "speech_queue.h"
 #include "voice_persona.h"
 #include "voice_turn.h"
+#include "wall_clock.h"
 
 static const char *TAG = "planner";
 
@@ -47,8 +51,9 @@ static const char *TAG = "planner";
  * memory of what it had said. Grow this with those buffers, not after a stack
  * overflow reports it. 11.5 KB since the rangefinder clause: the prompt buffer
  * grew by PLANNER_RANGE_CLAUSE_MAX and the frame gained the clause's own
- * buffer and a telemetry snapshot, about 1 KB. */
-#define PLANNER_TASK_STACK_SIZE 11776U
+ * buffer and a telemetry snapshot, about 1 KB. 12.5 KB since the quest clause
+ * (ADR-039 §3): the prompt buffer grew by QUEST_CLAUSE_MAX. */
+#define PLANNER_TASK_STACK_SIZE (11776U + QUEST_CLAUSE_MAX)
 #define PLANNER_TASK_PRIORITY 3U
 #define PLANNER_TASK_CORE 1
 
@@ -89,6 +94,80 @@ static const char *goal_kind_name(goal_kind_t kind)
  * ========================================================================= */
 
 static gemini_note_t s_note;
+
+/* =========================================================================
+ * The active quest (ADR-039 §3)
+ *
+ * File-scope for the same reason as the note: the offer holds a clause of up
+ * to QUEST_CLAUSE_MAX bytes. The planner task is the only user.
+ * ========================================================================= */
+
+static quest_offer_t s_quest_offer;
+static quest_reply_t s_quest_reply;
+static quest_ration_t s_quest_ration;
+/** The previous request's goal was `track`: evidence for `log_discovery`. */
+static bool s_tracked_last_request;
+
+/** Build this request's quest offer from the log. No log (store not ready)
+ *  means no quest clause and no quest tools. */
+static void quest_offer_prepare(void)
+{
+    memset(&s_quest_offer, 0, sizeof(s_quest_offer));
+    quest_log_t *log = quest_store_lock();
+    if (log == NULL) {
+        return;
+    }
+    const quest_prompt_inputs_t in = {
+        .view_changed = plan_activity_view_changed(),
+        .tracked_last_cycle = s_tracked_last_request,
+    };
+    quest_prompt_build(log, &in, &s_quest_ration, &s_quest_offer);
+    quest_store_unlock(false);
+    if (s_quest_offer.quest_id != 0) {
+        ESP_LOGI(TAG, "Quest #%u in the prompt (request %" PRIu32 "), offering%s%s%s",
+                 (unsigned)s_quest_offer.quest_id, s_quest_ration.requests,
+                 s_quest_offer.offer_discovery ? " log_discovery" : "",
+                 s_quest_offer.offer_done ? " quest_done" : "",
+                 (s_quest_offer.offer_discovery || s_quest_offer.offer_done) ? "" : " no tools");
+    }
+}
+
+/** Write the reply's quest calls into the log under what the offer allowed. */
+static void quest_reply_apply(char pose)
+{
+    const bool any = s_quest_reply.discovery[0] != '\0' || s_quest_reply.done;
+    if (!any) {
+        return;
+    }
+    quest_log_t *log = quest_store_lock();
+    if (log == NULL) {
+        return;
+    }
+    quest_apply_result_t r;
+    const bool changed =
+        quest_prompt_apply(log, &s_quest_offer, &s_quest_reply, pose, wall_clock_now(), &r);
+    quest_store_unlock(changed);
+
+    if (r.unoffered) {
+        ESP_LOGW(TAG, "Quest call in a reply that did not offer it — dropped");
+    }
+    if (r.stale) {
+        ESP_LOGI(TAG, "Quest #%u changed during the request — reply not applied",
+                 (unsigned)s_quest_offer.quest_id);
+    }
+    if (r.noted) {
+        ESP_LOGI(TAG, "Quest #%u noted (%c): \"%s\"", (unsigned)s_quest_offer.quest_id, pose,
+                 s_quest_reply.discovery);
+    } else if (r.note_err != QUEST_OK) {
+        ESP_LOGI(TAG, "Quest #%u discovery not stored (%s): \"%s\"",
+                 (unsigned)s_quest_offer.quest_id, quest_err_name(r.note_err),
+                 s_quest_reply.discovery);
+    }
+    if (r.closed) {
+        ESP_LOGI(TAG, "Quest #%u closed as %s: \"%s\"", (unsigned)s_quest_offer.quest_id,
+                 quest_state_name(r.closed_as), s_quest_reply.outcome);
+    }
+}
 
 /** The last EVENT_REPORT_NOTE_GOALS goals as short lines, oldest first once
  *  read through goal_history_collect(). */
@@ -386,6 +465,9 @@ static void planner_task(void *pvParameters)
                      (unsigned)NOTE_GATE_MAX_PER_BOOT);
         }
 
+        /* ---- 1e. The active quest's clause and tools (ADR-039 §3) ---- */
+        quest_offer_prepare();
+
         /* ---- 2. Call Gemini planner ---- */
         goal_t goal = {0};
         uint32_t latency_ms = 0;
@@ -395,8 +477,9 @@ static void planner_task(void *pvParameters)
         planner_speech_snapshot_t at_request = {0};
         at_request.speech_notes = speech_budget_notes();
         at_request.voice_turns = voice_turn_count();
-        esp_err_t ret = gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech,
-                                            sizeof(speech), note_offer, &s_note);
+        esp_err_t ret =
+            gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech),
+                                note_offer, &s_note, &s_quest_offer, &s_quest_reply);
 
         /* Notes the call whatever the outcome, then samples which gate opened
          * (or held) THIS cycle — see planner_cycle_after_request(). */
@@ -445,6 +528,10 @@ static void planner_task(void *pvParameters)
         if (note_offer != NOTE_TRIGGER_NONE && s_note.kind != NOTE_KIND_NONE) {
             report_note(note_offer, note_tele.reflex_trips);
         }
+        /* The discovery carries the dwell pose the frame was taken at. */
+        quest_reply_apply(scene_pose_letter(fp.pose));
+        s_tracked_last_request =
+            (result == PLANNER_RESULT_WRITE_GOAL) && (goal.kind == GOAL_KIND_TRACK);
         if (result == PLANNER_RESULT_WRITE_GOAL) {
             goal.head_pan_deg = head_at_capture.pan_angle;
             goal.head_tilt_deg = head_at_capture.tilt_angle;

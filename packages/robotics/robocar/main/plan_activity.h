@@ -257,6 +257,11 @@ unsigned plan_activity_range_score(void);
  */
 const char *plan_activity_verdict(void);
 
+/** @brief Whether the most recent plan_activity_should_call() saw the view
+ *         change (`V` in the verdict). The quest clause offers `log_discovery`
+ *         on this (ADR-039 §3). */
+bool plan_activity_view_changed(void);
+
 /** @brief Set the wake thresholds. Either may be 0 to disable that sub-gate. */
 void plan_activity_configure(uint8_t scene_threshold, uint8_t range_threshold_cm);
 
