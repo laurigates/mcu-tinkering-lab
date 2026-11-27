@@ -43,6 +43,18 @@ typedef enum {
 esp_err_t ota_manager_init(void);
 
 /**
+ * @brief Register the MQTT OTA check-now subscription.
+ *
+ * ota_manager_init() calls this once per boot. The network supervisor calls it
+ * again when the MQTT client is first created after that, so a client that
+ * could not be created by the first link-up does not lose the subscription
+ * for the rest of the boot (issue #1300). Safe to repeat.
+ *
+ * @return ESP_OK when registered, the mqtt_logger_subscribe() error otherwise
+ */
+esp_err_t ota_manager_subscribe_notify(void);
+
+/**
  * @brief Manually trigger an update check
  *
  * Wakes the OTA task immediately instead of waiting for the periodic

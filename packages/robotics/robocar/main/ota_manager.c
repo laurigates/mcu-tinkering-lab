@@ -126,6 +126,26 @@ static bool rolled_back_version(char *out, size_t out_len);
 static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len);
 #endif
 
+esp_err_t ota_manager_subscribe_notify(void)
+{
+#if MQTT_LOGGING_ENABLED
+    /* Subscribe to the OTA check-now nudge (mqtt_ota_notify_handler()). It
+     * used to be ignored when it failed, and logged "Subscribed" while the
+     * client did not exist yet (issue #1054). mqtt_logger_subscribe() refreshes
+     * an existing registration, so a repeat call is harmless (issue #1300). */
+    const esp_err_t sub_ret = mqtt_logger_subscribe(OTA_MQTT_NOTIFY_TOPIC, mqtt_ota_notify_handler);
+    if (sub_ret == ESP_OK) {
+        ESP_LOGI(TAG, "Subscribed to MQTT OTA topic: %s", OTA_MQTT_NOTIFY_TOPIC);
+    } else {
+        ESP_LOGE(TAG, "MQTT OTA topic %s not subscribed (%s) — check-now nudges ignored",
+                 OTA_MQTT_NOTIFY_TOPIC, esp_err_to_name(sub_ret));
+    }
+    return sub_ret;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
 esp_err_t ota_manager_init(void)
 {
     ESP_LOGI(TAG, "Initializing OTA manager");
@@ -143,20 +163,9 @@ esp_err_t ota_manager_init(void)
     ESP_LOGI(TAG, "OTA check task started (interval: %d min, manifest: %s)", OTA_CHECK_INTERVAL_MIN,
              OTA_MANIFEST_URL);
 
-#if MQTT_LOGGING_ENABLED
-    /* Subscribe to the OTA check-now nudge (mqtt_ota_notify_handler()). It
-     * used to be ignored when it failed, and logged "Subscribed" while the
-     * client did not exist yet (issue #1054). A failure loses only the nudge:
-     * the periodic check and the rollback timer below still run, so it is
-     * reported and initialisation carries on. */
-    const esp_err_t sub_ret = mqtt_logger_subscribe(OTA_MQTT_NOTIFY_TOPIC, mqtt_ota_notify_handler);
-    if (sub_ret == ESP_OK) {
-        ESP_LOGI(TAG, "Subscribed to MQTT OTA topic: %s", OTA_MQTT_NOTIFY_TOPIC);
-    } else {
-        ESP_LOGE(TAG, "MQTT OTA topic %s not subscribed (%s) — check-now nudges ignored",
-                 OTA_MQTT_NOTIFY_TOPIC, esp_err_to_name(sub_ret));
-    }
-#endif
+    /* A failure loses only the check-now nudge: the periodic check and the
+     * rollback timer below still run, so initialisation carries on. */
+    (void)ota_manager_subscribe_notify();
 
     // Clean up previous stability timer if re-initializing
     if (s_stability_timer) {

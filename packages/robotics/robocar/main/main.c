@@ -1326,6 +1326,13 @@ static esp_err_t init_hierarchical_ai(void)
 }
 
 #if MQTT_LOGGING_ENABLED
+static bool s_mqtt_created;
+#if OTA_ENABLED
+/* Set by the supervisor once ota_manager_init() has succeeded; until then
+ * that init does the OTA subscription itself (issue #1300). */
+static bool s_ota_initialised;
+#endif
+
 /**
  * @brief Create the MQTT client without connecting it (ADR-028 §2).
  *
@@ -1333,15 +1340,15 @@ static esp_err_t init_hierarchical_ai(void)
  * upgrade desk can register their subscriptions before the first link-up;
  * mqtt_logger_subscribe() refuses until the client exists (issue #1054). The
  * supervisor runs start_mqtt_service(), which retries a failed creation,
- * before ota_manager_init() subscribes (issue #1126). Written by app_main before
- * the supervisor task exists and by that task afterwards, never concurrently.
+ * before ota_manager_init() subscribes (issue #1126). s_mqtt_created is written
+ * by app_main before the supervisor task exists and by that task afterwards,
+ * never concurrently.
  *
  * @return true once the client exists.
  */
 static bool create_mqtt_client(void)
 {
-    static bool s_created;
-    if (s_created) {
+    if (s_mqtt_created) {
         return true;
     }
     const mqtt_logger_config_t mqtt_cfg = {
@@ -1367,7 +1374,7 @@ static bool create_mqtt_client(void)
                  esp_err_to_name(mqtt_ret));
         return false;
     }
-    s_created = true;
+    s_mqtt_created = true;
     /* Called after create_tasks(), so the queues the command handler
      * dispatches into already exist; no command arrives before the
      * supervisor connects the client anyway. */
@@ -1379,9 +1386,21 @@ static bool create_mqtt_client(void)
  *  retried here, as the first link-up used to do. */
 static void start_mqtt_service(void)
 {
-    if (create_mqtt_client()) {
-        mqtt_logger_resume();
+    const bool created_before = s_mqtt_created;
+    if (!create_mqtt_client()) {
+        return;
     }
+#if OTA_ENABLED
+    /* ota_manager_init() subscribes once per boot, on the first link-up. When
+     * the client could not be created by then, that subscription failed; the
+     * creation that finally succeeds registers it (issue #1300). Before init
+     * has run, init subscribes itself: a nudge taken earlier would be spent
+     * on a check that cannot start yet. */
+    if (!created_before && s_ota_initialised) {
+        (void)ota_manager_subscribe_notify();
+    }
+#endif
+    mqtt_logger_resume();
 }
 #endif
 
@@ -1462,6 +1481,9 @@ static void net_supervisor_task(void *arg)
                 ESP_LOGW(TAG, "ota_manager_init failed (%s) — updates disabled",
                          esp_err_to_name(ota_ret));
             }
+#if MQTT_LOGGING_ENABLED
+            s_ota_initialised = (ota_ret == ESP_OK);
+#endif
 #endif
         }
         if (act.stop_mqtt) {
