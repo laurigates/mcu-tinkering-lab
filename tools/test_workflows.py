@@ -971,6 +971,21 @@ CONCIERGE_RUN_GUARD = (
 )
 
 
+def runs_past_a_skipped_need(condition: str) -> bool:
+    """True for an `if:` that still runs the job when a dependency was skipped.
+
+    `always()` does, and so do `!cancelled()` and `success() || failure()`
+    (#1300): any of them runs an unguarded job after its guarded dependency
+    skipped for the concierge App.
+    """
+    text = re.sub(r"\s+", "", condition)
+    return (
+        "always()" in text
+        or "!cancelled()" in text
+        or ("success()" in text and "failure()" in text)
+    )
+
+
 class _Unknown:
     """A context value the test does not set: any value GitHub could give."""
 
@@ -1150,7 +1165,10 @@ class ConciergeGuardTest(unittest.TestCase):
             for job_id, job in jobs.items():
                 if job_id in guarded:
                     continue
-                self.assertNotIn("always()", str(job.get("if", "")), f"{name}:{job_id}")
+                self.assertFalse(
+                    runs_past_a_skipped_need(str(job.get("if", ""))),
+                    f"{name}:{job_id} runs after a skipped guarded job",
+                )
                 seen, todo = set(), set(needs_of(job))
                 while todo:
                     dep = todo.pop()
@@ -1161,6 +1179,25 @@ class ConciergeGuardTest(unittest.TestCase):
                     seen & guarded,
                     f"{name}:{job_id} lacks the concierge guard and needs no job with it",
                 )
+
+    def test_status_functions_that_outlive_a_skip_are_caught(self):
+        for condition in (
+            "always()",
+            "${{ !cancelled() }}",
+            "! cancelled() && needs.a.result != 'failure'",
+            "success() || failure()",
+            "failure() ||success()",
+        ):
+            with self.subTest(condition=condition):
+                self.assertTrue(runs_past_a_skipped_need(condition))
+        for condition in (
+            "success()",
+            "failure()",
+            "cancelled()",
+            "github.event_name == 'push'",
+        ):
+            with self.subTest(condition=condition):
+                self.assertFalse(runs_past_a_skipped_need(condition))
 
     def test_auto_fix_also_skips_runs_the_app_triggered_elsewhere(self):
         condition = str(load("auto-fix.yml")["jobs"]["gather-context"]["if"])
