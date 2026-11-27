@@ -574,7 +574,7 @@ jobs:
           # asset names the release already carries. Note it DELETES before uploading, so a
           # failed upload loses the previous copies; every run stages the full set, so the
           # next successful run restores them.
-          gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
 
       # Shared with attach-pico-release; from the workflow revision, like
       # tools/lib above, so a replay of an older tag still has it.
@@ -836,10 +836,12 @@ jobs:
             exit 1
           fi
 
+      # --repo: this job has no checkout at the workspace root, and gh
+      # without it reads the repository from git (issues #1310, #1321).
       - name: Upload firmware to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$RELEASE_TAG" release-assets/* --clobber
+        run: gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Verify release assets
         env:
