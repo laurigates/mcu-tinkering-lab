@@ -52,7 +52,7 @@ cp main/credentials.h.example main/credentials.h
 | Component | Purpose |
 |-----------|---------|
 | `usb_composite` | TinyUSB HID Boot Keyboard (EP 0x81) + CDC-ACM (EPs 0x82/0x03/0x83) |
-| `status_led` | WS2812 RMT driver — caller-driven via `status_led_update()` at ≥50Hz |
+| `status_led` | Mode table on the shared WS2812 layer (`packages/components/status-led`) — caller-driven via `status_led_update()` at ≥50Hz |
 | `wifi_manager` | WiFi connection with exponential backoff retry via `esp_timer` (not blocking) |
 | `state_machine` | NVS-persisted multi-step workflow state; survives power cycles |
 
