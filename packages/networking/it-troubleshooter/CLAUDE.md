@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Current phase:** Phase 3 — Claude API integration.
 **Completed:** Phase 1 (HID + CDC-ACM), Phase 2 (WiFi + NVS state machine + command passthrough).
-**Planned:** Claude API integration (Phase 3), CDC-NCM USB Ethernet (Phase 4).
+**Planned:** CDC-NCM USB Ethernet (Phase 4).
 
 **Target hardware:** Waveshare ESP32-S3-Zero (ESP32-S3, 4MB flash, 2MB PSRAM, WS2812 RGB on GPIO21).
 
@@ -18,8 +18,9 @@ Builds run in Docker (the repo's shared ESP-IDF image, version pinned in the roo
 
 ```bash
 just build        # Compile in Docker
-just flash        # Flash to /dev/cu.usbmodem101 (USB-Serial-JTAG)
-just monitor      # Serial via minicom on GPIO43/44 USB-UART adapter @ 115200
+just flash        # Flash over USB-Serial-JTAG (port auto-detected by Espressif VID)
+just monitor      # CDC-reset then serial monitor over USB-Serial-JTAG (tools/esp32s3-monitor.sh);
+                  # boot output only: once TinyUSB starts, read the GPIO43/44 UART (Hardware Constraints)
 just deploy       # build + flash
 just menuconfig   # Interactive sdkconfig in Docker
 just clean        # Remove build/, sdkconfig, managed_components (prompts confirm)
