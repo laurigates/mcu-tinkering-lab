@@ -187,7 +187,7 @@ lint-c:
 lint-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    just _ruff check .
+    "{{just_executable()}}" _ruff check .
     echo "Python lint checks passed"
 
 # Run the ruff that pre-commit and CI run: the ruff-pre-commit rev pinned in
@@ -217,7 +217,7 @@ format-c:
 format-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    just _ruff format .
+    "{{just_executable()}}" _ruff format .
     echo "Python code formatted"
 
 # Check formatting without modifying files
@@ -235,7 +235,7 @@ format-check-c:
 format-check-python:
     #!/usr/bin/env bash
     set -euo pipefail
-    just _ruff format --check .
+    "{{just_executable()}}" _ruff format --check .
     echo "Python formatting check passed"
 
 # Build the robocar (use `just <module>::build` for other projects)
