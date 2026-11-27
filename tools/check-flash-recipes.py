@@ -194,7 +194,7 @@ def check_attribute_placement() -> list[Finding]:
             stripped = line.rstrip()
             if not (stripped.startswith("[") and stripped.endswith("]")):
                 continue
-            # just 1.58.0 rejects a blank line here as well as a comment
+            # just (1.58.0, and the pinned 1.59.0) rejects a blank line here as well as a comment
             # (`error: extraneous attribute`, issue #675).
             nxt = lines[i + 1].strip()
             if not nxt or nxt.startswith("#"):

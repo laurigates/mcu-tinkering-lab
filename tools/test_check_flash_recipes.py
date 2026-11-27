@@ -1284,7 +1284,7 @@ class AttributePlacementTests(TempRepo):
         self.assertEqual(self.codes(), {})
 
     def test_an_attribute_separated_from_its_recipe_by_a_blank_line_is_reported(self):
-        # just 1.58.0 rejects this with `error: extraneous attribute` (#675).
+        # just 1.58.0 and 1.59.0 reject this with `error: extraneous attribute` (#675).
         self.write("tools/esp32-idf.just", "[private]\n\n_x:\n    true\n")
         self.assertEqual(self.codes(), {"tools/esp32-idf.just": ["ORPHANED_ATTRIBUTE"]})
 
