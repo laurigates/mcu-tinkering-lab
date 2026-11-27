@@ -29,7 +29,7 @@ Add a `mod` line to the root `justfile` if not already present:
 mod project-name 'packages/<domain>/project-name'
 ```
 
-Place it alphabetically among the existing `mod` declarations. Use the justfile recipe naming convention (lowercase-kebab-case).
+The `mod` lines are not sorted. A subproject's line goes after its parent's and the parent's other subprojects (`robocar-bringup` after `robocar`); a new project's line goes after `nfc-scavenger-hunt` (the last firmware project), before `schematics`. Two lines break the grouping: the tool module `switch-probe` sits among the projects, and `components` comes after the tool modules. Use the justfile recipe naming convention (lowercase-kebab-case).
 
 ### 3. Add the CI Matrix Entry
 

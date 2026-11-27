@@ -74,16 +74,17 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 | `_s3-flash bin` | Private — native ESP32-S3 flash (bootloader @0x0, 4MB @80MHz). Pass the app basename. |
 | `_s3-argfile-flash` | Private — native ESP32-S3 flash of everything the build's `build/flash_args` lists (otadata included), at its offsets and flash size. For tables `_s3-flash` does not fit; the four ThinkPack OTA receivers use it (#1076). |
 | `_s3-reset` / `_s3-monitor` | Private — ESP32-S3 USB-Serial-JTAG reset / CDC-reset monitor (wrap the `tools/esp32s3-*.sh` scripts). |
-| `build` | Public — delegates to `_idf-build` (override to add pre-build steps) |
-| `clean` | Public — delegates to `_idf-clean` |
-| `menuconfig` | Public — containerized `idf.py menuconfig` |
-| `shell` | Public — interactive container shell |
-| `monitor` | Public — delegates to `_serial-monitor` |
-| `flash-monitor` | Public — `flash` then `monitor` (requires project to define `flash`) |
+| `_idf-menuconfig` | Private — containerized `idf.py menuconfig` |
+| `_idf-shell` | Private — interactive container shell |
+
+The file defines no public recipe. A project writes the public ones it offers
+(`build`, `clean`, `menuconfig`, `shell`, `flash`, `monitor`, `flash-monitor`)
+in its own justfile, each composing a private recipe above (`build: _idf-build`,
+`monitor: _s3-monitor`).
 
 ### `tools/esphome.just` — Shared ESPHome recipes
 
-ESPHome projects import `tools/esphome.just` for standard recipes (install, config, validate, compile, upload, wireless, logs, monitor, dashboard, clean, status, dev).
+ESPHome projects import `tools/esphome.just` for the public recipes install, validate, compile, wireless, dashboard, clean and status. Each project writes its own `config`, `upload`, `logs` and `monitor`, usually composing the private helpers `_esphome-config`, `_esphome-upload` and `_esphome-logs` (`monitor: logs`); wireguard-ha's `config` is an inline script.
 
 ### `tools/kicad.just` — Shared KiCad carrier-PCB recipes
 
@@ -111,7 +112,7 @@ file's other imports.
 ### Usage Patterns
 
 ```just
-# Standard ESP-IDF project (gets build, clean, menuconfig, shell, monitor, flash-monitor):
+# Standard ESP-IDF project (gets the private _idf-*, flash and monitor recipes to compose):
 import '../../../tools/esp32-idf.just'
 # A project nested inside another (packages/robotics/robocar/bringup) is one
 # level deeper and imports '../../../../tools/esp32-idf.just'.
@@ -300,9 +301,9 @@ change rebuilds all four in CI.
 
 ### Monitor Recipe
 
-Projects using USB-serial adapters get the shared monitor automatically via `esp32-idf.just`.
-
-ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own scripts.
+Every project writes its own `monitor` recipe. Projects on a USB-serial adapter
+compose `monitor: _serial-monitor`; ESP32-S3 projects on native USB-Serial-JTAG
+compose `monitor: _s3-monitor`, which wraps `tools/esp32s3-monitor.sh`.
 
 ### Building in a Claude Code cloud session
 
