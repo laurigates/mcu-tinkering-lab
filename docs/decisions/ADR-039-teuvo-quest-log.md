@@ -271,6 +271,30 @@ Three changes from §1 and §7, made in the step-1 PR:
 - **`quest off|on` waits for step 3.** Until the curator and quest sessions
   exist, there is nothing for it to switch.
 
+## Step 2 as built (2026-11-27)
+
+Changes from §3, made in the step-2 PR:
+
+- **`QUEST_CLAUSE_MAX` is 1024, not 384.** With the title (60) and why (120)
+  at their caps, the head and both tool sentences come to about 840 bytes, so
+  one 160-byte note still fits; with ordinary titles both notes do. The clause
+  keeps the head and tool sentences whole and drops notes, oldest first. `GEMINI_SYSTEM_PROMPT_MAX` and the planner
+  stack grow by the same 1024.
+- **`quest_done(achieved, outcome)`.** `achieved=false` closes the quest as
+  dropped, so the model can give up on a quest it cannot do from where it is
+  without claiming success.
+- **`quest_done` is also offered with `log_discovery`.** The cycle that puts
+  the thing in view is the one where the quest can be seen to be done; under
+  "≥1 note" alone, the first discovery could never close it in the same reply.
+- **The half-ration count is in RAM.** Requests that carried the active
+  quest's clause are counted per quest and restart on a reboot or a change of
+  active quest; step 3 adds the persisted `QUEST_TOTAL_REQUESTS` ration.
+- **An `ask` quest gets no clause.** It is a question for a person, and the
+  planner never hears one.
+- **No wake.** Step 2 leaves dormancy as it is: a hand-opened quest is pursued
+  only on requests the ordinary evidence already makes. The `bored` wake is
+  step 3.
+
 ## Resolved questions (Lauri, 2026-11-27)
 
 | Question | Ruling |
