@@ -114,25 +114,31 @@ packages/<domain>/$name/
 # Project Name
 # Run `just --list` to see available recipes
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/<domain>/project-name"
 port := env("PORT", _detected_serial)  # or _detected_s3 for ESP32-S3
 target := "esp32"                       # or "esp32s3"
+bin_name := "project-name"              # the CMake project() name
 
 default:
     @just --list
 
 [group: "build"]
-build:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building project-name..."
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build"
+build: (_idf-build-checked bin_name)
+
+[group: "build"]
+clean: _idf-clean
+
+[group: "device"]
+flash: (_esp32-flash bin_name)          # or (_s3-flash bin_name) for esp32s3
+
+[group: "device"]
+monitor: _serial-monitor                # or _s3-monitor for esp32s3
 ```
+
+`tools/esp32-idf.just` defines only private recipes; the project's public ones
+compose them. The full list is in `.claude/rules/containerized-builds.md`.
 
 ### Root CMakeLists.txt
 
@@ -187,7 +193,7 @@ packages/stm32-projects/$name/
 ## Adding to the Monorepo
 
 1. Place project in `packages/<domain>/<name>/`
-2. Create justfile with `import '../../../tools/esp32.just'`
+2. Create justfile with `import '../../../tools/esp32-idf.just'`
 3. Register as module in root justfile: `mod name 'packages/<domain>/<name>'`
 4. Test: `just name::build`
 
@@ -224,6 +230,6 @@ just xbox::menuconfig
 ## Best Practices
 
 1. **Use sdkconfig.defaults** — Don't commit generated sdkconfig
-2. **Import tools/esp32.just** — Don't duplicate container_cmd, require-port, etc.
+2. **Import tools/esp32-idf.just** — Don't duplicate container_cmd, require-port or the containerized build, flash and monitor recipes
 3. **Minimal dependencies** — Only include REQUIRES you actually use
 4. **Document GPIO usage** — Create WIRING.md with `/wiring-doc`
