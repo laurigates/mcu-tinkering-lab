@@ -226,9 +226,9 @@ does not read this page for them yet.
 | Project | GPIOs used | Where it says so |
 |---|---|---|
 | [switch-usb-proxy](../../../packages/input-gaming/switch-usb-proxy/) | GPIO43 TX, GPIO44 RX (UART1, 921600 baud, to the PC); GPIO19/GPIO20 USB to the Switch | `main/main.c` lines 41–44; `CLAUDE.md` § Hardware Connections |
-| [xbox-switch-bridge](../../../packages/input-gaming/xbox-switch-bridge/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART; GPIO19/GPIO20 USB; BOOT and RESET | `components/status_led/status_led.c` line 18; `WIRING.md` § Waveshare ESP32-S3-Zero Pinout |
-| [it-troubleshooter](../../../packages/networking/it-troubleshooter/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART at 115200 baud | `components/status_led/status_led.c` line 16; `docs/adrs/0006-external-uart-debug.md` |
-| [facedancer-espdancer-fw](../../../packages/usb-tools/facedancer-espdancer-fw/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART in the `debug-uart` build | `components/status_led/status_led.c` line 23; `README.md` § Hardware required |
+| [xbox-switch-bridge](../../../packages/input-gaming/xbox-switch-bridge/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART; GPIO19/GPIO20 USB; BOOT and RESET | `components/status_led/status_led.c` line 13; `WIRING.md` § Waveshare ESP32-S3-Zero Pinout |
+| [it-troubleshooter](../../../packages/networking/it-troubleshooter/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART at 115200 baud | `components/status_led/status_led.c` line 14; `docs/adrs/0006-external-uart-debug.md` |
+| [facedancer-espdancer-fw](../../../packages/usb-tools/facedancer-espdancer-fw/) | GPIO21 WS2812; GPIO43/GPIO44 debug UART in the `debug-uart` build | `components/status_led/status_led.c` line 14; `README.md` § Hardware required |
 
 Every GPIO the projects use matches the vendor sources above. Two project
 statements disagree with them and are tracked outside this page:
