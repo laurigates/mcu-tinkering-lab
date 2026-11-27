@@ -412,6 +412,17 @@ target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
 add_test(NAME plan_activity COMMAND test_plan_activity)
 
 # -----------------------------------------------------------------------------
+# quest_log_core: Teuvo's quest log records, caps and file format (ADR-039)
+add_executable(test_quest_log_core
+    "${MAIN_SRC_DIR}/quest_log_core.c"
+    "${MAIN_SRC_DIR}/dialogue_style.c"   # near-repeat check
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_quest_log_core.c"
+)
+target_link_libraries(test_quest_log_core PRIVATE Threads::Threads m)
+add_test(NAME quest_log_core COMMAND test_quest_log_core)
+
 # note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
 # -----------------------------------------------------------------------------
 add_executable(test_note_gate

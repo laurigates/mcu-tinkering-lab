@@ -163,6 +163,15 @@
 #define EVENT_REPORT_TASK_STACK_SIZE 5120
 #define EVENT_REPORT_TASK_PRIORITY 2
 #define EVENT_REPORT_TASK_CORE 1
+// Quest log store (ADR-039 §1): mounts SPIFFS, loads the log, then writes it
+// back after each change. Holds stdio FILE buffers and the SPIFFS calls; the
+// log and the file image live in PSRAM, not on this stack.
+#define QUEST_STORE_TASK_STACK_SIZE 6144
+#define QUEST_STORE_TASK_PRIORITY 1
+#define QUEST_STORE_TASK_CORE 1
+// Changes inside this window after the first are written together, so a burst
+// of console edits costs one flash write.
+#define QUEST_STORE_SAVE_DELAY_MS 500
 // 1 adds `report crash`, which calls abort() to test the core dump path end
 // to end. Never on in a release: anyone with MQTT full access could reboot the
 // robot with it.

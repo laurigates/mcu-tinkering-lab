@@ -214,6 +214,34 @@ just robocar::test   # + test_plan_activity, test_plan_budget
 ```
 
 
+## Quest log
+
+Teuvo's quest log ([ADR-039](../../../../../docs/decisions/ADR-039-teuvo-quest-log.md))
+is kept on the robot. Step 1 is the log itself: no model reads or writes it
+yet, and quests are opened and noted by hand with the `quest` console command
+([console-and-mqtt.md](console-and-mqtt.md)).
+
+- **Records and caps** live in `quest_log_core.c`, pure C with an injected
+  clock: at most 8 quests open, 24 kept, 12 notes per quest and 96 in total;
+  the oldest closed quest is pruned first. Text is cleaned of control bytes and
+  cut at a UTF-8 boundary (title 60, why and outcome 120, note 160 bytes). A
+  note that is a near-repeat of one of its quest's notes (Sørensen–Dice
+  ≥ `QUEST_LOG_REPEAT_PCT`, the measure `dialogue_style` uses) is refused.
+- **The file** is `/quest/log.tsv` on the `spiffs` partition, one
+  tab-separated record per line, each starting with the format version.
+  `quest_store.c` mounts the partition on its own task (the first boot formats
+  it), loads the file, and rewrites it whole after each change: `log.new`
+  first, then a rename. A power loss leaves a file the parser still reads; it
+  skips a torn last line, a malformed line and a line from another version.
+  A robot whose partition table predates `spiffs` (one only ever updated over
+  the air) reports the store as unavailable and runs without quests.
+- **Time** is SNTP wall time (`wall_clock.c`, started on the first link-up,
+  `pool.ntp.org`, Finnish local time for display). A time recorded before the
+  sync is seconds since boot and flagged; `quest` prints it as `boot+<s>s`.
+
+`test_quest_log_core.c` holds the caps, the pruning, the near-repeat check and
+the parse of a log cut at every byte offset.
+
 ## Don't
 
 - Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
@@ -225,4 +253,5 @@ just robocar::test   # + test_plan_activity, test_plan_budget
 - Don't offer the `note` tool on every request, or word the clause to ask for restraint instead. The model cannot know what happened since its last note; `note_gate` decides on-device and the clause names the trigger (stateless-model-gating.md). Keep the trigger logic in `planner_cycle_core.c`, where the twin runs it
 - Don't give the note gate's per-boot count an auto-reset, for the same reason as the spend fuse
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
+- Don't write the quest log in place or append to it. `quest_store.c` writes `log.new` and renames it over `log.tsv`, so a power loss leaves either file whole, and `quest_log_parse()` still skips a torn last line rather than loading a shortened text (`a_log_cut_at_any_byte_loads_only_whole_lines`)
 - Don't resurrect `claude_*` or `ollama_*` source files. If a second backend becomes necessary, design an abstraction; old code paths are not a foundation

@@ -64,6 +64,9 @@ idf_component_register(
         "planner_task.c"
         "planner_cycle_core.c"
         "note_gate.c"
+        "quest_log_core.c"
+        "quest_store.c"
+        "wall_clock.c"
         "self_report.c"
         "credentials_loader.c"
         "console_line.c"
@@ -114,6 +117,8 @@ idf_component_register(
         "esp_timer"
         "espcoredump"
         "espressif__esp_websocket_client"
+        "spiffs"
+        "esp_netif"
 )
 
 # The build commit SHA the project CMakeLists.txt resolved from git (issue
