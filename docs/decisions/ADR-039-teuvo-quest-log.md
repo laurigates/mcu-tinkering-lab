@@ -1,6 +1,6 @@
 # ADR-039: Teuvo's Quest Log: Self-Chosen Long-Horizon Tasks Kept on the Robot
 
-**Status**: proposed
+**Status**: accepted (Lauri, 2026-11-27)
 **Date**: 2026-11-27
 **Source**: conversation 2026-11-27 (Lauri: Teuvo could decide to have a look
 around, discover things, make notes on them and keep his own quest log)

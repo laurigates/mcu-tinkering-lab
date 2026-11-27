@@ -488,7 +488,7 @@
       "ADR-039": {
         "path": "docs/decisions/ADR-039-teuvo-quest-log.md",
         "title": "Teuvo's Quest Log: Self-Chosen Long-Horizon Tasks Kept on the Robot",
-        "status": "proposed",
+        "status": "accepted",
         "created": "2026-11-27"
       },
       "PRP-carrier-power-architecture": {
