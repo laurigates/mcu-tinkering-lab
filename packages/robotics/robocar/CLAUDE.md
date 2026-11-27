@@ -116,7 +116,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 
 - `mqtt_command.c` classifies a line and calls `dispatch_movement()` or `execute_console_line()`, the functions the serial console uses. New behaviour goes into those.
 - The MQTT read-only allow-list holds exact whole lines. Add a command only after reading its handler in `main.c` end to end (#626).
-- `mqtt` is serial-only: `command_task()` handles it, outside `execute_console_line()` and `mqtt_command.c`'s prefixes.
+- `mqtt` is serial-only: `command_task()` handles it, outside the console command table (`console_cmd_core.c`) that `execute_console_line()` and `mqtt_command.c` share.
 - Every MQTT payload passes through `mqtt_command_extract_line()`, fragmentation check included.
 
 **Error reporting** ([why](docs/firmware/error-reporting.md#dont))

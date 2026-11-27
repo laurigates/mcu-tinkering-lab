@@ -38,6 +38,7 @@
 #include "camera.h"
 #include "cliff_sensor.h"
 #include "config.h"
+#include "console_cmd_core.h"
 #include "console_line.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
@@ -2090,37 +2091,56 @@ static void handle_report_cmd(const char *buf)
 
 static void execute_console_line(const char *buf)
 {
-    if (strncmp(buf, "gpio", 4) == 0) {
-        handle_gpio_cmd(buf);
-    } else if (strncmp(buf, "voice", 5) == 0) {
-        handle_voice_cmd(buf);
-    } else if (strncmp(buf, "snap", 4) == 0) {
-        handle_snap_cmd(buf);
-    } else if (strncmp(buf, "listen", 6) == 0) {
-        handle_listen_cmd(buf);
-    } else if (strncmp(buf, "trace", 5) == 0) {
-        handle_trace_cmd(buf);
-    } else if (strncmp(buf, "mic", 3) == 0) {
-        handle_mic_cmd(buf);
-    } else if (strncmp(buf, "cam", 3) == 0) {
-        handle_cam_cmd(buf);
-    } else if (strncmp(buf, "plan", 4) == 0) {
-        handle_plan_cmd(buf);
-    } else if (strncmp(buf, "idle", 4) == 0) {
-        handle_idle_cmd(buf);
-    } else if (strncmp(buf, "cliff", 5) == 0) {
-        handle_cliff_cmd(buf);
-    } else if (strncmp(buf, "motors", 6) == 0) {
-        handle_motors_cmd(buf);
-    } else if (strncmp(buf, "ota", 3) == 0) {
-        handle_ota_cmd(buf);
-    } else if (strncmp(buf, "report", 6) == 0) {
-        handle_report_cmd(buf);
-    } else if (strncmp(buf, "quest", 5) == 0) {
-        handle_quest_cmd(buf);
-    } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
-               strncmp(buf, "led", 3) == 0) {
-        handle_periph_cmd(buf);
+    /* No default: -Wswitch names a table command without a handler here. */
+    switch (console_cmd_lookup(buf)) {
+        case CONSOLE_CMD_NONE:
+        case CONSOLE_CMD_COUNT:
+            break;
+        case CONSOLE_CMD_GPIO:
+            handle_gpio_cmd(buf);
+            break;
+        case CONSOLE_CMD_VOICE:
+            handle_voice_cmd(buf);
+            break;
+        case CONSOLE_CMD_SNAP:
+            handle_snap_cmd(buf);
+            break;
+        case CONSOLE_CMD_LISTEN:
+            handle_listen_cmd(buf);
+            break;
+        case CONSOLE_CMD_TRACE:
+            handle_trace_cmd(buf);
+            break;
+        case CONSOLE_CMD_MIC:
+            handle_mic_cmd(buf);
+            break;
+        case CONSOLE_CMD_CAM:
+            handle_cam_cmd(buf);
+            break;
+        case CONSOLE_CMD_PLAN:
+            handle_plan_cmd(buf);
+            break;
+        case CONSOLE_CMD_IDLE:
+            handle_idle_cmd(buf);
+            break;
+        case CONSOLE_CMD_CLIFF:
+            handle_cliff_cmd(buf);
+            break;
+        case CONSOLE_CMD_MOTORS:
+            handle_motors_cmd(buf);
+            break;
+        case CONSOLE_CMD_OTA:
+            handle_ota_cmd(buf);
+            break;
+        case CONSOLE_CMD_REPORT:
+            handle_report_cmd(buf);
+            break;
+        case CONSOLE_CMD_QUEST:
+            handle_quest_cmd(buf);
+            break;
+        case CONSOLE_CMD_PERIPH:
+            handle_periph_cmd(buf);
+            break;
     }
 }
 

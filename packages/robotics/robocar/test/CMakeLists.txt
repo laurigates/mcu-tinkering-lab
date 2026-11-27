@@ -826,6 +826,16 @@ target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
 add_test(NAME led_controller COMMAND test_led_controller)
 
 # -----------------------------------------------------------------------------
+# console_cmd_core — the one console command table, read by main.c's
+# execute_console_line() and mqtt_command.c
+# -----------------------------------------------------------------------------
+add_executable(test_console_cmd_core
+    "${MAIN_SRC_DIR}/console_cmd_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_console_cmd_core.c"
+)
+add_test(NAME console_cmd_core COMMAND test_console_cmd_core)
+
+# -----------------------------------------------------------------------------
 # mqtt_command (issue #524) — MQTT command-topic validator/dispatcher
 #
 # mqtt_command.c is deliberately free of ESP-IDF and FreeRTOS (mqtt_logger.c
@@ -838,6 +848,7 @@ add_test(NAME led_controller COMMAND test_led_controller)
 # -----------------------------------------------------------------------------
 add_executable(test_mqtt_command
     "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${MAIN_SRC_DIR}/console_cmd_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_command.c"
 )
 target_link_libraries(test_mqtt_command PRIVATE Threads::Threads m)
@@ -858,6 +869,7 @@ add_executable(test_self_report
     "${MAIN_SRC_DIR}/self_report.c"
     "${MAIN_SRC_DIR}/gemini_key_state.c"
     "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
+    "${MAIN_SRC_DIR}/console_cmd_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
 )
@@ -1064,6 +1076,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
 add_executable(test_mqtt_logger
     "${MAIN_SRC_DIR}/mqtt_logger.c"
     "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${MAIN_SRC_DIR}/console_cmd_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_logger.c"
 )

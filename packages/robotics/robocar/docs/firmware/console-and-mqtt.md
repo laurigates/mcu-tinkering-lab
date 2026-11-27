@@ -121,7 +121,8 @@ username and a password configured, the full command set above is available.
   it, and `mqtt` alone prints the mode and where the credentials came from.
   Both apply at the next boot, because the MQTT client is created once. `mqtt`
   is serial-only by construction — handled in `command_task()` before
-  `execute_console_line()` and absent from `mqtt_command.c`'s prefixes — so an
+  `execute_console_line()` and absent from the console command table
+  (`console_cmd_core.c`), which both dispatch on — so an
   anonymous publisher cannot set the credentials that would lift its own
   lockout. The console line grew from 32 to 128 bytes for it, and the line is
   logged as `mqtt ... (redacted)`. The CI and web-flasher stub defines both as
@@ -176,5 +177,5 @@ The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'
 
 - Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
 - Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler in `main.c` end to end. Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
-- Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to `mqtt_command.c`'s forwarded prefixes. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
+- Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to the console command table (`console_cmd_core.c`), which `mqtt_command.c` forwards. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
 - Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived

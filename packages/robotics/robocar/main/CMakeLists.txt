@@ -75,6 +75,7 @@ idf_component_register(
         "net_supervisor_core.c"
         "mqtt_logger.c"
         "mqtt_command.c"
+        "console_cmd_core.c"
         "ota_manager.c"
         "ota_version_compare.c"
         "ota_update_decision.c"

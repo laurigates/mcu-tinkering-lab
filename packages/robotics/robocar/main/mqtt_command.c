@@ -9,6 +9,8 @@
 
 #include "mqtt_command.h"
 
+#include "console_cmd_core.h"
+
 #include <string.h>
 
 static bool is_printable_ascii(char c)
@@ -64,27 +66,16 @@ bool mqtt_command_extract_line(const char *data, int data_len, int total_data_le
 }
 
 /*
- * Console command-line prefixes forwarded verbatim to ops->console_line.
- * Kept as an explicit allowlist — rather than "anything that isn't
- * movement" — so a typo or an as-yet-unsupported string is rejected and
- * logged instead of silently reaching a handler chain via a coincidental
- * prefix match. Mirrors the strncmp chain in main.c's command_task() /
- * execute_console_line(); keep the two lists in sync.
+ * Console lines forwarded verbatim to ops->console_line: the lines the
+ * console command table recognises (console_cmd_core.h), the same table
+ * execute_console_line() dispatches on. Kept as an explicit allowlist, rather
+ * than "anything that isn't movement", so a typo or an as-yet-unsupported
+ * string is rejected and logged instead of reaching a handler by a
+ * coincidental prefix match.
  */
-static const char *const k_console_prefixes[] = {
-    "gpio",  "voice", "snap", "listen", "trace",  "mic",   "cam",    "plan",  "sound",
-    "servo", "led",   "idle", "ota",    "report", "cliff", "motors", "quest",
-};
-
 static bool matches_console_prefix(const char *line)
 {
-    for (size_t i = 0; i < sizeof(k_console_prefixes) / sizeof(k_console_prefixes[0]); i++) {
-        size_t plen = strlen(k_console_prefixes[i]);
-        if (strncmp(line, k_console_prefixes[i], plen) == 0) {
-            return true;
-        }
-    }
-    return false;
+    return console_cmd_lookup(line) != CONSOLE_CMD_NONE;
 }
 
 /* Single-letter forms mirror the console's command_task() switch exactly
