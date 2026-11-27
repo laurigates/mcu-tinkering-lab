@@ -78,7 +78,7 @@ Controlling PC ──WiFi SoftAP──▶ ESP32-S3 ──USB-C──▶ Target h
 
 | Component | Purpose | Status |
 | ----------- | --------- | -------- |
-| `status_led` | WS2812 RMT (non-DMA) — emulator-state indicator | Lifted |
+| `status_led` | Emulator-state mode table on the shared WS2812 layer (`packages/components/status-led`, RMT non-DMA) | Shared layer |
 | `log-udp` | WiFi SoftAP "espdancer-log" + UDP log broadcast | Shared: `packages/components/log-udp`, SSID and password set in `sdkconfig.defaults` |
 | `usb_rpc` | TCP server + framed-TLV dispatcher (this firmware's host iface) | New (stub) |
 | `raw_usb` | Own `dcd_event_handler` + relay pump + DCD primitives (M1 skeleton;
