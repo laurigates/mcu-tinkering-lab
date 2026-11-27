@@ -1115,6 +1115,103 @@ static void test_a_failed_read_does_not_release_the_reflex(void)
     ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
 }
 
+/* An object at the threshold reads 14 and 15 cm in turn. The reflex trips on
+ * the 14 and must stay latched through the 15s: releasing at the threshold
+ * braked and released the wheels every ~0.5 s on the robot (#1312). */
+static void test_reflex_does_not_flap_at_the_threshold(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(100);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+
+    reactive_telemetry_t t = {0};
+    for (int i = 0; i < 12; i++) {
+        ultrasonic_test_set_distance(ULTRASONIC_FRONT,
+                                     (i % 2 == 0) ? STOP_THRESHOLD_CM - 1 : STOP_THRESHOLD_CM);
+        reactive_controller_tick_for_test();
+        reactive_controller_get_telemetry(&t);
+        ASSERT(t.reflex_active);
+        ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+    }
+}
+
+/* A latched reflex releases only once both the latest reading and the mean
+ * reach STOP_RELEASE_CM; readings between the threshold and it hold. */
+static void test_reflex_releases_only_at_the_release_distance(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(8);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    reactive_telemetry_t t = {0};
+    /* A filter full of readings one short of the release distance holds. */
+    for (unsigned i = 0; i < ULTRASONIC_SMOOTH_N + 1u; i++) {
+        ultrasonic_test_set_distance(ULTRASONIC_FRONT, STOP_RELEASE_CM - 1);
+        reactive_controller_tick_for_test();
+        reactive_controller_get_telemetry(&t);
+        ASSERT(t.reflex_active);
+    }
+    /* At the release distance: held until the mean follows, then released. */
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, STOP_RELEASE_CM);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_active); /* mean (17 + 17 + 18) / 3 = 17 */
+    for (unsigned i = 1; i < ULTRASONIC_SMOOTH_N; i++) {
+        reactive_controller_tick_for_test();
+    }
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+}
+
+/* Before the reflex trips, a reading between the threshold and the release
+ * distance is clear: the margin applies only to a latched reflex. */
+static void test_release_margin_does_not_widen_the_trip(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(STOP_THRESHOLD_CM);
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+}
+
+/* The rear hold has the same margin: a held reverse stays braked while the
+ * rear reads between the threshold and the release distance (#1312). */
+static void test_rear_hold_releases_only_at_the_release_distance(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 8);
+    drive_goal(180, 50);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, STOP_RELEASE_CM - 1);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, STOP_RELEASE_CM);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+    ASSERT(ld == 0 && rd == 0 && ls > 0);
+}
+
+/* Before a reverse is held, a rear reading inside the margin does not hold it. */
+static void test_rear_margin_does_not_widen_the_hold(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, STOP_THRESHOLD_CM);
+    drive_goal(180, 50);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+    ASSERT(ld == 0 && rd == 0 && ls > 0);
+}
+
 /* Declaring the front sensor failed does not release the reflex either: the
  * last good reading stands, and the reflex errs toward stopping, as the cliff
  * reflex does with a failed floor read. Reversing and turning still run. */
@@ -1763,6 +1860,13 @@ int main(void)
     test_run("a_failed_read_does_not_release_the_reflex",
              test_a_failed_read_does_not_release_the_reflex);
     test_run("a_failed_sensor_keeps_a_latched_reflex", test_a_failed_sensor_keeps_a_latched_reflex);
+    test_run("reflex_does_not_flap_at_the_threshold", test_reflex_does_not_flap_at_the_threshold);
+    test_run("reflex_releases_only_at_the_release_distance",
+             test_reflex_releases_only_at_the_release_distance);
+    test_run("release_margin_does_not_widen_the_trip", test_release_margin_does_not_widen_the_trip);
+    test_run("rear_hold_releases_only_at_the_release_distance",
+             test_rear_hold_releases_only_at_the_release_distance);
+    test_run("rear_margin_does_not_widen_the_hold", test_rear_margin_does_not_widen_the_hold);
     test_run("a_failed_rear_read_keeps_a_reverse_held",
              test_a_failed_rear_read_keeps_a_reverse_held);
     test_run("distance_is_not_valid_before_the_first_reading",

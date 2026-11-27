@@ -60,6 +60,19 @@ extern "C" {
 #endif
 
 /**
+ * Release margin (cm) above STOP_THRESHOLD_CM for the obstacle reflex and the
+ * rear hold. A hold trips on a reading below STOP_THRESHOLD_CM and releases
+ * only once readings reach STOP_RELEASE_CM, so an object sitting at the
+ * threshold, whose readings alternate 14 and 15 cm, keeps the brake on instead
+ * of braking and releasing every reading (#1312). 3 cm is about one reading's
+ * jitter on the bench log of 2026-11-26, plus 1.
+ */
+#ifndef STOP_RELEASE_MARGIN_CM
+#define STOP_RELEASE_MARGIN_CM 3U
+#endif
+#define STOP_RELEASE_CM (STOP_THRESHOLD_CM + STOP_RELEASE_MARGIN_CM)
+
+/**
  * Visual-servo proportional gain.
  *
  * Input: bounding-box centre error in normalised units (0..1000, centre=500).
@@ -88,9 +101,9 @@ extern "C" {
  * -----------------------------------
  * The reflex trips on the first front reading below STOP_THRESHOLD_CM, and
  * releases only once that latest reading AND the running mean are both at or
- * above it. Tripping on the mean instead cost ULTRASONIC_SMOOTH_N readings: in
- * I2C mode a reading completes only every ~165 ms, so a sudden obstacle took
- * ~500 ms to pull a 3-reading mean under 15 cm.
+ * above STOP_RELEASE_CM, the threshold plus a release margin (#1312). Tripping on the mean instead
+ * cost ULTRASONIC_SMOOTH_N readings: in I2C mode a reading completes only every ~165 ms, so a
+ * sudden obstacle took ~500 ms to pull a 3-reading mean under 15 cm.
  *
  * The cost is a false trip: one spurious short reading brakes for one reading
  * period (~165 ms) until the next clear one, because the mean never fell. That
