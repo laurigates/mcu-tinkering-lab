@@ -164,6 +164,14 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    the high-precision silkscreen option. Standard silkscreen prints text
    under 1.0 mm tall unreadably. Record the option's price in § 4 the first
    time it is quoted.
+   If the board has vias in an exposed pad's paste windows (`[fanout]
+   in_pad_vias`; robocar's socketed carrier: five 0.5/0.3 mm vias under U5,
+   the BQ25887), look for "Via Covering" set to filled and capped (epoxy
+   filled & capped, or plugged). JLCPCB's capabilities page lists it as
+   standard only from 6 layers, so on 2 layers it may be absent or extra.
+   Offered: select it and record the price in § 4. Not offered: order plain
+   (tented) vias and note it in the README; the pad still wets outside the
+   via corners (#1308, decided 2026-11-27).
 3. Open the Gerber viewer and check what the README lists (outline, holes,
    cut lines, polarity marks), and that the silkscreen's `<sha7> <pcb8>`
    text matches the zip's name.
