@@ -148,6 +148,14 @@ twin runs that code as it is, and scenario request counts include the wake.
 Whether the robot does the same depends on how long its first camera capture
 takes, which is unmeasured.
 
+> **Status (#1187):** superseded. The executor now reports
+> `distance_valid = false` until its first good front read, and
+> `planner_task.c` (and the twin's `gather_evidence()`) map that to
+> `range_valid = false`. The tick at `t = 0` no longer takes 400 cm as a
+> reading: `plan_activity` adopts the first real reading as its reference
+> without waking, and the scenarios that relied on the wake wake the planner
+> with a console line instead.
+
 **Rangefinders.** The twin-owned bus samples the world at trigger time, so a
 reading takes the firmware's read cycle. A failed read (`range_fail`, a `null`
 range from the plant, and any trigger latched before the first `range` event
@@ -453,8 +461,9 @@ tolerances, not distances, until the plant is calibrated.
    yaw rate per duty, stopping distance, sensor offsets, and what the
    rangefinder returns with a target inside its 2 cm blind zone. The plant
    reports no reading there, which the reflex takes for a clear path (#1188).
-2. Whether the executor's boot range value (400 cm, valid, before the first
-   read) reaches the planner on the robot as it does in the twin (#1187).
+2. ~~Whether the executor's boot range value (400 cm, valid, before the first
+   read) reaches the planner on the robot as it does in the twin (#1187).~~
+   Closed by #1187: the boot value is reported as not valid.
 3. Whether the plant should select a frame's scene from the robot's pose, so
    a coupled scenario does not script frames by hand.
 4. Whether the legacy `DifferentialDriveRobot` and Genesis visualiser are
@@ -463,8 +472,16 @@ tolerances, not distances, until the plant is calibrated.
 ## Firmware behaviour the coupled twin surfaced
 
 Three behaviours of the firmware as it stands, each reproduced in the twin
-and none yet seen on the robot. The scenarios pin what the firmware does
-today and change with the fixes.
+and none yet seen on the robot. The scenarios pinned what the firmware did
+then and changed with the fixes.
+
+> **Status:** all three are fixed. A failed read now neither trips nor
+> releases a rangefinder hold (#1185, pinned by
+> `us-d1-failed-read-keeps-reflex` and `us-d3-rear-failed-read-holds`); a
+> cliff trip holds motion toward that end until a new goal and raises a
+> `cliff` note (#1186); the boot range is reported with
+> `distance_valid = false` (#1187). The list below records what the twin
+> surfaced.
 
 - One failed rangefinder read releases a latched obstacle reflex, and a
   failed rear read releases a held reverse (#1185).
