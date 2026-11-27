@@ -1,5 +1,5 @@
 {
-  "packages/robotics/robocar": "0.2.26",
+  "packages/robotics/robocar": "0.2.27",
   "packages/audio/audiobook-player": "0.1.2",
   "packages/camera-vision/cam-i2s-audio": "0.1.7",
   "packages/camera-vision/cam-webserver": "0.1.9",
@@ -15,7 +15,7 @@
   "packages/audio/gamepad-synth": "0.1.15",
   "packages/thinkpack/chatterbox": "1.1.6",
   "packages/thinkpack/finderbox": "1.1.7",
-  "packages/robotics/balancebot": "0.1.17",
+  "packages/robotics/balancebot": "0.1.18",
   "packages/usb-tools/facedancer-espdancer-fw": "0.1.1",
   "packages/thinkpack/boombox": "0.1.1",
   "packages/thinkpack/glowbug": "0.1.1",

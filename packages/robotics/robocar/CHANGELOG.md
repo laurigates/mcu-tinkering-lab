@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.27](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.26...robocar-v0.2.27) (2026-11-27)
+
+
+### Features
+
+* **robocar:** real-time conversation over the Gemini Live API ([#1318](https://github.com/laurigates/mcu-tinkering-lab/issues/1318)) ([4b16bfd](https://github.com/laurigates/mcu-tinkering-lab/commit/4b16bfdc06c8afe30c505184eb4abf0c3c497ba5)), closes [#619](https://github.com/laurigates/mcu-tinkering-lab/issues/619)
+* **robocar:** store the MQTT broker URI in NVS with `mqtt broker` ([27c1000](https://github.com/laurigates/mcu-tinkering-lab/commit/27c10000fa06e5179666d1adab0989d7ffd480d0)), closes [#1312](https://github.com/laurigates/mcu-tinkering-lab/issues/1312)
+
+
+### Bug Fixes
+
+* **robocar:** charger relayout, pre-fab review fixes, damping capacitor and charge LED for the socketed carrier ([#1301](https://github.com/laurigates/mcu-tinkering-lab/issues/1301)) ([91f91fd](https://github.com/laurigates/mcu-tinkering-lab/commit/91f91fdd1900cd3b32d95ff6b3c617f0f7fce6fe))
+* **robocar:** refuse to reinstall an OTA version that rolled back ([c9fa6af](https://github.com/laurigates/mcu-tinkering-lab/commit/c9fa6af910477a1bd3e22cd802120a88078ae70f)), closes [#1312](https://github.com/laurigates/mcu-tinkering-lab/issues/1312)
+
+
+### Documentation
+
+* **robocar:** ask for filled and capped vias at quote time ([#1308](https://github.com/laurigates/mcu-tinkering-lab/issues/1308)) ([e8ef64e](https://github.com/laurigates/mcu-tinkering-lab/commit/e8ef64e2686f884ac2a484a686c38a04f7d25aab))
+* **robocar:** plug the balance lead in before charging ([#1306](https://github.com/laurigates/mcu-tinkering-lab/issues/1306)) ([ce8dc43](https://github.com/laurigates/mcu-tinkering-lab/commit/ce8dc4334536c23120a88496ade87fd0a251ba8f))
+
+
+### Miscellaneous
+
+* **robocar:** re-stamp the socketed carrier with KiCad 10.0.6 ([#1287](https://github.com/laurigates/mcu-tinkering-lab/issues/1287)) ([b75e65e](https://github.com/laurigates/mcu-tinkering-lab/commit/b75e65e3a934f83175ed780b8119906fe4bbaefd))
+
 ## [0.2.26](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.25...robocar-v0.2.26) (2026-11-25)
 
 
