@@ -58,6 +58,12 @@ typedef enum {
     /** Either version string failed to parse. Fails closed, as
      *  ota_version_compare() does. */
     OTA_DECISION_INVALID_VERSION,
+    /** The manifest's version would install, but it is the version that
+     *  last booted from the other slot, was never confirmed and rolled back
+     *  (issue #1312). Installing it again would repeat the rollback on the
+     *  next reset and loop. A strictly newer version overwrites that slot and
+     *  clears the record, so it installs normally. */
+    OTA_DECISION_REFUSE_ROLLED_BACK,
 } ota_update_decision_t;
 
 /**
@@ -75,13 +81,18 @@ bool ota_build_sha_valid(const char *sha);
  *                        may be NULL or invalid ("unknown", "...-dirty").
  * @param remote_version  The manifest's "version" field.
  * @param remote_sha      The manifest's "buildSha" field; NULL when absent.
+ * @param rolled_back_version The version of the image in
+ *                        esp_ota_get_last_invalid_partition(); NULL when there
+ *                        is none. One that does not parse is ignored.
  *
  * Precedence: an unparseable version first, then a missing/invalid manifest
  * SHA, then the version ordering, then — only for equal versions — the SHA
- * comparison.
+ * comparison. The rolled-back check runs last and only turns an UPDATE into
+ * OTA_DECISION_REFUSE_ROLLED_BACK: it can stop an install, never allow one.
  */
 ota_update_decision_t ota_update_decide(const char *current_version, const char *current_sha,
-                                        const char *remote_version, const char *remote_sha);
+                                        const char *remote_version, const char *remote_sha,
+                                        const char *rolled_back_version);
 
 /** Stable lowercase token for logs and the MQTT status payload. */
 const char *ota_update_decision_name(ota_update_decision_t decision);

@@ -87,26 +87,28 @@ static void test_sha_valid(void)
 /* A strictly newer version installs, whatever the running build's SHA. */
 static void test_newer_version_updates(void)
 {
-    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", sha_b) == OTA_DECISION_UPDATE);
-    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", sha_a) == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", sha_b, NULL) == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", sha_a, NULL) == OTA_DECISION_UPDATE);
     /* A dev build with no usable SHA still takes a real release. */
-    ASSERT(ota_update_decide("0.2.9", "unknown", "0.2.10", sha_b) == OTA_DECISION_UPDATE);
-    ASSERT(ota_update_decide("0.2.9", NULL, "0.2.10", sha_b) == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.9", "unknown", "0.2.10", sha_b, NULL) == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.9", NULL, "0.2.10", sha_b, NULL) == OTA_DECISION_UPDATE);
 }
 
 static void test_same_version_same_sha_up_to_date(void)
 {
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", sha_a) == OTA_DECISION_UP_TO_DATE);
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", sha_a, NULL) == OTA_DECISION_UP_TO_DATE);
     /* "1.2" and "1.2.0" are the same version to ota_version_compare(). */
-    ASSERT(ota_update_decide("1.2", sha_a, "1.2.0", sha_a) == OTA_DECISION_UP_TO_DATE);
+    ASSERT(ota_update_decide("1.2", sha_a, "1.2.0", sha_a, NULL) == OTA_DECISION_UP_TO_DATE);
 }
 
 /* The case the issue is about: a binary rebuilt from another commit under
  * the same version string. Refused, and reported as such. */
 static void test_same_version_different_sha_refused(void)
 {
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", sha_b) == OTA_DECISION_REFUSE_SHA_MISMATCH);
-    ASSERT(ota_update_decide("1.2.0", sha_b, "1.2", sha_a) == OTA_DECISION_REFUSE_SHA_MISMATCH);
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", sha_b, NULL) ==
+           OTA_DECISION_REFUSE_SHA_MISMATCH);
+    ASSERT(ota_update_decide("1.2.0", sha_b, "1.2", sha_a, NULL) ==
+           OTA_DECISION_REFUSE_SHA_MISMATCH);
 }
 
 static void test_same_version_running_sha_unknown(void)
@@ -114,21 +116,24 @@ static void test_same_version_running_sha_unknown(void)
     char dirty[OTA_BUILD_SHA_HEX_LEN + 7];
     snprintf(dirty, sizeof(dirty), "%s-dirty", sha_a);
 
-    ASSERT(ota_update_decide("0.2.10", "unknown", "0.2.10", sha_a) ==
+    ASSERT(ota_update_decide("0.2.10", "unknown", "0.2.10", sha_a, NULL) ==
            OTA_DECISION_RUNNING_SHA_UNKNOWN);
-    ASSERT(ota_update_decide("0.2.10", NULL, "0.2.10", sha_a) == OTA_DECISION_RUNNING_SHA_UNKNOWN);
+    ASSERT(ota_update_decide("0.2.10", NULL, "0.2.10", sha_a, NULL) ==
+           OTA_DECISION_RUNNING_SHA_UNKNOWN);
     /* A dirty build at the published commit must not read as up to date:
      * its contents are not that commit. */
-    ASSERT(ota_update_decide("0.2.10", dirty, "0.2.10", sha_a) == OTA_DECISION_RUNNING_SHA_UNKNOWN);
+    ASSERT(ota_update_decide("0.2.10", dirty, "0.2.10", sha_a, NULL) ==
+           OTA_DECISION_RUNNING_SHA_UNKNOWN);
 }
 
 /* No downgrades, and an older remote is reported as older even when its SHA
  * differs — the SHA only qualifies an equal version. */
 static void test_older_remote(void)
 {
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", sha_b) == OTA_DECISION_OLDER_REMOTE);
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", sha_a) == OTA_DECISION_OLDER_REMOTE);
-    ASSERT(ota_update_decide("0.2.10", "unknown", "0.2.9", sha_a) == OTA_DECISION_OLDER_REMOTE);
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", sha_b, NULL) == OTA_DECISION_OLDER_REMOTE);
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", sha_a, NULL) == OTA_DECISION_OLDER_REMOTE);
+    ASSERT(ota_update_decide("0.2.10", "unknown", "0.2.9", sha_a, NULL) ==
+           OTA_DECISION_OLDER_REMOTE);
 }
 
 /* A manifest from an older generator has no buildSha. Fail closed — even
@@ -138,25 +143,26 @@ static void test_manifest_sha_missing_fails_closed(void)
     char short_sha[OTA_BUILD_SHA_HEX_LEN];
     fill(short_sha, OTA_BUILD_SHA_HEX_LEN - 1, 'a');
 
-    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", NULL) ==
+    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", NULL, NULL) ==
            OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
-    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", "") ==
+    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", "", NULL) ==
            OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
-    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", short_sha) ==
+    ASSERT(ota_update_decide("0.2.9", sha_a, "0.2.10", short_sha, NULL) ==
            OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", NULL) ==
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.10", NULL, NULL) ==
            OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
-    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", NULL) ==
+    ASSERT(ota_update_decide("0.2.10", sha_a, "0.2.9", NULL, NULL) ==
            OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
 }
 
 static void test_invalid_version_fails_closed(void)
 {
-    ASSERT(ota_update_decide(NULL, sha_a, "0.2.10", sha_b) == OTA_DECISION_INVALID_VERSION);
-    ASSERT(ota_update_decide("0.2.9", sha_a, "v0.2.10", sha_b) == OTA_DECISION_INVALID_VERSION);
+    ASSERT(ota_update_decide(NULL, sha_a, "0.2.10", sha_b, NULL) == OTA_DECISION_INVALID_VERSION);
+    ASSERT(ota_update_decide("0.2.9", sha_a, "v0.2.10", sha_b, NULL) ==
+           OTA_DECISION_INVALID_VERSION);
     /* An unparseable version outranks a missing SHA: both refuse, and the
      * version is the more basic defect to report. */
-    ASSERT(ota_update_decide("0.2.9", sha_a, "", NULL) == OTA_DECISION_INVALID_VERSION);
+    ASSERT(ota_update_decide("0.2.9", sha_a, "", NULL, NULL) == OTA_DECISION_INVALID_VERSION);
 }
 
 /* Exhaustive guard on the property that matters most: across every
@@ -174,7 +180,7 @@ static void test_update_only_on_newer_with_valid_sha(void)
             for (size_t cs = 0; cs < ns; cs++) {
                 for (size_t rs = 0; rs < ns; rs++) {
                     ota_update_decision_t d =
-                        ota_update_decide(versions[cv], shas[cs], versions[rv], shas[rs]);
+                        ota_update_decide(versions[cv], shas[cs], versions[rv], shas[rs], NULL);
                     if (d != OTA_DECISION_UPDATE) {
                         continue;
                     }
@@ -188,12 +194,63 @@ static void test_update_only_on_newer_with_valid_sha(void)
     }
 }
 
+/* Issue #1312: an image that booted, was never confirmed and rolled back must
+ * not be installed again by the image it rolled back to. Without this the old
+ * build finds the same version 15 s after every boot and reinstalls it, parking
+ * the robot each time. The rolled-back version comes from
+ * esp_ota_get_last_invalid_partition(); a strictly newer release lands in that
+ * slot and clears it, so it is a fair retry. */
+static void test_rolled_back_version_refused(void)
+{
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", sha_b, "0.2.26") ==
+           OTA_DECISION_REFUSE_ROLLED_BACK);
+    /* Equal by version comparison, not by string. */
+    ASSERT(ota_update_decide("0.2.24", sha_a, "1.2.0", sha_b, "1.2") ==
+           OTA_DECISION_REFUSE_ROLLED_BACK);
+    /* The running build's SHA does not matter: a dirty local build is the
+     * case that loops. */
+    ASSERT(ota_update_decide("0.2.24", "unknown", "0.2.26", sha_b, "0.2.26") ==
+           OTA_DECISION_REFUSE_ROLLED_BACK);
+}
+
+static void test_newer_than_rolled_back_updates(void)
+{
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.27", sha_b, "0.2.26") == OTA_DECISION_UPDATE);
+    /* An older rolled-back image says nothing about a newer manifest. */
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", sha_b, "0.2.25") == OTA_DECISION_UPDATE);
+}
+
+/* No invalid partition, or one whose version does not parse, leaves the
+ * decision alone: this check can only stop an install, never allow one. */
+static void test_no_usable_rolled_back_version_ignored(void)
+{
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", sha_b, NULL) == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", sha_b, "") == OTA_DECISION_UPDATE);
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", sha_b, "garbage") == OTA_DECISION_UPDATE);
+}
+
+/* Only an install is turned into a refusal. Every other outcome keeps its own
+ * reason, so the status topic does not report a rollback for a manifest that
+ * would not have been installed anyway. */
+static void test_rolled_back_keeps_other_outcomes(void)
+{
+    ASSERT(ota_update_decide("0.2.26", sha_a, "0.2.26", sha_a, "0.2.26") ==
+           OTA_DECISION_UP_TO_DATE);
+    ASSERT(ota_update_decide("0.2.27", sha_a, "0.2.26", sha_b, "0.2.26") ==
+           OTA_DECISION_OLDER_REMOTE);
+    ASSERT(ota_update_decide("0.2.24", sha_a, "0.2.26", NULL, "0.2.26") ==
+           OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING);
+    ASSERT(ota_update_decide("0.2.24", sha_a, "v0.2.26", sha_b, "0.2.26") ==
+           OTA_DECISION_INVALID_VERSION);
+}
+
 static void test_decision_names(void)
 {
     ASSERT(strcmp(ota_update_decision_name(OTA_DECISION_UPDATE), "update") == 0);
     ASSERT(strcmp(ota_update_decision_name(OTA_DECISION_REFUSE_SHA_MISMATCH), "sha_mismatch") == 0);
     ASSERT(strcmp(ota_update_decision_name(OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING),
                   "manifest_sha_missing") == 0);
+    ASSERT(strcmp(ota_update_decision_name(OTA_DECISION_REFUSE_ROLLED_BACK), "rolled_back") == 0);
     ASSERT(strcmp(ota_update_decision_name((ota_update_decision_t)99), "unknown") == 0);
 }
 
@@ -211,6 +268,10 @@ int main(void)
     test_run("manifest_sha_missing_fails_closed", test_manifest_sha_missing_fails_closed);
     test_run("invalid_version_fails_closed", test_invalid_version_fails_closed);
     test_run("update_only_on_newer_with_valid_sha", test_update_only_on_newer_with_valid_sha);
+    test_run("rolled_back_version_refused", test_rolled_back_version_refused);
+    test_run("newer_than_rolled_back_updates", test_newer_than_rolled_back_updates);
+    test_run("no_usable_rolled_back_version_ignored", test_no_usable_rolled_back_version_ignored);
+    test_run("rolled_back_keeps_other_outcomes", test_rolled_back_keeps_other_outcomes);
     test_run("decision_names", test_decision_names);
 
     printf("\n=== Results ===\n");

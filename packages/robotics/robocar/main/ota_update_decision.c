@@ -28,8 +28,17 @@ bool ota_build_sha_valid(const char *sha)
     return i == OTA_BUILD_SHA_HEX_LEN;
 }
 
+/* Equal by version ordering ("1.2" == "1.2.0"); false when either does not
+ * parse, so an unreadable rolled-back version never blocks an install. */
+static bool same_version(const char *a, const char *b)
+{
+    return ota_version_compare(a, b) == OTA_VERSION_COMPARE_NO_UPDATE &&
+           ota_version_compare(b, a) == OTA_VERSION_COMPARE_NO_UPDATE;
+}
+
 ota_update_decision_t ota_update_decide(const char *current_version, const char *current_sha,
-                                        const char *remote_version, const char *remote_sha)
+                                        const char *remote_version, const char *remote_sha,
+                                        const char *rolled_back_version)
 {
     const ota_version_compare_result_t forward =
         ota_version_compare(current_version, remote_version);
@@ -42,6 +51,9 @@ ota_update_decision_t ota_update_decide(const char *current_version, const char 
     }
 
     if (forward == OTA_VERSION_COMPARE_UPDATE_AVAILABLE) {
+        if (rolled_back_version != NULL && same_version(remote_version, rolled_back_version)) {
+            return OTA_DECISION_REFUSE_ROLLED_BACK;
+        }
         return OTA_DECISION_UPDATE;
     }
 
@@ -80,6 +92,8 @@ const char *ota_update_decision_name(ota_update_decision_t decision)
             return "manifest_sha_missing";
         case OTA_DECISION_INVALID_VERSION:
             return "invalid_version";
+        case OTA_DECISION_REFUSE_ROLLED_BACK:
+            return "rolled_back";
     }
     return "unknown";
 }
