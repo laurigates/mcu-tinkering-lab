@@ -538,6 +538,10 @@ paying for the order.
 
 3. **Upload the zip** at jlcpcb.com. It should detect 2 layers and
    100 × 100 mm. FR-4, 1.6 mm, 1 oz copper (the track widths assume it), HASL.
+   Ask for filled and capped vias if the 2-layer quote offers it: U5's
+   exposed pad takes five vias that overlap its paste windows, and open ones
+   wick solder from the thermal pad. If it is not offered, order plain vias
+   (`jlcpcb-order` skill § 3, #1308).
    In the Gerber preview check the outline and the `<sha7> <pcb8>` text under
    the title (it must match the zip's name).
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
