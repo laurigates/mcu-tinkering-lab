@@ -169,10 +169,18 @@ _esp32-flash bin: require-port
 # Flash ESP32-S3 firmware natively (bootloader @0x0, 4MB @80MHz).
 # Standard single-app layout. Uses bin_name + baud.
 [private]
-_s3-flash bin: require-port
+_s3-flash bin: require-port (_s3-flash-on port "${BAUD:-460800}" bin)
+
+# The _s3-flash write on a given port and baud, with the same four baked-in
+# assumptions. It checks no port itself: a second adapter (a USB-UART on
+# GPIO43/44) composes it behind its own port check, as _serial-monitor-on is,
+# e.g. `uart-flash: require-uart-port (_s3-flash-on uart_port baud bin_name)`.
+# The baud is quoted in bash, so a `${BAUD:-...}` expression passes through.
+[private]
+_s3-flash-on flash_port flash_baud bin:
     #!/usr/bin/env bash
     set -euo pipefail
-    esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
+    esptool -s --chip esp32s3 -p {{flash_port}} -b "{{flash_baud}}" \
         --before default-reset --after hard-reset \
         write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
         0x0 build/bootloader/bootloader.bin \

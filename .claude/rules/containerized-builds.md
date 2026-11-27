@@ -72,6 +72,7 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 | `_idf-build-checked bin overlay=""` | Private — validated build: filters output to warnings/errors/size and fails fast if `build/{{bin}}.bin` is missing. Pass the app basename. An optional `overlay` (`"sdkconfig.debug-jtag"`) is layered on `sdkconfig.defaults` through `SDKCONFIG_DEFAULTS` for `idf.py set-target`. |
 | `_esp32-flash bin` | Private — native ESP32 flash (bootloader @0x1000, flash-size detect). Pass the app basename. |
 | `_s3-flash bin` | Private — native ESP32-S3 flash (bootloader @0x0, 4MB @80MHz). Pass the app basename. |
+| `_s3-flash-on flash_port flash_baud bin` | Private — the `_s3-flash` write on any port and baud, with no port check of its own; a second adapter composes it behind its own check, e.g. `uart-flash: require-uart-port (_s3-flash-on uart_port baud bin_name)` |
 | `_s3-argfile-flash` | Private — native ESP32-S3 flash of everything the build's `build/flash_args` lists (otadata included), at its offsets and flash size. For tables `_s3-flash` does not fit; the four ThinkPack OTA receivers use it (#1076). |
 | `_s3-reset` / `_s3-monitor` | Private — ESP32-S3 USB-Serial-JTAG reset / CDC-reset monitor (wrap the `tools/esp32s3-*.sh` scripts). |
 | `build` | Public — delegates to `_idf-build` (override to add pre-build steps) |

@@ -91,8 +91,10 @@ SIZE_TO_BYTES = {
 # packages/robotics/robocar explains in prose why it stayed inline, and counting
 # it as a consumer would report the exact project that got this right. Those
 # inline recipes are not unchecked: check_flash_recipe_outputs audits them.
+# `(_s3-flash-on uart_port baud bin_name)` does the same esptool write on another
+# port, so the optional `-on` counts it as an `_s3-flash` consumer.
 RECIPE_RE = re.compile(
-    r"^(?P<name>[a-z0-9][a-z0-9-]*)\s*:[^\n]*?\((?P<shared>_s3-flash|_esp32-flash)\b",
+    r"^(?P<name>[a-z0-9][a-z0-9-]*)\s*:[^\n]*?\((?P<shared>_s3-flash|_esp32-flash)(?:-on)?\b",
     re.MULTILINE,
 )
 TARGET_RE = re.compile(r'^target\s*:=\s*"(?P<target>[^"]+)"', re.MULTILINE)
