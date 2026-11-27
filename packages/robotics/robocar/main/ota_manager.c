@@ -83,7 +83,8 @@ static const char *TAG = "OTA_Manager";
 #define OTA_BIN_URL_BUF_SIZE 256
 /** esp_app_get_description()->version is a fixed 32-byte field. */
 #define OTA_VERSION_STR_BUF_SIZE 32
-/** {"status":"refused","reason":<= 20 chars,"version":<= 31 chars} */
+/** {"status":"refused","reason":<= 20 chars,"version":<= 31 chars}, or
+ *  {"status":"failed","reason":<esp_err_to_name(), <= 40 chars>,"version":...} */
 #define OTA_STATUS_PAYLOAD_BUF_SIZE 128
 
 /* Set by main/CMakeLists.txt from the project CMakeLists.txt's commit lookup
@@ -119,6 +120,7 @@ static bool resolve_relative_url(const char *base_url, const char *relative_path
                                  size_t out_size);
 static void ota_stability_timer_callback(TimerHandle_t xTimer);
 static void report_refusal(ota_update_decision_t decision, const char *remote_version);
+static bool rolled_back_version(char *out, size_t out_len);
 
 #if MQTT_LOGGING_ENABLED
 static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len);
@@ -473,8 +475,12 @@ static bool run_update_check(void)
     const char *remote_sha =
         (cJSON_IsString(sha_node) && sha_node->valuestring) ? sha_node->valuestring : NULL;
 
+    char rolled_back[OTA_VERSION_STR_BUF_SIZE];
+    const bool has_rolled_back = rolled_back_version(rolled_back, sizeof(rolled_back));
+
     const ota_update_decision_t decision =
-        ota_update_decide(current_version, current_sha, remote_version, remote_sha);
+        ota_update_decide(current_version, current_sha, remote_version, remote_sha,
+                          has_rolled_back ? rolled_back : NULL);
     switch (decision) {
         case OTA_DECISION_UPDATE:
             break;
@@ -511,9 +517,17 @@ static bool run_update_check(void)
                      "released version",
                      remote_version, current_sha, remote_sha);
             break;
+        case OTA_DECISION_REFUSE_ROLLED_BACK:
+            ESP_LOGW(TAG,
+                     "Manifest %s is the version that rolled back on this robot (it booted, "
+                     "was never confirmed, and the next reset returned to %s) — not installing "
+                     "it again; a newer release will install",
+                     remote_version, current_version);
+            break;
     }
     if (decision == OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING ||
-        decision == OTA_DECISION_REFUSE_SHA_MISMATCH) {
+        decision == OTA_DECISION_REFUSE_SHA_MISMATCH ||
+        decision == OTA_DECISION_REFUSE_ROLLED_BACK) {
         report_refusal(decision, remote_version);
     }
     if (decision != OTA_DECISION_UPDATE) {
@@ -794,7 +808,14 @@ static void start_https_ota(const char *bin_url)
     } else {
         ESP_LOGE(TAG, "esp_https_ota() failed: %s", esp_err_to_name(ret));
 #if MQTT_LOGGING_ENABLED
-        mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"failed\"}", 1, false);
+        /* The reason was only in the serial log until issue #1312, so a
+         * failure on a robot without a cable said nothing about its cause.
+         * esp_err_to_name() returns a fixed identifier, safe in JSON as-is. */
+        char payload[OTA_STATUS_PAYLOAD_BUF_SIZE];
+        snprintf(payload, sizeof(payload),
+                 "{\"status\":\"failed\",\"reason\":\"%s\",\"version\":\"%s\"}",
+                 esp_err_to_name(ret), s_pending_version);
+        mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, payload, 1, false);
 #endif
         /* The running image is untouched (the download went to the other
          * slot), so let the robot move again and say so. */
@@ -808,9 +829,32 @@ static void start_https_ota(const char *bin_url)
 }
 
 /**
+ * The version of the image that last failed to confirm and rolled back
+ * (esp_ota_get_last_invalid_partition()), for ota_update_decide(). The record
+ * stays until another image is written to that slot, so it outlives reboots,
+ * and a newer release clears it by installing there (issue #1312).
+ *
+ * @return false when there is no such image or its description is unreadable.
+ */
+static bool rolled_back_version(char *out, size_t out_len)
+{
+    const esp_partition_t *invalid = esp_ota_get_last_invalid_partition();
+    if (invalid == NULL) {
+        return false;
+    }
+    esp_app_desc_t desc;
+    if (esp_ota_get_partition_description(invalid, &desc) != ESP_OK) {
+        return false;
+    }
+    snprintf(out, out_len, "%.*s", (int)sizeof(desc.version), desc.version);
+    return out[0] != '\0';
+}
+
+/**
  * Publish a refusal on the OTA status topic, beside downloading / rebooting /
- * failed. Only the two refusals are reported: they mean the published
- * manifest and this robot disagree about what the build is, which nobody sees
+ * failed. Only the three refusals are reported: two mean the published
+ * manifest and this robot disagree about what the build is, and the third
+ * that the published version already rolled back here. Nobody sees either
  * from a log line on a board without a serial cable. remote_version has
  * already passed ota_version_compare(), so it holds only digits and dots.
  */
