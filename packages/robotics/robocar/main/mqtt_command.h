@@ -159,8 +159,8 @@ bool mqtt_command_extract_line(const char *data, int data_len, int total_data_le
  *
  * Recognises the console's single-letter movement vocabulary (F/B/L/R/C/W/S,
  * case-insensitive) and its word form ("forward".."stop"), plus the same
- * command-line prefixes the serial console dispatches on ("plan", "voice",
- * "trace", "mic", "cam", "servo", "led", "sound", "gpio", "snap", "listen").
+ * console command table the serial console dispatches on
+ * (console_cmd_core.h: "plan", "voice", "trace", ...).
  * Anything else — including an empty line — is rejected and dispatches
  * neither callback. Under ops->access == READ_ONLY, a recognised line that is
  * not on the read-only allow-list (every movement command included) is
