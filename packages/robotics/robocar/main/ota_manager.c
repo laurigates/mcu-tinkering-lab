@@ -646,8 +646,11 @@ static ota_park_result_t park(void)
         reactive_telemetry_t t = {0};
         const bool have = reactive_controller_get_telemetry(&t) == ESP_OK;
         const bool rear_ok = have && !t.rear_failed && t.distance_rear_cm != ULTRASONIC_DIST_ERROR;
-        const ota_park_cmd_t cmd = ota_park_step(
-            &p, now_ms(), t.distance_cm, have && !t.sensor_failed, t.distance_rear_cm, rear_ok);
+        /* Before the first good reading distance_cm is the max-range
+         * placeholder, not open space (#1187): treat it as no sensor. */
+        const bool front_ok = have && t.distance_valid && !t.sensor_failed;
+        const ota_park_cmd_t cmd =
+            ota_park_step(&p, now_ms(), t.distance_cm, front_ok, t.distance_rear_cm, rear_ok);
         if (cmd == OTA_PARK_CMD_STOP) {
             /* The hold, not a STOP lease: STOP hands the wheels back to the
              * planner's goal, which could drive off between turning steps. */
