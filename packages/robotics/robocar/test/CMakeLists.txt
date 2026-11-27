@@ -545,7 +545,9 @@ if(CJSON_FOUND)
     target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
     add_test(NAME voice_prompts COMMAND test_voice_prompts)
 else()
-    message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
+    # A WARNING, not STATUS, so a local run does not pass by absence unseen
+    # (#1300). CI greps for "cJSON not found" and fails; keep the phrase.
+    message(WARNING "cJSON not found — skipping test_gemini_parse, test_event_report_core, test_voice_history, test_live_proto, test_live_session_core and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
 endif()
 
 # -----------------------------------------------------------------------------
