@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.18](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.17...balancebot-v0.1.18) (2026-11-27)
+
+
+### Miscellaneous
+
+* **balancebot:** re-route the carrier with the fixed DSN code, KiCad 10.0.6 stamp ([#1303](https://github.com/laurigates/mcu-tinkering-lab/issues/1303)) ([73ac910](https://github.com/laurigates/mcu-tinkering-lab/commit/73ac9108d21ddc4fb4064a6087a255940b17a25a))
+* **balancebot:** recompile the perfboard step guide PDF for the new label placement ([#762](https://github.com/laurigates/mcu-tinkering-lab/issues/762)) ([51a6812](https://github.com/laurigates/mcu-tinkering-lab/commit/51a6812777b3db29de05d0b0d8c83653d6b767a7))
+* **balancebot:** regenerate the perfboard drawing with the new label placement ([#762](https://github.com/laurigates/mcu-tinkering-lab/issues/762)) ([56fd0c4](https://github.com/laurigates/mcu-tinkering-lab/commit/56fd0c44243b4066d2a2d5e02f7d499739d2b584))
+* **balancebot:** set the carrier's min_resolved_spokes to the rule's 1 ([#1302](https://github.com/laurigates/mcu-tinkering-lab/issues/1302)) ([897fc20](https://github.com/laurigates/mcu-tinkering-lab/commit/897fc2053370b734f03f1eef45d41ef8b3a7b60f))
+
 ## [0.1.17](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.16...balancebot-v0.1.17) (2026-11-25)
 
 
