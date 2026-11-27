@@ -1956,7 +1956,8 @@ static void mqtt_command_received(const char *line)
 }
 
 /**
- * @brief `mqtt` — broker-credential state and NVS provisioning (issue #626).
+ * @brief `mqtt` — broker-credential and broker-URI state and NVS provisioning
+ *        (issues #626, #1312).
  *
  * Serial console ONLY. command_task() calls this before execute_console_line(),
  * and "mqtt" is not in mqtt_command.c's forwarded prefixes, so no MQTT message
@@ -1979,11 +1980,28 @@ static void handle_mqtt_cmd(const char *buf)
     const int n = sscanf(buf, "mqtt %7s %127s %127s", op, user, pass);
 
     if (n <= 0) {
-        printf("mqtt: commands=%s (credentials from %s, user=%s) broker=%s\n",
+        printf("mqtt: commands=%s (credentials from %s, user=%s) broker=%s (from %s)\n",
                mqtt_command_access_name(s_mqtt_access), get_mqtt_credentials_source(),
-               get_mqtt_username() ? get_mqtt_username() : "-", MQTT_BROKER_URI);
+               get_mqtt_username() ? get_mqtt_username() : "-",
+               get_mqtt_broker_uri(MQTT_BROKER_URI), get_mqtt_broker_uri_source());
         printf("  usage: mqtt auth <user> <pass> | mqtt auth clear   (applied at next boot;\n");
         printf("         max 32/64 chars, no spaces; NVS wins over credentials.h)\n");
+        printf("         mqtt broker <uri> | mqtt broker clear     (mqtt[s]:// or ws[s]://,\n");
+        printf("         applied at next boot; NVS wins over the build default)\n");
+        return;
+    }
+    /* Issue #1312: a release carries only the compiled default broker. */
+    if (strcmp(op, "broker") == 0 && n == 2) {
+        if (strcmp(user, "clear") == 0) {
+            printf("mqtt: %s\n", credentials_nvs_clear_mqtt_broker()
+                                     ? "NVS broker cleared — reboot to use " MQTT_BROKER_URI
+                                     : "clearing the NVS broker FAILED");
+        } else {
+            printf("mqtt: %s\n", credentials_nvs_save_mqtt_broker(user)
+                                     ? "broker saved to NVS — reboot to apply"
+                                     : "saving the broker FAILED (not mqtt[s]:// or ws[s]://, "
+                                       "too long, or NVS error)");
+        }
         return;
     }
     if (strcmp(op, "auth") == 0 && n == 2 && strcmp(user, "clear") == 0) {
@@ -2000,7 +2018,8 @@ static void handle_mqtt_cmd(const char *buf)
                                  : "saving credentials FAILED (too long, or NVS error)");
         return;
     }
-    printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear\n");
+    printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear | mqtt broker <uri> "
+           "| mqtt broker clear\n");
 }
 
 /**
@@ -2436,7 +2455,8 @@ static bool create_mqtt_client(void)
         return true;
     }
     const mqtt_logger_config_t mqtt_cfg = {
-        .broker_uri = MQTT_BROKER_URI,
+        /* NVS (`mqtt broker`) first, then the compiled default (#1312). */
+        .broker_uri = get_mqtt_broker_uri(MQTT_BROKER_URI),
         .client_id = MQTT_CLIENT_ID,
         /* NULL when unconfigured, which connects anonymously and leaves the
          * command topic read-only (init_mqtt_access()). */

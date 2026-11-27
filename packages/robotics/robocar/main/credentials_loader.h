@@ -150,4 +150,41 @@ bool credentials_nvs_save_mqtt(const char *username, const char *password);
 /** Erase NVS broker credentials, falling back to credentials.h at the next boot. */
 bool credentials_nvs_clear_mqtt(void);
 
+// ---------------------------------------------------------------------------
+// MQTT broker URI (issue #1312)
+//
+// MQTT_BROKER_URI (config.h, or credentials.h) is compiled in, and a release
+// is built with the CMake stub, so a released or OTA image could only reach
+// the default broker. `mqtt broker <uri>` on the serial console stores one in
+// NVS, read before that default. Read once per boot; a change applies at the
+// next boot, like `mqtt auth`.
+// ---------------------------------------------------------------------------
+
+/** 127 characters + NUL; `mqtt broker ` leaves 115 of a console line. */
+#define MAX_MQTT_BROKER_URI_LENGTH 128
+
+/** True for mqtt://, mqtts://, ws:// or wss:// with a non-empty rest, printable
+ *  ASCII without spaces, shorter than MAX_MQTT_BROKER_URI_LENGTH. */
+bool credentials_mqtt_broker_uri_valid(const char *uri);
+
+/** The NVS broker URI, or @p build_default when none valid is stored. */
+const char *get_mqtt_broker_uri(const char *build_default);
+
+/** "nvs" or "build" — where get_mqtt_broker_uri() takes its URI from. */
+const char *get_mqtt_broker_uri_source(void);
+
+/** Store a broker URI in NVS; false for an invalid URI or an NVS error. */
+bool credentials_nvs_save_mqtt_broker(const char *uri);
+
+/** Erase the NVS broker URI; the build default applies at the next boot. */
+bool credentials_nvs_clear_mqtt_broker(void);
+
+/**
+ * Why the last WiFi load from NVS did or did not load (issue #1312): "loaded",
+ * "no_namespace" (nothing ever saved), "open_failed" (NVS not initialised or
+ * broken), "no_ssid", "no_password", "too_long", "read_failed", "empty_ssid",
+ * or "not_read" before the first load. Logged at WARN when it changes.
+ */
+const char *credentials_wifi_nvs_reason(void);
+
 #endif  // CREDENTIALS_LOADER_H

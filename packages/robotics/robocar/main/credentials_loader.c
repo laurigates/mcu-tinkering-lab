@@ -23,6 +23,41 @@ static const char *TAG = "credentials_loader";
 static credentials_t g_credentials = {0};
 static bool g_credentials_initialized = false;
 
+/* Why the last load_from_nvs() did or did not load (issue #1312). It used to
+ * return false with no log line, so a namespace never written, a missing key
+ * and NVS not yet initialised all looked the same. */
+static const char *s_wifi_nvs_reason = "not_read";
+
+/** Record @p reason and log it at WARN when it differs from the last one, so
+ *  the repeated loads before provisioning log it once. No value is logged. */
+static void set_wifi_nvs_reason(const char *reason, esp_err_t err)
+{
+    if (strcmp(reason, s_wifi_nvs_reason) == 0) {
+        return;
+    }
+    s_wifi_nvs_reason = reason;
+    if (strcmp(reason, "loaded") != 0) {
+        ESP_LOGW(TAG, "WiFi not loaded from NVS: %s (%s)", reason, esp_err_to_name(err));
+    }
+}
+
+/** The reason for a failed nvs_get_str() of @p missing. */
+static const char *nvs_get_reason(esp_err_t err, const char *missing)
+{
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return missing;
+    }
+    if (err == ESP_ERR_NVS_INVALID_LENGTH) {
+        return "too_long";
+    }
+    return "read_failed";
+}
+
+const char *credentials_wifi_nvs_reason(void)
+{
+    return s_wifi_nvs_reason;
+}
+
 /**
  * @brief Attempt to load WiFi credentials from NVS (highest priority source).
  *
@@ -33,6 +68,8 @@ static bool load_from_nvs(credentials_t *creds)
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
+        /* NOT_FOUND on a read-only open: nothing was ever saved here. */
+        set_wifi_nvs_reason(err == ESP_ERR_NVS_NOT_FOUND ? "no_namespace" : "open_failed", err);
         return false;
     }
 
@@ -41,11 +78,22 @@ static bool load_from_nvs(credentials_t *creds)
     size_t ssid_len = sizeof(ssid);
     size_t pass_len = sizeof(password);
 
-    bool ok =
-        (nvs_get_str(handle, NVS_KEY_SSID, ssid, &ssid_len) == ESP_OK &&
-         nvs_get_str(handle, NVS_KEY_PASSWORD, password, &pass_len) == ESP_OK && strlen(ssid) > 0);
+    const char *reason = "loaded";
+    err = nvs_get_str(handle, NVS_KEY_SSID, ssid, &ssid_len);
+    if (err != ESP_OK) {
+        reason = nvs_get_reason(err, "no_ssid");
+    } else {
+        err = nvs_get_str(handle, NVS_KEY_PASSWORD, password, &pass_len);
+        if (err != ESP_OK) {
+            reason = nvs_get_reason(err, "no_password");
+        } else if (ssid[0] == '\0') {
+            reason = "empty_ssid";
+        }
+    }
     nvs_close(handle);
+    set_wifi_nvs_reason(reason, err);
 
+    const bool ok = strcmp(reason, "loaded") == 0;
     if (ok) {
         strncpy(creds->wifi_ssid, ssid, MAX_SSID_LENGTH - 1);
         creds->wifi_ssid[MAX_SSID_LENGTH - 1] = '\0';
@@ -386,6 +434,122 @@ bool credentials_nvs_clear_mqtt(void)
         return false;
     }
     ESP_LOGI(TAG, "MQTT credentials cleared from NVS — applied at next boot");
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// MQTT broker URI (issue #1312)
+// ---------------------------------------------------------------------------
+
+/* Its own namespace: `mqtt auth clear` erases the whole mqtt_auth namespace,
+ * and clearing credentials must not also lose the broker. */
+#define NVS_BROKER_NAMESPACE "mqtt_broker"
+#define NVS_KEY_BROKER_URI "uri"
+
+static char s_broker_uri[MAX_MQTT_BROKER_URI_LENGTH];
+static bool s_broker_loaded = false;
+
+bool credentials_mqtt_broker_uri_valid(const char *uri)
+{
+    static const char *const schemes[] = {"mqtt://", "mqtts://", "ws://", "wss://"};
+    if (!uri || strlen(uri) >= MAX_MQTT_BROKER_URI_LENGTH) {
+        return false;
+    }
+    size_t host = 0;
+    for (size_t i = 0; i < sizeof(schemes) / sizeof(schemes[0]); ++i) {
+        const size_t n = strlen(schemes[i]);
+        if (strncmp(uri, schemes[i], n) == 0) {
+            host = n;
+            break;
+        }
+    }
+    if (host == 0 || uri[host] == '\0') {
+        return false;
+    }
+    /* Printable ASCII without spaces, as for the Gemini key. */
+    for (const char *p = uri; *p != '\0'; ++p) {
+        if (*p <= ' ' || *p > '~') {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Read once per boot, like the broker credentials: the client is created once,
+ * so the URI reported must be the one it was started with. */
+static void load_broker_uri(void)
+{
+    if (s_broker_loaded) {
+        return;
+    }
+    s_broker_uri[0] = '\0';
+    nvs_handle_t handle;
+    if (nvs_open(NVS_BROKER_NAMESPACE, NVS_READONLY, &handle) == ESP_OK) {
+        size_t len = sizeof(s_broker_uri);
+        const bool ok = nvs_get_str(handle, NVS_KEY_BROKER_URI, s_broker_uri, &len) == ESP_OK &&
+                        credentials_mqtt_broker_uri_valid(s_broker_uri);
+        nvs_close(handle);
+        if (!ok) {
+            s_broker_uri[0] = '\0';
+        }
+    }
+    s_broker_loaded = true;
+}
+
+const char *get_mqtt_broker_uri(const char *build_default)
+{
+    load_broker_uri();
+    return s_broker_uri[0] != '\0' ? s_broker_uri : build_default;
+}
+
+const char *get_mqtt_broker_uri_source(void)
+{
+    load_broker_uri();
+    return s_broker_uri[0] != '\0' ? "nvs" : "build";
+}
+
+bool credentials_nvs_save_mqtt_broker(const char *uri)
+{
+    if (!credentials_mqtt_broker_uri_valid(uri)) {
+        return false;
+    }
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_BROKER_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for the MQTT broker: %s", esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_set_str(handle, NVS_KEY_BROKER_URI, uri);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save the MQTT broker: %s", esp_err_to_name(err));
+        return false;
+    }
+    ESP_LOGI(TAG, "MQTT broker saved to NVS (%s) — applied at next boot", uri);
+    return true;
+}
+
+bool credentials_nvs_clear_mqtt_broker(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_BROKER_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for the MQTT broker: %s", esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_erase_all(handle);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to clear the MQTT broker: %s", esp_err_to_name(err));
+        return false;
+    }
+    ESP_LOGI(TAG, "MQTT broker cleared from NVS — build default at next boot");
     return true;
 }
 
