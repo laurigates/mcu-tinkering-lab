@@ -318,8 +318,13 @@ esp_err_t servo_get_position(servo_position_t *position)
 {
     if (!servo_state.initialized || !position)
         return ESP_ERR_INVALID_STATE;
+    /* Under the lock, so pan and tilt come from the same side of a move
+     * (#1127). */
+    if (!servo_lock())
+        return ESP_ERR_TIMEOUT;
     position->pan_angle = servo_state.pan_angle;
     position->tilt_angle = servo_state.tilt_angle;
+    servo_unlock();
     return ESP_OK;
 }
 
