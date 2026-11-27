@@ -57,6 +57,7 @@ lines keep a bench session readable:
 | `ota` / `ota check` / `ota postpone` | `ota` alone prints the running version and build, and where an update is (idle, waiting for a quiet moment, announcing, postpone window open, parking, installing); `ota check` checks the manifest now, as the MQTT nudge does; `ota postpone` defers an announced update to the next check, accepted only in the minute after the robot says it is going. See [wifi-and-ota.md](wifi-and-ota.md#before-the-install-announce-postpone-park) |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
+| `quest …` | Teuvo's quest log ([ADR-039](../../../../../docs/decisions/ADR-039-teuvo-quest-log.md), [planner.md](planner.md#quest-log)). `quest` alone prints the open quests, the last five notes, the file size and the clock (`not synced` until SNTP answers); `quest show <id>` one quest with its notes; `quest open <explore\|find\|revisit\|ask> <title>`, `quest note <id> <text>`, `quest active <id>`, `quest done\|drop <id> [outcome]` edit it by hand; `quest clear yes` deletes everything. Changes are written to flash about 0.5 s later |
 | `report` / `report test` | GlitchTip error events ([error-reporting.md](error-reporting.md)). `report` alone prints the event counters (queued, sent, dropped, pending), whether MQTT is up, and how many of the last boot's log lines survived its reset, and where this boot's core dump stands; `report test` queues a synthetic `info` event with this boot's lines so far, to check the path end to end. Over MQTT only with full access: `report test` sends |
 | `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them; `mqtt broker <uri>` stores the broker URI in NVS over the compiled default, `mqtt broker clear` removes it (#1312) — all applied at the next boot |
 | `gemini …` | Serial only. `gemini` alone prints whether a key is set, where it came from (`nvs`/`credentials.h`/`env`/`none`), its length and what the last response said (`untested`/`ok`/`rejected`/`exhausted`); `gemini auth <key>` stores a key in NVS, `gemini auth clear` removes it — both applied from the next request. The key is never printed or logged (issue #845) |
@@ -105,7 +106,7 @@ and classifies the payload before anything acts on it:
 with no `MQTT_USERNAME`/`MQTT_PASSWORD` connects anonymously, and on an
 anonymous broker anything on the LAN can publish to `robocar/commands` — so in
 that mode only the bare status forms reach a handler: `plan`, `trace`, `mic`,
-`cam`, `servo`, `gpio`, `voice`, `voice said`, `idle`, `cliff`. Movement, every setting, and
+`cam`, `servo`, `gpio`, `voice`, `voice said`, `idle`, `cliff`, `quest`. Movement, every setting, and
 `snap`/`mic dump`/`listen` (camera frames and raw audio are not status) are
 refused and logged as `MQTT command refused: read-only …`. With both a
 username and a password configured, the full command set above is available.

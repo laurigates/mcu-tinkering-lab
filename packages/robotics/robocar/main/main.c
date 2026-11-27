@@ -73,6 +73,8 @@
 #include "planner_task.h"
 #include "power_latch.h"
 #include "power_manager.h"
+#include "quest_log_core.h"
+#include "quest_store.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
 #include "self_report.h"
@@ -84,6 +86,7 @@
 #include "voice_budget.h"
 #include "voice_persona.h"
 #include "voice_turn.h"
+#include "wall_clock.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "robocar";
@@ -1833,6 +1836,212 @@ static void handle_ota_cmd(const char *buf)
     printf("  usage: ota check | ota postpone\n");
 }
 
+/* ---- `quest`: Teuvo's quest log (ADR-039 §1) ---------------------------- */
+
+static const char *skip_spaces(const char *p)
+{
+    while (*p == ' ') {
+        p++;
+    }
+    return p;
+}
+
+/* Copy the next space-delimited word of *p into @p out and advance *p past it. */
+static void next_word(const char **p, char *out, size_t out_len)
+{
+    const char *s = skip_spaces(*p);
+    size_t n = 0;
+    while (s[n] != '\0' && s[n] != ' ') {
+        n++;
+    }
+    const size_t keep = n < out_len - 1 ? n : out_len - 1;
+    memcpy(out, s, keep);
+    out[keep] = '\0';
+    *p = skip_spaces(s + n);
+}
+
+static bool parse_quest_id(const char *word, uint16_t *id)
+{
+    char *end = NULL;
+    const unsigned long v = strtoul(word[0] == '#' ? word + 1 : word, &end, 10);
+    if (end == NULL || *end != '\0' || v == 0 || v > UINT16_MAX) {
+        return false;
+    }
+    *id = (uint16_t)v;
+    return true;
+}
+
+static void print_quest_line(const quest_log_t *log, const quest_t *q)
+{
+    printf("  #%u %-7s %-7s %s (%u note%s)\n", (unsigned)q->id, quest_kind_name(q->kind),
+           quest_state_name(q->state), q->title, (unsigned)quest_log_note_count(log, q->id),
+           quest_log_note_count(log, q->id) == 1 ? "" : "s");
+}
+
+static void print_note_line(const quest_note_t *n)
+{
+    char when[24];
+    wall_clock_format(n->at, when, sizeof(when));
+    printf("    #%u %s %c  %s\n", (unsigned)n->quest_id, when, n->pose, n->text);
+}
+
+static void print_quest_summary(const quest_log_t *log)
+{
+    char now[24];
+    const quest_time_t t = wall_clock_now();
+    wall_clock_format(t, now, sizeof(now));
+    printf("quest: %u quest(s), %u open, %u note(s), %u bytes on flash; clock %s%s\n",
+           (unsigned)log->quest_count, (unsigned)quest_log_open_count(log),
+           (unsigned)log->note_count, (unsigned)quest_store_file_bytes(), now,
+           t.synced ? "" : " (not synced)");
+    size_t closed = 0;
+    for (size_t i = 0; i < log->quest_count; i++) {
+        const quest_t *q = &log->quests[i];
+        if (q->state == QUEST_STATE_ACTIVE || q->state == QUEST_STATE_OPEN) {
+            print_quest_line(log, q);
+        } else {
+            closed++;
+        }
+    }
+    if (closed > 0) {
+        printf("  closed: %u (quest show <id>)\n", (unsigned)closed);
+    }
+    const size_t first = log->note_count > 5 ? log->note_count - 5 : 0;
+    if (log->note_count > 0) {
+        printf("  last notes:\n");
+        for (size_t i = first; i < log->note_count; i++) {
+            print_note_line(&log->notes[i]);
+        }
+    }
+}
+
+static void print_quest_detail(const quest_log_t *log, const quest_t *q)
+{
+    char opened[24];
+    wall_clock_format(q->opened, opened, sizeof(opened));
+    printf("quest #%u: %s\n  kind %s, %s, opened %s\n", (unsigned)q->id, q->title,
+           quest_kind_name(q->kind), quest_state_name(q->state), opened);
+    if (q->why[0] != '\0') {
+        printf("  why: %s\n", q->why);
+    }
+    if (q->state == QUEST_STATE_DONE || q->state == QUEST_STATE_DROPPED) {
+        char closed[24];
+        wall_clock_format(q->closed, closed, sizeof(closed));
+        printf("  closed %s: %s\n", closed, q->outcome[0] != '\0' ? q->outcome : "(no outcome)");
+    }
+    for (size_t i = 0; i < log->note_count; i++) {
+        if (log->notes[i].quest_id == q->id) {
+            print_note_line(&log->notes[i]);
+        }
+    }
+}
+
+/**
+ * @brief `quest` console command: read and edit Teuvo's quest log by hand.
+ *
+ * `quest` lists the open quests and the last notes; the rest change the log
+ * and are written to flash by quest_store's task. Opening and noting by hand
+ * is how the planner's quest clause is tried on the bench before the curator
+ * exists (ADR-039, implementation order).
+ */
+static void handle_quest_cmd(const char *buf)
+{
+    static const char *const usage =
+        "quest: usage: quest | quest show <id> | quest open <explore|find|revisit|ask> <title> |"
+        " quest note <id> <text> | quest active <id> | quest done|drop <id> [outcome] |"
+        " quest clear yes";
+    const char *p = skip_spaces(buf + 5);
+    char sub[12];
+    next_word(&p, sub, sizeof(sub));
+
+    quest_log_t *log = quest_store_lock();
+    if (log == NULL) {
+        printf("quest: store %s\n", quest_store_state());
+        return;
+    }
+
+    bool changed = false;
+    quest_err_t err = QUEST_OK;
+    char word[16];
+    uint16_t id = 0;
+    const quest_time_t now = wall_clock_now();
+
+    if (sub[0] == '\0') {
+        print_quest_summary(log);
+        printf("  %s\n", usage + strlen("quest: "));
+    } else if (strcmp(sub, "show") == 0) {
+        next_word(&p, word, sizeof(word));
+        const quest_t *q = parse_quest_id(word, &id) ? quest_log_find(log, id) : NULL;
+        if (q == NULL) {
+            printf("quest: no quest %s\n", word);
+        } else {
+            print_quest_detail(log, q);
+        }
+    } else if (strcmp(sub, "open") == 0) {
+        quest_kind_t kind;
+        next_word(&p, word, sizeof(word));
+        if (!quest_kind_from_name(word, &kind) || *p == '\0') {
+            printf("%s\n", usage);
+        } else {
+            err = quest_log_open(log, kind, p, "opened by hand at the console", now, &id);
+            if (err == QUEST_OK) {
+                changed = true;
+                printf("quest: opened #%u (%s)\n", (unsigned)id, quest_kind_name(kind));
+            }
+        }
+    } else if (strcmp(sub, "note") == 0) {
+        next_word(&p, word, sizeof(word));
+        if (!parse_quest_id(word, &id) || *p == '\0') {
+            printf("%s\n", usage);
+        } else {
+            err = quest_log_note(log, id, '-', p, now);
+            if (err == QUEST_OK) {
+                changed = true;
+                printf("quest: noted on #%u\n", (unsigned)id);
+            }
+        }
+    } else if (strcmp(sub, "active") == 0) {
+        next_word(&p, word, sizeof(word));
+        if (!parse_quest_id(word, &id)) {
+            printf("%s\n", usage);
+        } else {
+            err = quest_log_set_active(log, id);
+            if (err == QUEST_OK) {
+                changed = true;
+                printf("quest: #%u is active\n", (unsigned)id);
+            }
+        }
+    } else if (strcmp(sub, "done") == 0 || strcmp(sub, "drop") == 0) {
+        const bool done = (strcmp(sub, "done") == 0);
+        next_word(&p, word, sizeof(word));
+        if (!parse_quest_id(word, &id)) {
+            printf("%s\n", usage);
+        } else {
+            err = quest_log_close(log, id, done ? QUEST_STATE_DONE : QUEST_STATE_DROPPED, p, now);
+            if (err == QUEST_OK) {
+                changed = true;
+                printf("quest: #%u %s\n", (unsigned)id, done ? "done" : "dropped");
+            }
+        }
+    } else if (strcmp(sub, "clear") == 0) {
+        next_word(&p, word, sizeof(word));
+        if (strcmp(word, "yes") != 0) {
+            printf("quest: `quest clear yes` deletes every quest and note\n");
+        } else {
+            quest_log_clear(log);
+            changed = true;
+            printf("quest: log cleared\n");
+        }
+    } else {
+        printf("%s\n", usage);
+    }
+
+    if (err != QUEST_OK) {
+        printf("quest: %s\n", quest_err_name(err));
+    }
+    quest_store_unlock(changed);
+}
+
 /**
  * @brief `report` — the GlitchTip event path (ADR-033).
  *
@@ -1907,6 +2116,8 @@ static void execute_console_line(const char *buf)
         handle_ota_cmd(buf);
     } else if (strncmp(buf, "report", 6) == 0) {
         handle_report_cmd(buf);
+    } else if (strncmp(buf, "quest", 5) == 0) {
+        handle_quest_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
@@ -2601,6 +2812,9 @@ static void net_supervisor_task(void *arg)
         const bool link_up = wifi_is_connected();
 
         settle_improv_attempt(link_up, &sup);
+        if (link_up) {
+            wall_clock_start(); /* once per boot; quest timestamps (ADR-039) */
+        }
         const net_actions_t act = net_supervisor_step(&sup, link_up, now_ms);
 
         /* MQTT first: ota_manager_init() subscribes to the OTA check-now topic
@@ -2813,6 +3027,12 @@ void app_main(void)
      * self_report renders the per-peripheral breakdown (issue #500). */
     init_hardware();
     self_report_note_init(SELF_REPORT_SUBSYS_I2C_BUS, i2c_bus_is_ready());
+
+    /* Quest log (ADR-039): mounts and loads on its own task, so a first-boot
+     * SPIFFS format does not hold the boot. Non-fatal. */
+    if (quest_store_start() != ESP_OK) {
+        ESP_LOGW(TAG, "quest store not started — quests unavailable");
+    }
 
     // Camera is non-fatal here so the robot can still boot, connect, and report
     // "camera not responding" instead of panicking on a board without the Sense
