@@ -36,6 +36,14 @@ trips:
 A `test` commit that adds new files is not a correction. A `docs` or `ci`
 commit never is.
 
+The auto-fix workflow pushes `fix(auto): resolve CI failure in ...` onto the
+PR branch when a hook such as ruff format fails. It changes only files the PR
+already touched, so it is a rule 8 correction and turns the label to
+`merge:squash`. Fold it into the commit it fixes, then force-push with a
+lease on the branch's current head (#1314). A `chore` is visible in this
+repo's release-please config, so it does not count as the non-releasing last
+commit a `merge:rebase` PR needs.
+
 GitHub also cannot rebase-merge a branch whose commits conflict with `main`
 when replayed one by one, even if a merge of `main` resolved the same
 conflict: on #1149 the replay stopped at the commit that deleted a file `main`

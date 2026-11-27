@@ -597,6 +597,21 @@ down):
     A thermal that reaches only a pocket of fill fenced off by routed tracks
     is "connected to isolated island": route_board.py's island vias tie each
     such pocket to the other layer's plane where a via fits inside the fill.
+62. **A pad's number is not its identity.** A SOT-223's tab and its middle
+    pin are both pad 2. #1301's `check_track_ends` keyed pads by
+    (ref, number), so balancebot's tab-to-pin track read as "starts and ends
+    on one pad" and every re-route stopped before Freerouting ran (#1314).
+    Key a pad by its position too, wherever two pads are compared.
+63. **The perfboard tests read a frozen copy of balancebot, not the live
+    project.** `test_render.py` lays out `testfixture.shared()`, so a label
+    collision in the live `perfboard.svg` can pass every test. Render the
+    live drawing and look at it (`kicad.perfboard <project>`, then a
+    headless screenshot). `just <p>::perfboard` also recompiles the step
+    guide's PDF through `mise exec typst@<version>`; without mise that step
+    fails after the SVG is written, the PDF stays stale, and CI's
+    "Verify committed PDFs match Typst source" catches it. Typst 0.15.0 from
+    its GitHub release, with the recipe's flags, reproduces main's PDF byte
+    for byte (#1314).
 
 ## Verify the gate can fail
 
