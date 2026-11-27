@@ -530,8 +530,10 @@ typedef struct {
     uint16_t front_cm;      /**< Mean of good front readings; releases the reflex. */
     uint16_t front_last_cm; /**< Latest good front reading; trips the reflex.     */
     uint16_t rear_cm;       /**< Latest rear reading, or ULTRASONIC_DIST_ERROR.  */
-    uint16_t rear_last_cm;  /**< Latest good rear reading; holds a reverse.      */
+    uint16_t rear_last_cm;  /**< Latest good rear reading.                       */
     bool front_seen;        /**< A good front reading has arrived since reset.  */
+    bool front_held;        /**< Obstacle reflex latched; see range_hold_step(). */
+    bool rear_held;         /**< Reverse held by the rear reading.              */
     uint32_t streak[ULTRASONIC_COUNT];
     bool failed[ULTRASONIC_COUNT];
 } rangers_t;
@@ -566,19 +568,31 @@ static uint16_t rangers_smooth(rangers_t *r, uint16_t cm)
 }
 
 /**
- * Whether the obstacle reflex holds the wheels.
+ * One good reading's step of a rangefinder hold, with hysteresis.
  *
- * Trips on the latest front reading alone, so the reflex fires on the first
- * reading that sees the obstacle instead of waiting ULTRASONIC_SMOOTH_N
- * readings for the mean to follow. Releases only when the mean agrees, so a
- * close reading still in the filter keeps the brake on. A failed read changes
- * neither, so it can neither trip nor release the reflex (#1185); that holds
- * after ULTRASONIC_FAIL_STREAK too, so a sensor that dies while the reflex is
- * latched keeps forward motion held until it reads clear again.
+ * Trips on the latest reading alone, below STOP_THRESHOLD_CM, so the hold
+ * fires on the first reading that sees the obstacle instead of waiting
+ * ULTRASONIC_SMOOTH_N readings for the mean to follow. A held hold releases
+ * only once the latest reading and the mean both reach STOP_RELEASE_CM, so a
+ * close reading still in the filter keeps the brake on, and an object sitting
+ * at the threshold does not brake and release it every reading (#1312).
+ *
+ * Called on good readings only: a failed read neither trips nor releases a
+ * hold (#1185), also after ULTRASONIC_FAIL_STREAK, so a sensor that dies while
+ * a hold is latched keeps that motion held until it reads clear again.
  */
+static bool range_hold_step(bool held, uint16_t latest_cm, uint16_t mean_cm)
+{
+    if (latest_cm < STOP_THRESHOLD_CM || mean_cm < STOP_THRESHOLD_CM) {
+        return true;
+    }
+    return held && (latest_cm < STOP_RELEASE_CM || mean_cm < STOP_RELEASE_CM);
+}
+
+/** Whether the obstacle reflex holds the wheels (range_hold_step()). */
 static bool rangers_reflex(const rangers_t *r)
 {
-    return r->front_last_cm < STOP_THRESHOLD_CM || r->front_cm < STOP_THRESHOLD_CM;
+    return r->front_held;
 }
 
 /**
@@ -607,11 +621,13 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
                 r->front_cm = rangers_smooth(r, cm);
                 r->front_last_cm = cm;
                 r->front_seen = true;
+                r->front_held = range_hold_step(r->front_held, cm, r->front_cm);
             }
         } else {
             r->rear_cm = ok ? cm : ULTRASONIC_DIST_ERROR;
             if (ok) {
                 r->rear_last_cm = cm;
+                r->rear_held = range_hold_step(r->rear_held, cm, cm);
             }
         }
 
@@ -685,13 +701,13 @@ static bool cliff_allows(cliff_motion_t m)
     return !s_cliff_armed || cliff_permits(&s_cliff, m);
 }
 
-/** Whether something is too close behind to reverse into, by the latest good
- *  rear reading: a failed read does not release a held reverse (#1185). An
- *  absent rear sensor reads as clear: reversing then is blind, as it always
- *  was. */
+/** Whether something is too close behind to reverse into, by the good rear
+ *  readings through range_hold_step() (unsmoothed: the latest is its own mean).
+ *  A failed read does not release a held reverse (#1185). An absent rear
+ *  sensor reads as clear: reversing then is blind, as it always was. */
 static bool rangers_rear_blocked(const rangers_t *r)
 {
-    return r->rear_last_cm < STOP_THRESHOLD_CM;
+    return r->rear_held;
 }
 
 /* -------------------------------------------------------------------------

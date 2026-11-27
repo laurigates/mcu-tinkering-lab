@@ -70,6 +70,13 @@ forward component, arcs and pivots included), back, a turn in place, or none:
 | turn in place | runs (braked if the rear is blocked too) | runs |
 | none | braked (not coasted) | coasts |
 
+Both holds trip on a good reading below `STOP_THRESHOLD_CM` and release only
+once good readings reach `STOP_RELEASE_CM` (`STOP_THRESHOLD_CM` +
+`STOP_RELEASE_MARGIN_CM`, 3 cm); the front also needs its running mean there.
+An object sitting at the threshold read 14 and 15 cm in turn and braked and
+released the wheels every ~0.5 s before the margin (#1312). A failed read
+changes neither hold (#1185).
+
 Until #1026 the front reflex braked every command, so a robot with something in
 front of it could neither back out nor turn away. On 2026-11-09 Teuvo stopped at
 a toy train and stayed stuck. A failed read changes nothing: the last good

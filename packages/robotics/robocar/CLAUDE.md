@@ -22,8 +22,9 @@ Core affinity is load-bearing — do not change without understanding the trade-
   - `ultrasonic` driver — front and rear RCWL-1601 over I2C, polled by the
     executor; a reading completes every ~165 ms (`ULTRASONIC_CONVERSION_MS` plus
     a tick to read and a tick to re-trigger). The front one drives the reflex,
-    which trips on a single reading below `STOP_THRESHOLD_CM` and releases on the
-    running mean, so the worst case from an obstacle appearing to the brake is
+    which trips on a single reading below `STOP_THRESHOLD_CM` and releases once
+    the reading and the running mean reach `STOP_RELEASE_CM` (3 cm above it,
+    #1312), so the worst case from an obstacle appearing to the brake is
     `(2·ceil(ULTRASONIC_CONVERSION_MS / 33) + 1) · 33` ms = 297 ms
     (`REACTIVE_REFLEX_WORST_CASE_MS`, pinned by `test_reflex_latency.c`). That is
     still above the GPIO driver's ~100 ms until the conversion wait is measured
