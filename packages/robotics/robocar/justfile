@@ -156,8 +156,10 @@ cmd line:
 # suites are seconds — run this after touching goal_state, ultrasonic,
 # reactive_controller, base64, speech_tags, dialogue_style or gemini_parse.
 #
-# gemini_parse needs cjson: `brew install cjson` (found via pkg-config, else
-# Homebrew's prefix).
+# Six suites (gemini_parse, voice_history and the rest) need cjson:
+# `brew install cjson` or `apt install libcjson-dev` (found via pkg-config,
+# else Homebrew's prefix). Without it they are skipped and the recipe ends
+# with a warning naming them.
 #
 # `.github/workflows/_ci-build-esp32.yml`'s Host unit tests step runs this
 # exact recipe in CI on any PR touching this project (issue #482).
@@ -165,9 +167,17 @@ cmd line:
 test:
     #!/usr/bin/env bash
     set -euo pipefail
-    cmake -S test -B build-host
+    configure_log=$(cmake -S test -B build-host 2>&1) || { echo "$configure_log"; exit 1; }
+    echo "$configure_log"
     cmake --build build-host
     ctest --test-dir build-host --output-on-failure
+    # Six suites need cJSON; without it they are left out and ctest still
+    # passes. Say so last, where it is read (#1300).
+    if grep -q "cJSON not found" <<<"$configure_log"; then
+        echo "WARNING: cJSON not found, so gemini_parse, event_report_core, voice_history," >&2
+        echo "         live_proto, live_session_core and voice_prompts did not run." >&2
+        echo "         Install libcjson-dev (apt) or cjson (brew); CI runs them." >&2
+    fi
 
 ##########
 # Docs
