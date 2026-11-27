@@ -726,6 +726,84 @@ static void test_the_release_clears_the_flag_before_it_unlocks(void)
     CHECK(!servo_is_enabled(SERVO_PAN) && !servo_is_enabled(SERVO_TILT), "both must read off");
 }
 
+/* The console's other entry points: each must wait for an executor write
+ * already in flight rather than run beside it (#1127). servo_get_position()
+ * included, so a reader never pairs a pan from before a move with a tilt from
+ * after it. */
+typedef enum { OP_ENABLE, OP_SET_LIMITS, OP_SET_FREQUENCY, OP_GET_POSITION } console_op_t;
+
+typedef struct {
+    console_op_t op;
+    esp_err_t result;
+    bool done;
+} op_runner_t;
+
+static void *op_main(void *arg)
+{
+    op_runner_t *r = arg;
+    esp_err_t ret = ESP_FAIL;
+    switch (r->op) {
+        case OP_ENABLE:
+            ret = servo_enable(SERVO_PAN);
+            break;
+        case OP_SET_LIMITS: {
+            int16_t lo = 0, hi = 0;
+            (void)servo_get_limits(SERVO_TILT, &lo, &hi);
+            ret = servo_set_limits(SERVO_TILT, lo, hi);
+            break;
+        }
+        case OP_SET_FREQUENCY:
+            ret = servo_set_pwm_frequency(i2c_bus_pca9685_frequency());
+            break;
+        case OP_GET_POSITION: {
+            servo_position_t pos;
+            ret = servo_get_position(&pos);
+            break;
+        }
+    }
+    pthread_mutex_lock(&s_gate_m);
+    r->result = ret;
+    r->done = true;
+    pthread_cond_broadcast(&s_gate_cv);
+    pthread_mutex_unlock(&s_gate_m);
+    return NULL;
+}
+
+static void check_op_waits_for_a_write(console_op_t op, const char *name)
+{
+    CHECK(servo_enable_all() == ESP_OK, "%s: servo on failed", name);
+    reset_bus();
+
+    writer_t exec = {.is_release = false, .pan_deg = 10};
+    op_runner_t runner = {.op = op};
+    pthread_t te, to;
+
+    arm_gate(SERVO_PAN_CHANNEL, false);
+    pthread_create(&te, NULL, writer_main, &exec);
+    CHECK(wait_for(&s_gate_parked, NULL), "%s: the executor's write never reached the bus", name);
+
+    pthread_create(&to, NULL, op_main, &runner);
+    (void)wait_for(&runner.done, &s_lock_contended);
+    pthread_mutex_lock(&s_gate_m);
+    const bool waited = s_lock_contended && !runner.done;
+    pthread_mutex_unlock(&s_gate_m);
+    CHECK(waited, "%s ran beside an executor write instead of waiting for the lock", name);
+    open_gate();
+    pthread_join(te, NULL);
+    pthread_join(to, NULL);
+
+    CHECK(exec.result == ESP_OK, "%s: the executor's write returned %d", name, exec.result);
+    CHECK(runner.result == ESP_OK, "%s returned %d", name, runner.result);
+}
+
+static void test_console_calls_wait_for_an_executor_write(void)
+{
+    check_op_waits_for_a_write(OP_ENABLE, "servo_enable");
+    check_op_waits_for_a_write(OP_SET_LIMITS, "servo_set_limits");
+    check_op_waits_for_a_write(OP_SET_FREQUENCY, "servo_set_pwm_frequency");
+    check_op_waits_for_a_write(OP_GET_POSITION, "servo_get_position");
+}
+
 int main(void)
 {
     struct {
@@ -760,6 +838,7 @@ int main(void)
         {"an_executor_write_during_off_is_refused", test_an_executor_write_during_off_is_refused},
         {"the_release_clears_the_flag_before_it_unlocks",
          test_the_release_clears_the_flag_before_it_unlocks},
+        {"console_calls_wait_for_an_executor_write", test_console_calls_wait_for_an_executor_write},
     };
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         int before = s_failures;

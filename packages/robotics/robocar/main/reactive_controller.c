@@ -1278,10 +1278,14 @@ esp_err_t reactive_controller_head_hold(reactive_head_axis_t axis, int16_t angle
     if (ttl_ms == 0) {
         ttl_ms = REACTIVE_HEAD_HOLD_TTL_MS;
     }
-    /* Read outside the spinlock: servo_get_position() is a plain copy, but it
-     * is not ours to call with interrupts masked. */
+    /* Read outside the spinlock: servo_get_position() takes the servo lock,
+     * which must not be taken with interrupts masked. A timed-out read leaves
+     * the lease as it was rather than seeding a fresh hold at 0/0. Without
+     * servos the read fails and 0/0 is the head-forward pose. */
     servo_position_t pos = {0};
-    (void)servo_get_position(&pos);
+    if (servo_get_position(&pos) == ESP_ERR_TIMEOUT) {
+        return ESP_ERR_TIMEOUT;
+    }
     const int64_t expiry = esp_timer_get_time() + (int64_t)ttl_ms * 1000;
 
     portENTER_CRITICAL(&s_head_mux);
