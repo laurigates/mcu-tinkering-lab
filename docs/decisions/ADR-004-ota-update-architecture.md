@@ -1,6 +1,8 @@
 # ADR-004: OTA Firmware Update Architecture
 
 > **Implementation removed (2026-11).** The dual-ESP32 firmware this record describes (`robocar-main`, `robocar-camera`) was deleted in favour of `robocar` ([ADR-013](ADR-013-single-board-xiao-esp32s3.md)). The record is kept for history; the code is in git history before that removal.
+>
+> **esp_ghota polling replaced (#539, #559).** esp_ghota never completed an update in this monorepo: it called the wrong API host, its filename match could not hit, and release-please's `<component>-v<semver>` tags do not parse as semver. `robocar` polls the web flasher's manifest instead (`packages/robotics/robocar/main/ota_manager.c`), and the `ota-github` component dropped esp_ghota and its PULL mode ([ADR-015, Update 2026-11-13](ADR-015-ota-github-shared-component.md)). The esp_ghota layer below describes the removed design.
 
 ## Status
 
