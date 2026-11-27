@@ -749,6 +749,36 @@ def check_ota_writer_tables() -> list[Finding]:
     return findings
 
 
+def check_flash_size_conflicts() -> list[Finding]:
+    """FLASH_SIZE_CONFLICT for every ESP-IDF project, not only shared consumers.
+
+    audit() reports a conflict for a project that composes a shared flash
+    recipe; an inline recipe, or a project with none, builds from the same
+    sdkconfig.defaults and was not read (#1300). Shared consumers are skipped
+    here so each conflict is reported once.
+    """
+    findings: list[Finding] = []
+    for cmake in sorted((REPO_ROOT / "packages").rglob("CMakeLists.txt")):
+        project_dir = cmake.parent
+        if cmake_project_name(project_dir) is None:
+            continue
+        justfile = project_dir / "justfile"
+        if justfile.is_file() and RECIPE_RE.search(justfile.read_text()):
+            continue
+        cfg = parse_sdkconfig(project_dir / "sdkconfig.defaults")
+        _, conflict = declared_flash_size(cfg)
+        if conflict:
+            findings.append(
+                Finding(
+                    _display(project_dir),
+                    "FLASH_SIZE_CONFLICT",
+                    f"sdkconfig.defaults declares more than one flash size "
+                    f"({conflict}); keep one",
+                )
+            )
+    return findings
+
+
 def flash_recipes(just: str) -> tuple[list[tuple[str, Path]], list[Finding]]:
     """Every public module recipe with "flash" in its name, with its directory."""
     modules = {
@@ -954,6 +984,7 @@ def main() -> int:
     findings += check_justfile_directory()
     findings += output_findings
     findings += ota_table_findings
+    findings += check_flash_size_conflicts()
     flagged = {f.project for f in output_findings}
 
     print("=== SHARED FLASH RECIPE CONSUMERS ===")

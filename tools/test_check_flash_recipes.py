@@ -1447,6 +1447,51 @@ class SharedRecipeTests(TempRepo):
         self.assertEqual(cfr.collect(), [])
 
 
+class FlashSizeConflictTests(TempRepo):
+    """Two flash sizes in one sdkconfig.defaults, on any project (#1300).
+
+    audit() reports the conflict only for a shared-recipe consumer; an inline
+    flash recipe or a project with none was not checked.
+    """
+
+    CMAKE = (
+        "cmake_minimum_required(VERSION 3.16)\n"
+        "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\n"
+        "project(demo-inline)\n"
+    )
+    CONFLICT = 'CONFIG_ESPTOOLPY_FLASHSIZE="4MB"\nCONFIG_ESPTOOLPY_FLASHSIZE_8MB=y\n'
+
+    def project(self, sdkconfig: str, rel: str = "packages/demo/inline") -> None:
+        self.write(f"{rel}/CMakeLists.txt", self.CMAKE)
+        self.write(f"{rel}/justfile", "flash:\n    esptool.py write_flash 0x0 x.bin\n")
+        self.write(f"{rel}/sdkconfig.defaults", sdkconfig)
+
+    def codes(self) -> list[str]:
+        return [f.code for f in cfr.check_flash_size_conflicts()]
+
+    def test_a_project_without_a_shared_recipe_is_checked(self):
+        self.project(self.CONFLICT)
+        self.assertEqual(self.codes(), ["FLASH_SIZE_CONFLICT"])
+
+    def test_one_size_is_no_finding(self):
+        self.project("CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y\n")
+        self.assertEqual(self.codes(), [])
+
+    def test_a_pico_project_is_not_read(self):
+        self.write("packages/demo/pico/CMakeLists.txt", "project(pico C CXX)\n")
+        self.write("packages/demo/pico/sdkconfig.defaults", self.CONFLICT)
+        self.assertEqual(self.codes(), [])
+
+    def test_a_shared_recipe_consumer_is_left_to_audit(self):
+        # audit() reports it already; one finding, not two.
+        self.project(self.CONFLICT)
+        self.write(
+            "packages/demo/inline/justfile",
+            'target := "esp32s3"\nbin_name := "thing"\n\nflash: (_s3-flash bin_name)\n',
+        )
+        self.assertEqual(self.codes(), [])
+
+
 class OtaWriterTableTests(TempRepo):
     """A project that writes OTA images needs otadata and two app slots (#1076).
 
