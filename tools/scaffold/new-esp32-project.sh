@@ -176,11 +176,12 @@ fi
 # new project in the justfile's echo lines (the info recipe). Left as is, the
 # flash recipe names the template's binary (issue #1178). A type-4 source may
 # name its binary in a `project_name :=` line or a hardcoded build/<name>.bin
-# path instead of bin_name, so those follow the template's project() name too.
+# path instead of bin_name, so those follow the template's project() name too,
+# read from `project(<name>)` or `project(<name> VERSION ...)` (#1300).
 if [ -f "$PROJECT_DIR/justfile" ]; then
     TEMPLATE_NAME=$(basename "$TEMPLATE_DIR")
-    CMAKE_PROJECT=$(sed -n 's/^project(\([^) ]*\)).*/\1/p' "$PROJECT_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
-    OLD_PROJECT=$(sed -n 's/^project(\([^) ]*\)).*/\1/p' "$TEMPLATE_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
+    CMAKE_PROJECT=$(sed -n 's/^project(\([^) ]*\)[) ].*/\1/p' "$PROJECT_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
+    OLD_PROJECT=$(sed -n 's/^project(\([^) ]*\)[) ].*/\1/p' "$TEMPLATE_DIR/CMakeLists.txt" 2>/dev/null | head -n 1)
     EXPR="/^[[:space:]]*@echo /s/$TEMPLATE_NAME/$PROJECT_NAME/g"
     if [[ $CMAKE_PROJECT =~ ^[A-Za-z0-9_.-]+$ ]]; then
         EXPR="$EXPR; s|^bin_name := .*|bin_name := \"$CMAKE_PROJECT\"|"
