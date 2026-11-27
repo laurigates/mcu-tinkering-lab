@@ -34,6 +34,7 @@
 #include "gemini_http.h"
 #include "gemini_parse.h"
 #include "http_timing.h"
+#include "live_session.h"
 #include "mic_pdm.h"
 #include "motor_controller.h"
 #include "pin_config.h"
@@ -89,6 +90,7 @@ static const char *TAG = "voice_turn";
 typedef struct {
     uint32_t window_ms; /**< Fixed window (`listen`), or the ceiling for a VAD turn. */
     bool vad;           /**< Pre-roll + end-of-speech instead of a fixed window. */
+    bool live;          /**< A Gemini Live session instead (`voice live on`, ADR-032). */
 } voice_turn_req_t;
 
 /** What one recording produced, for the per-turn log line. */
@@ -629,6 +631,36 @@ static void run_turn(uint32_t window_ms, bool vad)
     ambient_audio_mark_spoken();
 }
 
+/**
+ * @brief One Gemini Live session in place of a hands-free turn (ADR-032).
+ *
+ * Same checks on this task as run_turn() — link and budget, because a request
+ * can wait in the queue while the last of the ceiling goes — then the session
+ * runs here to its end, so voice_turn_is_busy() stays true for its length and
+ * the planner's line and an OTA install keep off the speaker meanwhile.
+ * live_session_run() charges the budget once the server accepts the setup.
+ */
+static void run_live(void)
+{
+    if (!wifi_is_connected()) {
+        ESP_LOGW(TAG, "live: no WiFi link — session skipped");
+        return;
+    }
+    const voice_budget_verdict_t verdict =
+        voice_budget_check((uint32_t)(esp_timer_get_time() / 1000), true);
+    if (verdict != VOICE_BUDGET_OK) {
+        ESP_LOGW(TAG, "live: session refused at start — %s",
+                 verdict == VOICE_BUDGET_TRIP_CEILING ? "spend ceiling reached" : "rationed");
+        return;
+    }
+    const char *api_key = get_gemini_api_key();
+    if (!api_key || api_key[0] == '\0') {
+        ESP_LOGE(TAG, "no Gemini API key — cannot open a Live session");
+        return;
+    }
+    live_session_run(api_key);
+}
+
 static void voice_turn_task(void *arg)
 {
     (void)arg;
@@ -641,7 +673,11 @@ static void voice_turn_task(void *arg)
         }
         s_turns_started = s_turns_started + 1u;
         s_busy = true;
-        run_turn(req.window_ms, req.vad);
+        if (req.live) {
+            run_live();
+        } else {
+            run_turn(req.window_ms, req.vad);
+        }
         s_busy = false;
     }
 }
@@ -715,7 +751,10 @@ esp_err_t voice_turn_request(uint32_t window_ms)
 
 esp_err_t voice_turn_request_vad(void)
 {
-    const voice_turn_req_t req = {.window_ms = VOICE_TURN_VAD_MAX_MS, .vad = true};
+    /* With `voice live on` the same trigger opens a Live session instead; the
+     * enqueue checks (link, mic, not speaking, ration, ceiling) are the same. */
+    const voice_turn_req_t req = {
+        .window_ms = VOICE_TURN_VAD_MAX_MS, .vad = true, .live = live_session_enabled()};
     return enqueue(&req);
 }
 

@@ -61,6 +61,7 @@
 /* motor_controller_init() in the hardware phase and motor_is_initialized() in
  * the boot wheel exercise — both reads. Motor *output* is the reactive
  * executor's job, and nothing here writes the motors directly. */
+#include "live_session.h"
 #include "motor_controller.h"
 #include "mqtt_command.h"
 #include "mqtt_logger.h"
@@ -611,6 +612,7 @@ static void handle_periph_cmd(const char *buf)
  * `voice ration <n> <seconds>` — at most n hands-free voice-turn requests per window
  * `voice turns [<n>]`          — voice-turn spend; with n, the per-boot ceiling (0 = off)
  * `voice resume`               — reopen a tripped voice-turn ceiling and zero the counters
+ * `voice live [on|off|stop|idle <s>|cap <s>]` — hands-free turns as Gemini Live sessions (ADR-032)
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  * `trace`                      — camera + endpoint activity counters since boot
@@ -634,6 +636,27 @@ static void handle_periph_cmd(const char *buf)
  * logs each cycle and set the threshold from real numbers. None of the four
  * persist: a boot comes up at the documented default rather than at whatever an
  * experiment left behind. */
+/**
+ * @brief One line on Gemini Live sessions (ADR-032): the switch, the close
+ *        knobs, and what sessions have done since boot.
+ */
+static void print_live_status(const char *indent)
+{
+    uint32_t idle_ms = 0;
+    uint32_t max_ms = 0;
+    uint32_t sessions = 0;
+    uint32_t failures = 0;
+    uint32_t turns = 0;
+    uint32_t waits = 0;
+    live_session_get_config(&idle_ms, &max_ms);
+    live_session_stats(&sessions, &failures, &turns, &waits);
+    printf("%slive:   %s%s | idle %u s, cap %u s | sessions %u (failed %u), turns %u, waits %u\n",
+           indent, live_session_enabled() ? "on" : "off",
+           live_session_is_open() ? " (session open)" : "", (unsigned)(idle_ms / 1000u),
+           (unsigned)(max_ms / 1000u), (unsigned)sessions, (unsigned)failures, (unsigned)turns,
+           (unsigned)waits);
+}
+
 /**
  * @brief Two lines on what voice turns have spent (voice_budget.h, issue #623).
  *
@@ -739,6 +762,7 @@ static void handle_voice_cmd(const char *buf)
                (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
                (unsigned)speech_trigger_sustain_ms());
         print_voice_turn_budget("  ", now_ms);
+        print_live_status("  ");
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -766,6 +790,7 @@ static void handle_voice_cmd(const char *buf)
             "         voice endpoint <quiet_ms> <db>   when a hands-free turn stops recording\n");
         printf("         voice trigger <band%%> <db> <ms>  what starts one (see `mic`)\n");
         printf("         voice ration <n> <s> | turns <n> | resume   what voice turns may spend\n");
+        printf("         voice live on|off|stop | idle <s> | cap <s>   Gemini Live sessions\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
         printf(
@@ -984,6 +1009,35 @@ static void handle_voice_cmd(const char *buf)
             printf("voice: voice=%s\n", clear ? "(persona default)" : name);
         } else {
             printf("voice: could not set voice\n");
+        }
+        return;
+    }
+
+    if (strcmp(op, "live") == 0) {
+        /* Gemini Live sessions in place of hands-free turns (ADR-032 phase 1).
+         * Off at boot and not persisted, like every voice switch. */
+        char sub[8] = {0};
+        unsigned secs = 0;
+        const int got = sscanf(buf, "voice live %7s %u", sub, &secs);
+        if (got >= 1 && strcmp(sub, "on") == 0) {
+            live_session_set_enabled(true);
+        } else if (got >= 1 && strcmp(sub, "off") == 0) {
+            live_session_set_enabled(false);
+            live_session_request_stop();
+        } else if (got >= 1 && strcmp(sub, "stop") == 0) {
+            live_session_request_stop();
+        } else if (got == 2 && strcmp(sub, "idle") == 0 && secs >= 2 && secs <= 120) {
+            live_session_configure(secs * 1000u, 0);
+        } else if (got == 2 && strcmp(sub, "cap") == 0 && secs >= 30 && secs <= 540) {
+            /* 540 s keeps a session inside the ~10 min connection limit. */
+            live_session_configure(0, secs * 1000u);
+        } else if (got >= 1) {
+            printf("voice: usage: voice live on|off|stop | idle <2..120 s> | cap <30..540 s>\n");
+            return;
+        }
+        print_live_status("voice: ");
+        if (got >= 1) {
+            ESP_LOGI(TAG, "voice: live %s", sub);
         }
         return;
     }
