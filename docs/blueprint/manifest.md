@@ -61,6 +61,7 @@ Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, p
 | ADR-036 | ADR | Robocar Twin Executor and Plant Port | accepted | 2026-11-13 |
 | ADR-037 | ADR | Balancebot Untethered Run Log in RAM, Saved to Flash After the Run | accepted | 2026-11-24 |
 | ADR-038 | ADR | Carrier Power Design: the BMS Stays on the Pack, the Switch, Cutoff and Charging Move Onto the Carrier | accepted | 2026-11-24 |
+| ADR-039 | ADR | Teuvo's Quest Log: Self-Chosen Long-Horizon Tasks Kept on the Robot | accepted | 2026-11-27 |
 | PRP-carrier-power-architecture | PRP | Carrier Power Design: Switch, Cutoff, Monitoring and Charging | planned | 2026-11-24 |
 | PRP-hardware-in-the-loop-testing | PRP | Hardware-in-the-Loop (HIL) Testing | planned | 2026-04-18 |
 | PRP-hierarchical-ai-controller | PRP | Hierarchical AI Controller (Planner + Reactive Executor) | draft | 2026-04-18 |

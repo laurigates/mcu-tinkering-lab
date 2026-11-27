@@ -485,6 +485,12 @@
         "status": "accepted",
         "created": "2026-11-24"
       },
+      "ADR-039": {
+        "path": "docs/decisions/ADR-039-teuvo-quest-log.md",
+        "title": "Teuvo's Quest Log: Self-Chosen Long-Horizon Tasks Kept on the Robot",
+        "status": "accepted",
+        "created": "2026-11-27"
+      },
       "PRP-carrier-power-architecture": {
         "path": "docs/prompts/carrier-power-architecture.md",
         "title": "Carrier Power Design: Switch, Cutoff, Monitoring and Charging",
