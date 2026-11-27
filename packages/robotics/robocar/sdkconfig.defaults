@@ -37,6 +37,18 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=y
 # and then never reached Gemini.
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 
+# Software AES for TLS. With the record buffers in PSRAM (above), the hardware
+# AES path still needs internal DMA-capable memory for every record: DMA
+# descriptors, and 1600-byte bounce buffers when a buffer is not cache-line
+# aligned (esp_aes_dma_core.c, ESP-IDF 5.5). That pool is the one camera, I2S
+# and WiFi DMA draw on, and when it ran out mid-stream the TTS request failed
+# with `esp-aes: Failed to allocate memory` and
+# ESP_ERR_HTTP_CONNECTION_CLOSED (#1312, local 0.2.26 build, 23.6 s uptime).
+# Software AES allocates nothing per record. Its cost is CPU on core 1: the TTS
+# stream and the Live session move well under 200 kB/s, a few percent of a
+# 240 MHz core.
+CONFIG_MBEDTLS_HARDWARE_AES=n
+
 # Camera (DMA on Core 1 to isolate from motor control on Core 0)
 CONFIG_CAMERA_CORE1=y
 CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
