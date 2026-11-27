@@ -198,17 +198,7 @@ require-uart-port:
 # Flash firmware via USB-UART adapter (requires RTS→EN and DTR→GPIO0 wired for auto-reset)
 # Wiring: UART TX→GPIO44, RX→GPIO43, RTS→EN, DTR→GPIO0, GND→GND
 [group: "device"]
-flash-uart: require-uart-port
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Flashing via UART adapter {{uart_port}} @ {{uart_flash_baud}} baud"
-    esptool -s --chip esp32s3 -p {{uart_port}} -b {{uart_flash_baud}} \
-        --before default-reset --after hard-reset \
-        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
-        0x0 build/bootloader/bootloader.bin \
-        0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/xbox-switch-bridge.bin
-    echo "Flashed OK"
+flash-uart: require-uart-port (_s3-flash-on uart_port uart_flash_baud bin_name)
 
 # Flash via UART adapter then open serial monitor
 [group: "device"]
