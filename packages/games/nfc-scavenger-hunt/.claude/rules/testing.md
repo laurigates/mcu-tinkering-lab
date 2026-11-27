@@ -18,5 +18,5 @@ reviewed: 2026-04-05
 
 ## Test Organization
 
-- Tests in `test/` directory following ESP-IDF Unity test conventions
-- Host-based tests use CMake CTest where applicable
+- The project has no tests yet: there is no `test/` directory and no CTest suite.
+  The strategy above is the plan for the first suite, not a description of one.
