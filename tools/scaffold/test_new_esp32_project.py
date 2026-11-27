@@ -220,6 +220,45 @@ class CopyFromExisting(unittest.TestCase):
         self.assertNotIn("src-proj", justfile)
 
 
+class CopyFromVersionedProject(unittest.TestCase):
+    """Project type 4 from a source whose project() takes more arguments
+    (packages/robotics/balancebot: `project(balancebot VERSION ...)`). The
+    name was read only from `project(<name>)`, so the binary kept the source's
+    name (#1300)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls._tmp.name)
+        make_tree(cls.root)
+        source = cls.root / "packages" / "games" / "ver-proj"
+        (source / "main").mkdir(parents=True)
+        (source / "CMakeLists.txt").write_text(
+            "project(ver-proj VERSION ${VER} LANGUAGES C CXX ASM)\n"
+        )
+        (source / "justfile").write_text(
+            'bin_name := "ver-proj"\n'
+            "flash:\n    esptool.py write_flash 0x10000 build/ver-proj.bin\n"
+        )
+        cls.result = run_scaffold(
+            cls.root, ["copy-ver", SENSORS, "4", "games/ver-proj"]
+        )
+        cls.project = cls.root / "packages" / "sensors" / "copy-ver"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_justfile_flashes_the_binary_the_build_writes(self):
+        self.assertEqual(
+            self.result.returncode, 0, self.result.stdout + self.result.stderr
+        )
+        justfile = (self.project / "justfile").read_text()
+        self.assertIn('bin_name := "copy-ver"', justfile)
+        self.assertIn("0x10000 build/copy-ver.bin", justfile)
+        self.assertNotIn("ver-proj", justfile)
+
+
 class CopyFromBareSource(unittest.TestCase):
     """Project type 4 from a source with no mDNS call, no version.txt and only
     one of the release files (packages/audio/kids-audio-toy lacks the mDNS
