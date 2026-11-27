@@ -64,7 +64,7 @@ cp main/credentials.h.example main/credentials.h
 | `bluepad32_host` | Bluepad32 v3.x custom platform — BLE gamepad scan/connect, shared state |
 | `button_mapper` | Xbox → Switch input mapping (face button swap, stick remapping, triggers) |
 | `switch_pro_usb` | TinyUSB HID (VID 0x057E / PID 0x2009), 0x80 handshake, 0x30 input reports |
-| `status_led` | WS2812 RMT driver — caller-driven via `status_led_update()` at 125 Hz |
+| `status_led` | Mode table on the shared WS2812 layer (`packages/components/status-led`) — caller-driven via `status_led_update()` at 125 Hz |
 | `controller_profile` | Swappable controller identity profiles (type, caps, colors, MAC) for FR12 multi-controller |
 | `log-udp` (shared, `packages/components/log-udp`) | WiFi SoftAP "xbox-bridge-log" + UDP broadcast log sink on port 4444 |
 
