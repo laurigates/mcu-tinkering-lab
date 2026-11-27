@@ -236,6 +236,12 @@ Each step is a PR, testable before the next.
    `remember`.
 6. `drive` in quest sessions, after ADR-029 step 6 (wander).
 
+## Resolved questions (Lauri, 2026-11-27)
+
+| Question | Ruling |
+|---|---|
+| Who chooses quests: a separate curator call or the planner alone? | A separate curator call (§2) |
+
 ## Open questions
 
 1. Curator model: flash-lite text-only is assumed; whether Robotics-ER with no
