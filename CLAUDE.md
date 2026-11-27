@@ -64,6 +64,7 @@ mcu-tinkering-lab/
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
 │       ├── ota-github/             # GitHub Releases OTA updater
 │       ├── log-udp/                # SoftAP + UDP broadcast log sink (SSID and password via Kconfig)
+│       ├── status-led/             # WS2812 status LED layer each project's status_led compiles beside its mode table
 │       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
 ├── .github/workflows/              # CI/CD pipelines
 ├── tools/scaffold/                 # Project scaffolding scripts
