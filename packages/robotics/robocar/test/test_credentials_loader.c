@@ -1,8 +1,8 @@
 /**
  * @file test_credentials_loader.c
  *
- * Pins the MQTT broker-credential loader (issue #639) and the Gemini key
- * loader (issue #845). Its output decides
+ * Pins the MQTT broker-credential loader (issue #639), the Gemini key
+ * loader (issue #845), the broker URI and the WiFi NVS reason (issue #1312). Its output decides
  * whether the MQTT command topic may change anything
  * (mqtt_command_access_for_credentials(), pinned in test_mqtt_command.c), so
  * what reaches that decision matters as much as the decision:
@@ -46,6 +46,9 @@
 #define WIFI_NS "wifi_config"
 #define GEMINI_NS "gemini_auth"
 #define GEMINI_KEY "key"
+#define BROKER_NS "mqtt_broker"
+#define BROKER_KEY "uri"
+#define BUILD_BROKER "mqtt://192.168.0.100:1883"
 
 #ifdef CREDENTIALS_FIXTURE_NO_MQTT
 #define FALLBACK_USER NULL
@@ -486,6 +489,196 @@ static void test_gemini_clear_falls_back_now(void)
     CHECK_STR(nvs_shim_get(WIFI_NS, "ssid"), "home"); /* WiFi untouched */
 }
 
+/* ---- MQTT broker URI (issue #1312) --------------------------------------- */
+
+/* A release is built with the CMake stub, so before this the broker was the
+ * compiled default whatever the network: a released or OTA image could not
+ * reach a broker on another host or port. `mqtt broker <uri>` stores one in
+ * NVS, read before the default, in its own namespace so `mqtt auth clear`
+ * (which erases the mqtt_auth namespace) leaves it alone. */
+
+static const char *s_want_broker;
+static const char *s_want_broker_source;
+
+static void check_boot_reads_broker(void)
+{
+    CHECK_STR(get_mqtt_broker_uri(BUILD_BROKER), s_want_broker);
+    CHECK_STR(get_mqtt_broker_uri_source(), s_want_broker_source);
+    CHECK(nvs_shim_open_handles() == 0, "%d NVS handle(s) left open", nvs_shim_open_handles());
+}
+
+static void expect_broker_boot(const char *uri, const char *source)
+{
+    s_want_broker = uri;
+    s_want_broker_source = source;
+    in_fresh_boot(check_boot_reads_broker);
+}
+
+static void test_broker_falls_back_to_the_build_default(void)
+{
+    expect_broker_boot(BUILD_BROKER, "build");
+}
+
+static void test_nvs_broker_wins(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://192.168.0.106:11883");
+    expect_broker_boot("mqtt://192.168.0.106:11883", "nvs");
+}
+
+/* A stored value the save path would refuse is ignored, not used. */
+static void test_a_malformed_nvs_broker_falls_back(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "192.168.0.106:1883");
+    expect_broker_boot(BUILD_BROKER, "build");
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "");
+    expect_broker_boot(BUILD_BROKER, "build");
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://a b");
+    expect_broker_boot(BUILD_BROKER, "build");
+}
+
+static void test_a_broker_nvs_that_will_not_open_falls_back(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://10.0.0.2:1883");
+    nvs_shim_fail_open(ESP_FAIL);
+    expect_broker_boot(BUILD_BROKER, "build");
+}
+
+/* The MQTT client is created once per boot with the URI it was given; what
+ * `mqtt` reports must stay that URI after `mqtt broker` stores a new one. */
+static void read_broker_then_save_then_read_again(void)
+{
+    CHECK_STR(get_mqtt_broker_uri(BUILD_BROKER), "mqtt://10.0.0.2:1883");
+    CHECK(credentials_nvs_save_mqtt_broker("mqtt://10.0.0.3:1883"), "save refused a valid URI");
+    CHECK_STR(get_mqtt_broker_uri(BUILD_BROKER), "mqtt://10.0.0.2:1883");
+    CHECK_STR(get_mqtt_broker_uri_source(), "nvs");
+}
+
+static void test_broker_is_read_once_per_boot(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://10.0.0.2:1883");
+    in_fresh_boot(read_broker_then_save_then_read_again);
+}
+
+static void test_broker_uri_validation(void)
+{
+    char longest[MAX_MQTT_BROKER_URI_LENGTH];
+    const size_t scheme = strlen("mqtt://");
+    memcpy(longest, "mqtt://", scheme);
+    memset(longest + scheme, 'h', sizeof(longest) - 1 - scheme);
+    longest[sizeof(longest) - 1] = '\0';
+    char too_long[MAX_MQTT_BROKER_URI_LENGTH + 1];
+    memcpy(too_long, longest, sizeof(longest) - 1);
+    too_long[sizeof(too_long) - 2] = 'h';
+    too_long[sizeof(too_long) - 1] = '\0';
+
+    CHECK(credentials_mqtt_broker_uri_valid("mqtt://192.168.0.106:11883"), "refused mqtt://");
+    CHECK(credentials_mqtt_broker_uri_valid("mqtts://broker.lan:8883"), "refused mqtts://");
+    CHECK(credentials_mqtt_broker_uri_valid("ws://broker.lan/mqtt"), "refused ws://");
+    CHECK(credentials_mqtt_broker_uri_valid("wss://broker.lan/mqtt"), "refused wss://");
+    CHECK(credentials_mqtt_broker_uri_valid(longest), "refused the longest URI that fits");
+    CHECK(!credentials_mqtt_broker_uri_valid(NULL), "accepted NULL");
+    CHECK(!credentials_mqtt_broker_uri_valid(""), "accepted an empty URI");
+    CHECK(!credentials_mqtt_broker_uri_valid("mqtt://"), "accepted a scheme with no host");
+    CHECK(!credentials_mqtt_broker_uri_valid("192.168.0.106:1883"), "accepted no scheme");
+    CHECK(!credentials_mqtt_broker_uri_valid("http://broker.lan"), "accepted http://");
+    CHECK(!credentials_mqtt_broker_uri_valid("mqtt://a b"), "accepted a space");
+    CHECK(!credentials_mqtt_broker_uri_valid("mqtt://a\r\n"), "accepted CR/LF");
+    CHECK(!credentials_mqtt_broker_uri_valid(too_long), "accepted an over-long URI");
+}
+
+static void test_broker_save_refuses_an_invalid_uri(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://10.0.0.2:1883");
+    const int writes = nvs_shim_write_count();
+    CHECK(!credentials_nvs_save_mqtt_broker("not-a-uri"), "save accepted an invalid URI");
+    CHECK(nvs_shim_write_count() == writes, "refused save still wrote NVS");
+    CHECK(nvs_shim_open_handles() == 0, "refused save left an NVS handle open");
+    expect_broker_boot("mqtt://10.0.0.2:1883", "nvs");
+}
+
+static void test_saved_broker_applies_at_the_next_boot(void)
+{
+    CHECK(credentials_nvs_save_mqtt_broker("mqtt://192.168.0.106:11883"), "save refused");
+    CHECK(nvs_shim_open_handles() == 0, "save left an NVS handle open");
+    CHECK_STR(nvs_shim_get(BROKER_NS, BROKER_KEY), "mqtt://192.168.0.106:11883");
+    expect_broker_boot("mqtt://192.168.0.106:11883", "nvs");
+}
+
+static void test_broker_save_fails_when_nvs_will_not_open(void)
+{
+    nvs_shim_fail_open(ESP_FAIL);
+    CHECK(!credentials_nvs_save_mqtt_broker("mqtt://10.0.0.2:1883"),
+          "save reported success with NVS unavailable");
+}
+
+static void test_broker_clear_falls_back_and_keeps_the_rest(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://10.0.0.2:1883");
+    nvs_shim_put(MQTT_NS, MQTT_USER_KEY, "nvs-user");
+    nvs_shim_put(MQTT_NS, MQTT_PASS_KEY, "nvs-pass");
+    CHECK(credentials_nvs_clear_mqtt_broker(), "clear failed");
+    CHECK(nvs_shim_open_handles() == 0, "clear left an NVS handle open");
+    CHECK_STR(nvs_shim_get(BROKER_NS, BROKER_KEY), NULL);
+    CHECK_STR(nvs_shim_get(MQTT_NS, MQTT_USER_KEY), "nvs-user");
+    expect_broker_boot(BUILD_BROKER, "build");
+}
+
+/* `mqtt auth clear` must not cost the board its broker. */
+static void test_mqtt_auth_clear_keeps_the_broker(void)
+{
+    nvs_shim_put(BROKER_NS, BROKER_KEY, "mqtt://10.0.0.2:1883");
+    CHECK(credentials_nvs_clear_mqtt(), "clear failed");
+    expect_broker_boot("mqtt://10.0.0.2:1883", "nvs");
+}
+
+/* ---- why WiFi did not load from NVS (issue #1312) ------------------------ */
+
+/* load_from_nvs() returned false with no log line, so a missing namespace, a
+ * missing key and NVS not yet initialised looked the same. Each now has a
+ * stable reason, logged at WARN when it changes. */
+static const char *s_want_reason;
+
+static void check_wifi_nvs_reason(void)
+{
+    (void)are_credentials_available();
+    CHECK_STR(credentials_wifi_nvs_reason(), s_want_reason);
+    CHECK(nvs_shim_open_handles() == 0, "%d NVS handle(s) left open", nvs_shim_open_handles());
+}
+
+static void expect_wifi_nvs_reason(const char *reason)
+{
+    s_want_reason = reason;
+    in_fresh_boot(check_wifi_nvs_reason);
+}
+
+static void test_wifi_nvs_reasons(void)
+{
+    expect_wifi_nvs_reason("no_namespace");
+
+    nvs_shim_put(WIFI_NS, "password", "secret");
+    expect_wifi_nvs_reason("no_ssid");
+
+    nvs_shim_reset();
+    nvs_shim_put(WIFI_NS, "ssid", "home");
+    expect_wifi_nvs_reason("no_password");
+
+    nvs_shim_put(WIFI_NS, "ssid", "");
+    nvs_shim_put(WIFI_NS, "password", "secret");
+    expect_wifi_nvs_reason("empty_ssid");
+
+    char ssid[MAX_SSID_LENGTH + 1];
+    memset(ssid, 's', sizeof(ssid) - 1);
+    ssid[sizeof(ssid) - 1] = '\0';
+    nvs_shim_put(WIFI_NS, "ssid", ssid);
+    expect_wifi_nvs_reason("too_long");
+
+    nvs_shim_put(WIFI_NS, "ssid", "home");
+    expect_wifi_nvs_reason("loaded");
+
+    nvs_shim_fail_open(ESP_FAIL);
+    expect_wifi_nvs_reason("open_failed");
+}
+
 int main(void)
 {
     struct {
@@ -527,6 +720,20 @@ int main(void)
         {"a_key_change_never_rewrites_a_key_in_use", test_a_key_change_never_rewrites_a_key_in_use},
         {"gemini_save_refuses_bad_keys", test_gemini_save_refuses_bad_keys},
         {"gemini_clear_falls_back_now", test_gemini_clear_falls_back_now},
+        {"broker_falls_back_to_the_build_default", test_broker_falls_back_to_the_build_default},
+        {"nvs_broker_wins", test_nvs_broker_wins},
+        {"a_malformed_nvs_broker_falls_back", test_a_malformed_nvs_broker_falls_back},
+        {"a_broker_nvs_that_will_not_open_falls_back",
+         test_a_broker_nvs_that_will_not_open_falls_back},
+        {"broker_is_read_once_per_boot", test_broker_is_read_once_per_boot},
+        {"broker_uri_validation", test_broker_uri_validation},
+        {"broker_save_refuses_an_invalid_uri", test_broker_save_refuses_an_invalid_uri},
+        {"saved_broker_applies_at_the_next_boot", test_saved_broker_applies_at_the_next_boot},
+        {"broker_save_fails_when_nvs_will_not_open", test_broker_save_fails_when_nvs_will_not_open},
+        {"broker_clear_falls_back_and_keeps_the_rest",
+         test_broker_clear_falls_back_and_keeps_the_rest},
+        {"mqtt_auth_clear_keeps_the_broker", test_mqtt_auth_clear_keeps_the_broker},
+        {"wifi_nvs_reasons", test_wifi_nvs_reasons},
     };
 #ifdef CREDENTIALS_FIXTURE_NO_MQTT
     printf("credentials.h fixture: no broker credentials (CMake stub shape)\n");
