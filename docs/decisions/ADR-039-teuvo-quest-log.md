@@ -9,7 +9,7 @@ cadence, the boredom delay and the per-quest ration are guesses until a bench
 week sets them)
 **Extends**: [ADR-016](ADR-016-hierarchical-ai-controller.md),
 [ADR-022](ADR-022-planner-dormancy-and-spend-ceiling.md),
-[ADR-029](ADR-029-idle-gaze-and-wander.md)
+[ADR-029](ADR-029-idle-gaze-and-wander.md) (amends §4: wander starts by itself)
 **Related**: [ADR-032](ADR-032-robocar-live-conversation.md) (Live
 conversation, its `wait` tool), [ADR-033](ADR-033-robocar-error-reporting.md)
 (planner notes), [ADR-030](ADR-030-robocar-behaviour-twin.md) (behaviour twin)
@@ -164,9 +164,27 @@ against 240 for the pre-ADR-022 loop. The 500-request fuse still binds.
 Head-only until wander exists. A quest can use the idle gaze, look-only
 `track` and in-place `rotate` (which the rangefinders and the cliff reflex
 already govern). `drive` during a quest session is allowed only while wander
-is on (ADR-029 §4), which is off at every boot and switched on by Lauri. The
-quest clause tells the planner which of the two applies, and `drive` is
-withheld from the tool list when it does not.
+is on. The quest clause tells the planner which of the two applies, and
+`drive` is withheld from the tool list when it does not.
+
+**Wander starts by itself** (Lauri, 2026-11-27). This amends ADR-029 §4,
+where wander was off at every boot and on only by a console command. Here the
+sensors decide, not a person:
+
+- Wander is on whenever the cliff reflex is armed (`cliff_armed` in
+  `reactive_telemetry_t`) and both floor sensors read floor. If either
+  condition fails, wander is off and quests are head-only. That covers no
+  MCP23017, `CLIFF_REFLEX_AT_BOOT` 0, `cliff off`, a failed read (fail
+  closed) and a cliff trip. The cliff reflex is what makes driving on a table
+  safe without a person deciding, so wander depends on it.
+- After a cliff trip, wander stays off for `WANDER_CLIFF_HOLDOFF_MS`
+  (initially 5 min), and it stays off for the rest of the boot after
+  `WANDER_CLIFF_TRIPS_MAX` (initially 3) trips, so a robot on a table edge
+  stops trying.
+- `idle wander off` is the one way to stop it, and it is kept in NVS, so the
+  choice survives reboots. `idle wander auto` restores the default.
+- Wander's moves are still the bounded turns and short forward steps from
+  ADR-029 §4, and they never reverse.
 
 ### 6. Speech: quests are quiet
 
@@ -234,7 +252,8 @@ Each step is a PR, testable before the next.
 4. The MQTT mirror.
 5. Voice and Live: the summary in the system instructions, `ask` quests,
    `remember`.
-6. `drive` in quest sessions, after ADR-029 step 6 (wander).
+6. Wander with automatic start (§5), then `drive` in quest sessions. This
+   replaces ADR-029 step 6.
 
 ## Resolved questions (Lauri, 2026-11-27)
 
@@ -242,6 +261,7 @@ Each step is a PR, testable before the next.
 |---|---|
 | Who chooses quests: a separate curator call or the planner alone? | A separate curator call (§2) |
 | May Teuvo move his body during a self-chosen quest? | Head, look-only `track` and in-place `rotate` at any time; `drive` only while wander is on (§5) |
+| What turns wander on? | Nothing by hand: it starts by itself while the cliff reflex is armed and reading floor; `idle wander off` (NVS) stops it (§5, amends ADR-029 §4) |
 
 ## Open questions
 
