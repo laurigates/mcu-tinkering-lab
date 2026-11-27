@@ -87,7 +87,10 @@
     "project": "it-troubleshooter",
     "path": "networking/it-troubleshooter",
     "target": "esp32s3",
-    "fetch_bluepad32": false
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/status-led"
+    ]
   },
   {
     "system": "esp32",
@@ -103,7 +106,8 @@
     "target": "esp32s3",
     "fetch_bluepad32": true,
     "extra_paths": [
-      "components/log-udp"
+      "components/log-udp",
+      "components/status-led"
     ]
   },
   {
@@ -265,7 +269,8 @@
     "target": "esp32s3",
     "fetch_bluepad32": false,
     "extra_paths": [
-      "components/log-udp"
+      "components/log-udp",
+      "components/status-led"
     ]
   },
   {
