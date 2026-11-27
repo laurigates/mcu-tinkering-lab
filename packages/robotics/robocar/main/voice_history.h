@@ -30,13 +30,14 @@
 
 /** Bytes the request-body buffer reserves beyond the two base64 payloads, for
  *  the JSON skeleton: keys, the system prompt, the current prompt and the
- *  history replies. The largest skeleton the firmware can build (a full history
- *  ring of SPEECH_TEXT_MAX replies, a filled 1536-byte system prompt) prints to
- *  ~3.7 kB unescaped; this is twice that and more, so escaped quotes and
- *  newlines still fit. test_request_body_peak_is_one_copy checks that the
- *  unescaped worst case fits without the print buffer growing; the escaped case
- *  is not tested, and overflowing the headroom costs peak memory, not
- *  correctness (cJSON grows the buffer). */
+ *  history replies. The system prompt is heap-built with no fixed cap; the
+ *  longest persona's is about 1.5 kB with a 32-byte name (test_voice_prompts
+ *  prints each). With a full history ring of SPEECH_TEXT_MAX replies and a
+ *  2048-byte system prompt the skeleton prints to ~4.2 kB unescaped; this is
+ *  nearly twice that, so escaped quotes and newlines still fit. test_request_body_peak_is_one_copy
+ * checks that the unescaped worst case fits without the print buffer growing; the escaped case is
+ * not tested, and overflowing the headroom costs peak memory, not correctness (cJSON grows the
+ * buffer). */
 #define VOICE_HISTORY_BODY_HEADROOM (8 * 1024)
 
 typedef struct {

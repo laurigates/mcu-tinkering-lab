@@ -590,7 +590,7 @@ static void test_request_body_peak_is_one_copy(void)
 {
     /* Worst case the firmware can produce: 8 s clip, a JPEG at the 64 kB
      * CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE ceiling, a full history ring of
-     * maximum-length replies, and a system prompt filling its buffer. */
+     * maximum-length replies, and a system prompt longer than any persona's. */
     const size_t wav_len = ((256000 + 44 + 2) / 3) * 4; /* 341 392 */
     const size_t jpeg_len = ((65536 + 2) / 3) * 4;      /* 87 384 */
     char *b64_wav = fake_b64(wav_len, 'A');
@@ -603,7 +603,9 @@ static void test_request_body_peak_is_one_copy(void)
     for (uint32_t i = 0; i < VOICE_HISTORY_MAX_TURNS; i++) {
         voice_history_record(reply, 1000 + i);
     }
-    char sys_prompt[1536];
+    /* 2048 bytes: above the longest persona's prompt (about 1.5 kB with a
+     * 32-byte name, printed by test_voice_prompts), with room for it to grow. */
+    char sys_prompt[2048];
     memset(sys_prompt, 's', sizeof(sys_prompt) - 1);
     sys_prompt[sizeof(sys_prompt) - 1] = '\0';
 
