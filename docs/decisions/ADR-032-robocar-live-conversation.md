@@ -147,6 +147,32 @@ answer itself.
 | 1 | Half-duplex Live session behind a console switch (`voice live on`), TTS ring reuse, open on trigger, close on idle | on the bench: first audio within 2 s of end of speech, no self-interruption over 20 turns, PSRAM low-water mark logged |
 | 2 | AEC and barge-in, `interrupted` handling, optional start-of-session frame | interrupting a reply stops it within 300 ms; no self-interruption with the amp at normal volume |
 
+## Phase 1 as built (2026-11-27)
+
+Implemented behind `voice live on` (`live_proto.c`, `live_session_core.c`,
+`live_session.c`; [voice.md](../../packages/robotics/robocar/docs/firmware/voice.md)
+§ Real-time conversation). Not yet run on the robot: the phase-1 exit check
+is on the robocar bench queue. Where it differs from the decision above:
+
+- **One tool, `wait`** (§6 said none). The workstation play sessions
+  (`tools/live-probe/play.py`, 2026-11-16) answered open question 3: an
+  instruction to stay silent drew speech 4 times in 4, a `wait` tool drew
+  `wait` 4 times in 4. It is not a body action, so #947's concern stands
+  unchanged. Each call counts as an ignored hands-free reply.
+- **The session runs on the voice-turn task**, not a task of its own, so the
+  enqueue checks and `voice_turn_is_busy()` cover it without widening (§5).
+- **Audio said during the handshake is kept** (§4 named only the pre-roll).
+  The client connects on its own task while the voice-turn task buffers the
+  pre-roll and the mic, up to 8 s, and sends the backlog once
+  `setupComplete` arrives.
+- **The upstream mute starts at the first reply audio part**, not at the amp
+  (§3): the player banks its preroll before it plays.
+- **One gain per session**, measured on the pre-roll by
+  `audio_clip_normalise()`. The PDM mic is ~-40 dBFS; the old path normalised
+  each clip.
+- **Fallback**: three sessions in a row that fail before `setupComplete`
+  switch live mode off, so hands-free triggers return to the old voice turn.
+
 ## Consequences
 
 - One request per conversation instead of two per turn, and about 10 s less
