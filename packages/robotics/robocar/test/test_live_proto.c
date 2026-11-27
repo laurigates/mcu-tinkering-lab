@@ -127,6 +127,9 @@ static void test_finnish_instruction_carries_persona_and_wait(void)
     ASSERT(strstr(s, "Olet Teuvo, puhuva robottiauto. BRIEF.") == s);
     ASSERT(strstr(s, "Ääntämys ja esitystapa: STYLE.") != NULL);
     ASSERT(strstr(s, "Vastaa aina suomeksi, ääneen ja lyhyesti.") != NULL);
+    /* "No reaction needed", not addressee detection (owner, 2026-11-27). */
+    ASSERT(strstr(s, "Kaikkeen ei tarvitse reagoida.") != NULL);
+    ASSERT(strstr(s, "osoitettu") == NULL);
     ASSERT(strstr(s, "`wait`") != NULL);
     free(s);
 }
@@ -137,6 +140,8 @@ static void test_english_instruction_and_missing_fields(void)
     ASSERT(s != NULL);
     ASSERT(strstr(s, "You are Robocar, a talking robot car.") == s);
     ASSERT(strstr(s, "Delivery") == NULL); /* no empty style line */
+    ASSERT(strstr(s, "Not everything needs a reaction.") != NULL);
+    ASSERT(strstr(s, "addressed") == NULL);
     ASSERT(strstr(s, "`wait`") != NULL);
     ASSERT(strstr(s, "(null)") == NULL);
     free(s);

@@ -24,12 +24,16 @@
  *     `inputTranscription`, `outputTranscription`), `toolCall`, `goAway`,
  *     `usageMetadata`. Several can share one message.
  *
- * Why `wait`: a Live session answers in audio, so the old path's `__IGNORE__`
- * text reply does not carry over (ADR-032 §4). The workstation play sessions
- * (tools/live-probe/play.py, 2026-11-16) showed that an instruction to stay
- * silent alone drew a spoken reply 4 times in 4, and a `wait` tool drew `wait`
- * 4 times in 4. It is not a body action, so the model still cannot claim to
- * move (#947).
+ * Why `wait`: not every utterance needs a reaction, and a robot that fills
+ * every silence or chimes in on every remark is tiresome. With no trigger word,
+ * the model hears everything said in the session, so it needs a way to answer
+ * with nothing. It is not addressee detection, which cannot be judged reliably
+ * (Lauri, 2026-11-27). A Live session answers in audio, so the old path's
+ * `__IGNORE__` text reply does not carry over (ADR-032 §4). The workstation
+ * play sessions (tools/live-probe/play.py, 2026-11-16) showed that an
+ * instruction to stay silent alone drew a spoken reply 4 times in 4, and a
+ * `wait` tool drew `wait` 4 times in 4. It is not a body action, so the model
+ * still cannot claim to move (#947).
  */
 
 #ifndef LIVE_PROTO_H

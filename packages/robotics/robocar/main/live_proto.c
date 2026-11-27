@@ -12,21 +12,23 @@
 #include "cJSON.h"
 
 static const char k_wait_description[] =
-    "Call this instead of speaking when the speech you heard was not addressed to you, or "
-    "needs no answer. Say nothing after it.";
+    "Call this instead of speaking when no reaction is needed. Not every remark needs an "
+    "answer: there is no need to fill a silence or to chime in on everything you hear. Say "
+    "nothing after it.";
 
 /* The persona lines are the probe's (live_probe.py extract_persona()). */
 static const char k_fi_head[] = "Olet %s, puhuva robottiauto.";
 static const char k_fi_style[] = "Ääntämys ja esitystapa: %s.";
 static const char k_fi_tail[] =
     "Vastaa aina suomeksi, ääneen ja lyhyesti.\n"
-    "Jos puhetta ei ole osoitettu sinulle tai siihen ei tarvitse vastata, kutsu `wait` "
-    "äläkä sano mitään.";
+    "Kaikkeen ei tarvitse reagoida. Älä täytä hiljaisuutta äläkä puutu jokaiseen "
+    "lausahdukseen; kun vastausta ei tarvita, kutsu `wait` äläkä sano mitään.";
 static const char k_en_head[] = "You are %s, a talking robot car.";
 static const char k_en_style[] = "Delivery: %s.";
 static const char k_en_tail[] =
     "Always answer aloud and briefly.\n"
-    "If the speech was not addressed to you or needs no answer, call `wait` and say nothing.";
+    "Not everything needs a reaction. Don't fill silences or chime in on every remark; when "
+    "no answer is needed, call `wait` and say nothing.";
 
 static const char k_stream_end[] = "{\"realtime_input\":{\"audioStreamEnd\":true}}";
 

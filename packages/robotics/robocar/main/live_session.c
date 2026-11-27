@@ -620,11 +620,10 @@ esp_err_t live_session_run(const char *api_key)
             ok = resp && send_text(client, resp, strlen(resp));
             free(resp);
             if (strcmp(tool_name, LIVE_PROTO_WAIT_TOOL) == 0) {
-                /* Counted like an __IGNORE__ reply: many of these against the
-                 * session count means the trigger wakes for talk not addressed
-                 * to the robot (`voice trigger`). */
-                voice_budget_note_ignored(true);
-                ESP_LOGI(TAG, "wait (not addressed, or no answer needed)");
+                /* A normal outcome, not a misfire: the model judged that no
+                 * reaction was needed. Counted on the `live:` line only, not as
+                 * an ignored voice turn, whose count means "trigger too loose". */
+                ESP_LOGI(TAG, "wait (no reaction needed)");
             }
         }
         if (turn_done) {
