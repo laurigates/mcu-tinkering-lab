@@ -1,0 +1,41 @@
+# US-D1: an object sitting at the threshold does not make the obstacle reflex
+# flap (#1312). On the robot an object at 14-15 cm read 14 and 15 cm in turn,
+# and the log alternated `Obstacle reflex ACTIVE` and `CLEARED` every ~0.5 s,
+# braking and releasing the wheels each time. The reflex now releases only once
+# the reading and the running mean reach STOP_RELEASE_CM, 3 cm above
+# STOP_THRESHOLD_CM (range_hold_step() in reactive_controller.c).
+#
+# The timeline is us-d1-front-reflex-brakes': a forward drive at 60 % written
+# at 16 s, the obstacle from 17.326 s, braked at 17.622 s, all inside the
+# drive's 3 s time bound (#1057), which ends it at 19.008 s. The obstacle reads
+# 14 cm, then 16 cm from 17.9 s, then 14 cm again from 18.5 s: either side of
+# the threshold, inside the margin. Before the margin the reflex released at
+# 18.282 s, once the mean of 14, 16, 16 reached the threshold, drove forward
+# to full duty and braked again at 18.777 s.
+id: us-d1-reflex-holds-at-threshold
+stories: [US-D1]
+seed: 7
+duration: 24s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway}}
+  - {at: 5s, console: status}
+  - {at: 0s, range: 120}
+  - {at: 17.326s, range: 14}
+  - {at: 17.9s, range: 16}
+  - {at: 18.5s, range: 14}
+models:
+  planner: inline
+default:
+  status: 200
+  latency: 1s
+  call: drive
+  args: {heading_deg: 0, distance_cm: 100, speed_pct: 60}
+expect:
+  - requests: {count: 1}
+  - wheels_at: {at: 17.326s, left: forward, right: forward, left_duty: 2457, right_duty: 2457}
+  - wheels: {left: brake, right: brake, after: "range[1]", within: 297ms, count: 1}
+  # Held through the readings at the threshold and to the end of the run.
+  - wheels: {left: forward, between: [17.622s, 24s], count: 0}
+  - wheels_at: {at: 18.4s, left: brake, right: brake}
+  - wheels: {left: brake, count: 1}
