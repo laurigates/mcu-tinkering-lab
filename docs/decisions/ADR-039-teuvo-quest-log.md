@@ -255,6 +255,22 @@ Each step is a PR, testable before the next.
 6. Wander with automatic start (§5), then `drive` in quest sessions. This
    replaces ADR-029 step 6.
 
+## Step 1 as built (2026-11-27)
+
+Three changes from §1 and §7, made in the step-1 PR:
+
+- **SPIFFS, not LittleFS.** SPIFFS is part of ESP-IDF, so the log needs no
+  new managed component and no `dependencies.lock` change. The whole-file
+  write through `log.new` and a rename, plus a parser that skips a torn last
+  line, gives the power-loss behaviour LittleFS was chosen for. Revisit if the
+  log moves to appends.
+- **Tab-separated lines, not JSON lines.** Text is cleaned of control bytes on
+  the way in, so a tab-separated record needs no escaping, and
+  `quest_log_core.c` needs no cJSON. The host suite therefore always builds,
+  even where cJSON is missing. Every line still starts with a format version.
+- **`quest off|on` waits for step 3.** Until the curator and quest sessions
+  exist, there is nothing for it to switch.
+
 ## Resolved questions (Lauri, 2026-11-27)
 
 | Question | Ruling |
