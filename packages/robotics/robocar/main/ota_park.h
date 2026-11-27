@@ -92,7 +92,8 @@ void ota_park_start(ota_park_t *p, const ota_park_config_t *cfg, uint32_t now_ms
  * @brief Advance the state machine and return the command to apply now.
  *
  * @param front_cm  Smoothed front distance (reactive_telemetry_t.distance_cm).
- * @param front_ok  False when the front sensor has failed (sensor_failed).
+ * @param front_ok  False when the front sensor has failed (sensor_failed) or has
+ *                  not read yet (distance_valid false).
  * @param rear_cm   Latest rear distance.
  * @param rear_ok   False when the rear sensor has failed or has no reading.
  * @return STOP once done.
