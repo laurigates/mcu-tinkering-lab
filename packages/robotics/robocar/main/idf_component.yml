@@ -7,6 +7,10 @@ dependencies:
   espressif/esp32-camera: '^2.0.0'
   # mDNS component
   espressif/mdns: '^1.8.0'
+  # WebSocket client for the Gemini Live API (ADR-032). 1.7.0 is the first
+  # release with task_core_id_set, which pins the client's task to core 1
+  # beside the rest of the network work; core 0 is the motors'.
+  espressif/esp_websocket_client: '^1.7.0'
   # ---------------------------------------------------------------------------
   # esp-idf-lib drivers (previously vendored under packages/robocar/main, the
   # dual-board main controller since removed, as a ~95-component snapshot of the

@@ -488,6 +488,28 @@ if(CJSON_FOUND)
     target_link_libraries(test_voice_history PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
     add_test(NAME voice_history COMMAND test_voice_history)
 
+    # Gemini Live messages (ADR-032): the setup, audio and tool-response shapes
+    # google-genai puts on the wire, and the server message classifier.
+    add_executable(test_live_proto
+        "${MAIN_SRC_DIR}/live_proto.c"
+        "${MAIN_SRC_DIR}/base64.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_live_proto.c"
+    )
+    target_include_directories(test_live_proto PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_live_proto PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_live_proto PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    add_test(NAME live_proto COMMAND test_live_proto)
+
+    # The Live session's decisions on an injected clock: half-duplex mute,
+    # close rules, turns, frame reassembly, session gain.
+    add_executable(test_live_session_core
+        "${MAIN_SRC_DIR}/live_session_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_live_session_core.c"
+    )
+    target_include_directories(test_live_session_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_libraries(test_live_session_core PRIVATE Threads::Threads m)
+    add_test(NAME live_session_core COMMAND test_live_session_core)
+
     # Every prompt built from a persona reaches the request whole (issue #847),
     # and the TTS request has the gemini-3.8-flash-tts shape (issue #844).
     # Compiles the real voice_persona.c table, so its config.h needs a

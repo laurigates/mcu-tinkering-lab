@@ -174,6 +174,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - TTS uses `:streamGenerateContent?alt=sse` at 24 kHz, decoded incrementally into the ring.
 - Playback waits for `AUDIO_PREROLL_BYTES` or the end of the fetch, and PCM is batched (`TTS_PCM_BATCH_BYTES`) before `audio_player_write()`.
 - `s_written_total` counts each successful `ring_send()`.
+- A Live session (`voice live on`) sends nothing upstream from the first reply audio until the playback hangover ends, declares only the `wait` tool, and runs on the voice-turn task (ADR-032).
 
 **Camera and log mirror** ([why](docs/firmware/camera-and-log.md#dont))
 

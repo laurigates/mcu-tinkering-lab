@@ -46,6 +46,9 @@ idf_component_register(
         "voice_history.c"
         "voice_budget.c"
         "voice_turn.c"
+        "live_proto.c"
+        "live_session_core.c"
+        "live_session.c"
         "gemini_tts.c"
         "tts_request.c"
         "voice_persona.c"
@@ -110,6 +113,7 @@ idf_component_register(
         "esp_driver_usb_serial_jtag"
         "esp_timer"
         "espcoredump"
+        "espressif__esp_websocket_client"
 )
 
 # The build commit SHA the project CMakeLists.txt resolved from git (issue
