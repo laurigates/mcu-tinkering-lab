@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.28](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.27...robocar-v0.2.28) (2026-11-27)
+
+
+### Bug Fixes
+
+* **robocar:** release the rangefinder holds 3 cm above the threshold ([2c779f6](https://github.com/laurigates/mcu-tinkering-lab/commit/2c779f60c0c3779b86b1dcc4a74124a4c6282fdf)), closes [#1312](https://github.com/laurigates/mcu-tinkering-lab/issues/1312)
+
 ## [0.2.27](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.26...robocar-v0.2.27) (2026-11-27)
 
 
