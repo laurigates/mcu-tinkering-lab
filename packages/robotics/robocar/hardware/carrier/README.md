@@ -210,6 +210,15 @@ comparison against the MP2672A, and every number below.
   stays, and both circuits only discharge the higher cell, so they do not
   fight. The BMS's over-charge cutoff must sit above 4.221 V per cell or it
   cuts an ordinary charge; this pack's BMS is not recorded in the repo.
+- **Plug J21 in before charging.** With J21 unplugged, MID floats, and
+  SLUSD89B does not say what the charger does with MID open, so a charge could
+  start unbalanced. With J21 in and the BMS's FETs open (they sit in the
+  negative lead), the top cell can still drive under about 74 mA into MID: from
+  GND through the low-side balance FET's body diode and R21–R24 (about 68 mW
+  each, within their rating). The BMS cannot cut that path. Both stay as they
+  are until the charger's behaviour with MID open is measured on the bench
+  (#1306, decided 2026-11-27); a 1 MΩ / 1 MΩ bias on MID, or series
+  resistance in it, are the fixes if it misbehaves.
 - **No cell temperature sensing.** R27 (10 kΩ) stands in for an NTC the pack
   does not carry, so TS always reads "normal". Only the BMS (if it has an NTC
   input) and the part's own thermal regulation (120 °C) limit a hot charge.
