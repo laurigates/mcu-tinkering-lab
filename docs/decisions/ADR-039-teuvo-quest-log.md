@@ -241,6 +241,7 @@ Each step is a PR, testable before the next.
 | Question | Ruling |
 |---|---|
 | Who chooses quests: a separate curator call or the planner alone? | A separate curator call (§2) |
+| May Teuvo move his body during a self-chosen quest? | Head, look-only `track` and in-place `rotate` at any time; `drive` only while wander is on (§5) |
 
 ## Open questions
 
