@@ -18,6 +18,7 @@
 #include "esp_err.h"
 #include "goal_state.h"
 #include "note_gate.h"
+#include "quest_prompt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,6 +67,17 @@ typedef struct {
  * whether the tool was offered: this reports what the response carried.
  */
 void gemini_parse_last_note(gemini_note_t *out);
+
+/**
+ * @brief The `log_discovery` and `quest_done` calls from the most recent
+ *        gemini_parse_response() (ADR-039 §3).
+ *
+ * Cleared at the start of every parse. The first `log_discovery` with
+ * printable text wins, cut to QUEST_LOG_NOTE_MAX; a `quest_done` without
+ * `achieved` reads as achieved. Neither is ever taken as the motion goal.
+ * Whether the request offered them is for quest_prompt_apply() to decide.
+ */
+void gemini_parse_last_quest(quest_reply_t *out);
 
 /**
  * @brief Navigate candidates[0].content.parts[0].functionCall from the raw

@@ -326,6 +326,90 @@ static void test_parse_bad_note_is_dropped_and_slot_cleared(void)
     ASSERT(note.kind == NOTE_KIND_NONE);
 }
 
+/* `log_discovery` and `quest_done` are side channels like `note`: placed
+ * first, neither becomes the motion goal (ADR-039 §3). */
+static void test_parse_quest_calls_before_motion_are_not_the_goal(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"log_discovery\",\"args\":{\"text\":"
+                       "\"A red cup\\tbeside the lamp.\"}}},"
+                       "{\"functionCall\":{\"name\":\"quest_done\",\"args\":{\"outcome\":"
+                       "\"Found the cup.\",\"achieved\":true}}},"
+                       "{\"functionCall\":{\"name\":\"rotate\",\"args\":{\"angle_deg\":45}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    ASSERT(gemini_parse_response(json, &goal, speech, sizeof(speech)) == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_ROTATE);
+    ASSERT(speech[0] == '\0');
+    quest_reply_t q;
+    gemini_parse_last_quest(&q);
+    ASSERT(strcmp(q.discovery, "A red cup beside the lamp.") == 0);
+    ASSERT(q.done);
+    ASSERT(q.achieved);
+    ASSERT(strcmp(q.outcome, "Found the cup.") == 0);
+}
+
+/* achieved=false drops the quest; a missing `achieved` reads as done, since
+ * the model called quest_done. Quest calls alone still fail safe to STOP. */
+static void test_parse_quest_done_achieved_and_fail_safe(void)
+{
+    const char *dropped = "{\"candidates\":[{\"content\":{\"parts\":["
+                          "{\"functionCall\":{\"name\":\"quest_done\",\"args\":{\"outcome\":"
+                          "\"Cannot see under the sofa.\",\"achieved\":false}}}"
+                          "]}}]}";
+    const char *bare = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}},"
+                       "{\"functionCall\":{\"name\":\"quest_done\",\"args\":{}}}"
+                       "]}}]}";
+    goal_t goal;
+    quest_reply_t q;
+    ASSERT(gemini_parse_response(dropped, &goal, NULL, 0) == ESP_FAIL);
+    ASSERT(goal.kind == GOAL_KIND_STOP);
+    gemini_parse_last_quest(&q);
+    ASSERT(q.done && !q.achieved);
+    ASSERT(strcmp(q.outcome, "Cannot see under the sofa.") == 0);
+    ASSERT(q.discovery[0] == '\0');
+
+    ASSERT(gemini_parse_response(bare, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_quest(&q);
+    ASSERT(q.done && q.achieved);
+    ASSERT(q.outcome[0] == '\0');
+}
+
+/* A blank discovery is no discovery, the first one wins, an over-long one is
+ * cut to the note cap, and nothing leaks into the next parse. */
+static void test_parse_quest_slot_is_cleaned_and_cleared(void)
+{
+    char json[2048];
+    char longtext[400];
+    memset(longtext, 'x', sizeof(longtext) - 1);
+    longtext[sizeof(longtext) - 1] = '\0';
+    snprintf(json, sizeof(json),
+             "{\"candidates\":[{\"content\":{\"parts\":["
+             "{\"functionCall\":{\"name\":\"log_discovery\",\"args\":{\"text\":\" \\n \"}}},"
+             "{\"functionCall\":{\"name\":\"log_discovery\",\"args\":{\"text\":\"%s\"}}},"
+             "{\"functionCall\":{\"name\":\"log_discovery\",\"args\":{\"text\":\"second\"}}},"
+             "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}}"
+             "]}}]}",
+             longtext);
+    goal_t goal;
+    quest_reply_t q;
+    ASSERT(gemini_parse_response(json, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_quest(&q);
+    ASSERT(strlen(q.discovery) == QUEST_LOG_NOTE_MAX);
+    ASSERT(q.discovery[0] == 'x');
+    ASSERT(!q.done);
+
+    const char *none = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}}"
+                       "]}}]}";
+    ASSERT(gemini_parse_response(none, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_quest(&q);
+    ASSERT(q.discovery[0] == '\0');
+    ASSERT(!q.done);
+}
+
 /* Order must not matter — speech first, motion second. */
 static void test_parse_speak_before_motion(void)
 {
@@ -778,6 +862,12 @@ int main(void)
     test_run("parse_note_only_still_fails_safe", test_parse_note_only_still_fails_safe);
     test_run("parse_bad_note_is_dropped_and_slot_cleared",
              test_parse_bad_note_is_dropped_and_slot_cleared);
+    test_run("parse_quest_calls_before_motion_are_not_the_goal",
+             test_parse_quest_calls_before_motion_are_not_the_goal);
+    test_run("parse_quest_done_achieved_and_fail_safe",
+             test_parse_quest_done_achieved_and_fail_safe);
+    test_run("parse_quest_slot_is_cleaned_and_cleared",
+             test_parse_quest_slot_is_cleaned_and_cleared);
     test_run("parse_speak_only_still_yields_text", test_parse_speak_only_still_yields_text);
     test_run("parse_sound_leads_the_line", test_parse_sound_leads_the_line);
     test_run("parse_sound_alone", test_parse_sound_alone);

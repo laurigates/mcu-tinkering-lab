@@ -423,6 +423,19 @@ add_executable(test_quest_log_core
 target_link_libraries(test_quest_log_core PRIVATE Threads::Threads m)
 add_test(NAME quest_log_core COMMAND test_quest_log_core)
 
+# quest_prompt: the planner's quest clause, its two tools and applying the
+# reply (ADR-039 §3)
+add_executable(test_quest_prompt
+    "${MAIN_SRC_DIR}/quest_prompt.c"
+    "${MAIN_SRC_DIR}/quest_log_core.c"
+    "${MAIN_SRC_DIR}/dialogue_style.c"   # near-repeat check
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_quest_prompt.c"
+)
+target_link_libraries(test_quest_prompt PRIVATE Threads::Threads m)
+add_test(NAME quest_prompt COMMAND test_quest_prompt)
+
 # note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
 # -----------------------------------------------------------------------------
 add_executable(test_note_gate

@@ -153,6 +153,12 @@ TEST(test_a_changed_view_wakes_it)
     ASSERT(plan_activity_should_call(&b, BASE_MS));
     ASSERT(!plan_activity_dormant());
     ASSERT(strchr(plan_activity_verdict(), 'V') != NULL);
+    ASSERT(plan_activity_view_changed());
+
+    /* Once a request has been made on it, the same view again is no change. */
+    plan_activity_note_call(BASE_MS);
+    (void)plan_activity_should_call(&b, BASE_MS * 2u);
+    ASSERT(!plan_activity_view_changed());
 }
 
 /**

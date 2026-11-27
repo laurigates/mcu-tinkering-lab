@@ -65,6 +65,7 @@ idf_component_register(
         "planner_cycle_core.c"
         "note_gate.c"
         "quest_log_core.c"
+        "quest_prompt.c"
         "quest_store.c"
         "wall_clock.c"
         "self_report.c"
