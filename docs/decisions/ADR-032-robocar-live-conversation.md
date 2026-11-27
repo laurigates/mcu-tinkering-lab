@@ -154,11 +154,15 @@ Implemented behind `voice live on` (`live_proto.c`, `live_session_core.c`,
 § Real-time conversation). Not yet run on the robot: the phase-1 exit check
 is on the robocar bench queue. Where it differs from the decision above:
 
-- **One tool, `wait`** (§6 said none). The workstation play sessions
-  (`tools/live-probe/play.py`, 2026-11-16) answered open question 3: an
-  instruction to stay silent drew speech 4 times in 4, a `wait` tool drew
-  `wait` 4 times in 4. It is not a body action, so #947's concern stands
-  unchanged. Each call counts as an ignored hands-free reply.
+- **One tool, `wait`** (§6 said none), framed as "no reaction needed": no
+  filling silences, no chiming in on every remark. It is not addressee
+  detection, which cannot be judged reliably, and no trigger word is needed
+  inside a session (owner's decision, 2026-11-27). This replaces §4's "ignore
+  talk not addressed to the robot". The workstation play sessions
+  (`tools/live-probe/play.py`, 2026-11-16) showed that an instruction alone
+  drew speech 4 times in 4, while a `wait` tool drew `wait` 4 times in 4. It
+  is not a body action, so #947's concern stands unchanged. Waits are counted
+  on the `live:` line, not as ignored voice turns.
 - **The session runs on the voice-turn task**, not a task of its own, so the
   enqueue checks and `voice_turn_is_busy()` cover it without widening (§5).
 - **Audio said during the handshake is kept** (§4 named only the pre-roll).
