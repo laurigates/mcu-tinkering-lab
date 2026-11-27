@@ -124,8 +124,8 @@ static const char *movement_word_for(const char *line)
 }
 
 /*
- * The read-only allow-list (issue #626): every line here was read in main.c's
- * handler and only prints state. Whole-line matches, not prefixes — see
+ * The read-only allow-list (issue #626): every line here was read in its
+ * handler (console_handlers.h) and only prints state. Whole-line matches, not prefixes — see
  * mqtt_command_is_read_only() in the header for why.
  *
  * Deliberately absent, though they only "read":

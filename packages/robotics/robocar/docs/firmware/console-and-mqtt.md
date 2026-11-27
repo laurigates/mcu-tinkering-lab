@@ -38,6 +38,14 @@ lines keep a bench session readable:
 
 ## Serial console commands
 
+`execute_console_line()` in `main.c` chooses a handler from the console command
+table in `console_cmd_core.c`, the same table `mqtt_command.c` recognises MQTT
+lines by. The handlers for `voice`, `mic` and `listen` live in `console_voice.c`;
+`plan`, `idle`, `quest` and `report` in `console_planner.c`; `gpio`, `cam`,
+`snap`, `trace`, `cliff` and `ota` in `console_devices.c`. `sound`, `servo`,
+`led`, `motors`, `mqtt` and `gemini` stay in `main.c`, next to the queues and
+the boot steps they use.
+
 | Command | Effect |
 | --------- | -------- |
 | `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
@@ -176,6 +184,6 @@ The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'
 ## Don't
 
 - Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
-- Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler in `main.c` end to end. Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
+- Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler end to end (`main.c`, or the `console_*.c` file `console_handlers.h` names for it). Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
 - Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to the console command table (`console_cmd_core.c`), which `mqtt_command.c` forwards. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
 - Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived
