@@ -21,6 +21,7 @@ idf_component_register(
         "gemini_http.c"
         "gemini_key_state.c"
         "gemini_parse.c"
+        "gemini_tools_core.c"
         "goal_state.c"
         "scene_change.c"
         "voice_fx_core.c"

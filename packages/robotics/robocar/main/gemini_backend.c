@@ -31,13 +31,13 @@
 #include "esp_timer.h"
 #include "gemini_http.h"
 #include "gemini_parse.h"
+#include "gemini_tools_core.h"
 #include "goal_state.h"
 #include "plan_budget.h"
 #include "planner_range.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
 #include "reactive_controller.h"
 #include "scene_change.h"
-#include "sound_clips_core.h"
 #include "speech_budget.h"
 #include "speech_evidence.h"
 #include "voice_persona.h"
@@ -181,306 +181,35 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 /* -------------------------------------------------------------------------- */
 
 /**
- * Build the tool declaration array that instructs Gemini to respond with one
- * of drive / track / rotate / stop function calls, optionally accompanied by a
- * speak call (which is not a motion goal — see the note at its declaration).
+ * Build the tool declaration array: drive / track / rotate / stop always, and
+ * the optional tools only where this request offers them. The table and the
+ * gate live in gemini_tools_core.c, host-tested by test_gemini_tools_core.c.
  *
- * @param allow_speak When false the `speak` declaration is omitted entirely, so
+ * @param allow_speak When false `speak` and `sound` are omitted entirely, so
  *        the model *cannot* produce an utterance on this cycle. Withholding the
  *        tool rather than asking for restraint is the point: a stateless model
  *        has no way to know how recently it last spoke, so "use it sparingly"
  *        is advice it cannot act on. See speech_budget.h.
- *
- * Schema follows the Gemini API "functionDeclarations" format:
- *   https://ai.google.dev/api/generate-content#v1beta.Tool
- *
- * Box coordinates use Gemini's convention: [ymin, xmin, ymax, xmax]
- * integers normalised 0..1000.
  */
-/* ---- log_discovery / quest_done ----
- * Declared only on a request whose quest offer allows them (quest_prompt.h,
- * ADR-039 §3); the clause says why. The parser keeps both out of the motion
- * goal, and quest_prompt_apply() drops a call the offer did not allow. */
-static void add_quest_tools(cJSON *tools_arr, const quest_offer_t *quest)
-{
-    if (quest == NULL || quest->quest_id == 0) {
-        return;
-    }
-    if (quest->offer_discovery) {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "log_discovery");
-        cJSON_AddStringToObject(fn, "description",
-                                "Add one line to your quest log: what you see that bears on the "
-                                "active quest and what is near it. Call this IN ADDITION to a "
-                                "movement function.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-        cJSON *text = cJSON_CreateObject();
-        cJSON_AddStringToObject(text, "type", "STRING");
-        cJSON_AddStringToObject(text, "description",
-                                "At most 160 characters of plain English about what is in view. "
-                                "No markdown.");
-        cJSON_AddItemToObject(props, "text", text);
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
-        cJSON_AddItemToObject(params, "required", required);
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-    if (quest->offer_done) {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "quest_done");
-        cJSON_AddStringToObject(fn, "description",
-                                "Close the active quest. Call this IN ADDITION to a movement "
-                                "function.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-        cJSON *achieved = cJSON_CreateObject();
-        cJSON_AddStringToObject(achieved, "type", "BOOLEAN");
-        cJSON_AddStringToObject(achieved, "description",
-                                "true when the quest is done; false when it cannot be done from "
-                                "here.");
-        cJSON_AddItemToObject(props, "achieved", achieved);
-        cJSON *outcome = cJSON_CreateObject();
-        cJSON_AddStringToObject(outcome, "type", "STRING");
-        cJSON_AddStringToObject(outcome, "description",
-                                "At most 120 characters: what you found, or why not.");
-        cJSON_AddItemToObject(props, "outcome", outcome);
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("achieved"));
-        cJSON_AddItemToArray(required, cJSON_CreateString("outcome"));
-        cJSON_AddItemToObject(params, "required", required);
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-}
-
 static cJSON *build_tools(bool allow_speak, bool allow_note, const quest_offer_t *quest)
 {
-    cJSON *tools_arr = cJSON_CreateArray();
-
-    /* ---- drive ---- */
-    {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "drive");
-        cJSON_AddStringToObject(fn, "description",
-                                "Drive the robot on a given heading for a set distance.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *heading = cJSON_CreateObject();
-        cJSON_AddStringToObject(heading, "type", "INTEGER");
-        cJSON_AddStringToObject(
-            heading, "description",
-            "Heading in degrees (0=forward, 90=right, -90=left, 180=backward).");
-        cJSON_AddItemToObject(props, "heading_deg", heading);
-
-        cJSON *distance = cJSON_CreateObject();
-        cJSON_AddStringToObject(distance, "type", "INTEGER");
-        cJSON_AddStringToObject(distance, "description", "Distance to travel in centimetres (>0).");
-        cJSON_AddItemToObject(props, "distance_cm", distance);
-
-        cJSON *speed = cJSON_CreateObject();
-        cJSON_AddStringToObject(speed, "type", "INTEGER");
-        cJSON_AddStringToObject(speed, "description", "Motor speed as a percentage 0..100.");
-        cJSON_AddItemToObject(props, "speed_pct", speed);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("heading_deg"));
-        cJSON_AddItemToArray(required, cJSON_CreateString("distance_cm"));
-        cJSON_AddItemToArray(required, cJSON_CreateString("speed_pct"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-
-    /* ---- track ---- */
-    {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "track");
-        cJSON_AddStringToObject(fn, "description",
-                                "Visually servo toward a bounding box detected in the frame. "
-                                "box_2d is [ymin, xmin, ymax, xmax] normalised "
-                                "0..1000.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *box = cJSON_CreateObject();
-        cJSON_AddStringToObject(box, "type", "ARRAY");
-        cJSON_AddStringToObject(box, "description",
-                                "Bounding box [ymin, xmin, ymax, xmax] integers 0..1000.");
-        cJSON *items = cJSON_AddObjectToObject(box, "items");
-        cJSON_AddStringToObject(items, "type", "INTEGER");
-        cJSON_AddItemToObject(props, "box_2d", box);
-
-        cJSON *max_spd = cJSON_CreateObject();
-        cJSON_AddStringToObject(max_spd, "type", "INTEGER");
-        cJSON_AddStringToObject(max_spd, "description",
-                                "Maximum motor speed as a percentage 0..100.");
-        cJSON_AddItemToObject(props, "max_speed_pct", max_spd);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("box_2d"));
-        cJSON_AddItemToArray(required, cJSON_CreateString("max_speed_pct"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-
-    /* ---- rotate ---- */
-    {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "rotate");
-        cJSON_AddStringToObject(fn, "description", "Rotate in place by the given angle.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *angle = cJSON_CreateObject();
-        cJSON_AddStringToObject(angle, "type", "INTEGER");
-        cJSON_AddStringToObject(angle, "description",
-                                "Angle in degrees. Positive = clockwise, negative = "
-                                "counter-clockwise.");
-        cJSON_AddItemToObject(props, "angle_deg", angle);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("angle_deg"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-
-    /* ---- stop ---- */
-    {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "stop");
-        cJSON_AddStringToObject(fn, "description", "Immediately halt all movement.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-        /* stop takes no parameters; empty properties object is valid */
-        (void)props;
-        cJSON_AddItemToObject(params, "required", cJSON_CreateArray());
-
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-
-    /* ---- speak ----
-     * Unlike the four above, `speak` is NOT a motion goal — it is emitted
-     * *alongside* one, and travels to the TTS task via speech_queue rather
-     * than goal_state. See speech_queue.h for why the two cannot share a
-     * lifetime. The parser recovers both from the same response. */
+    uint32_t gates = 0;
     if (allow_speak) {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "speak");
-        cJSON_AddStringToObject(fn, "description",
-                                "Say something out loud through the robot's speaker. Call this "
-                                "IN ADDITION to a movement function, not instead of one. Omit it "
-                                "entirely unless this frame shows something you have not already "
-                                "remarked on — saying nothing is the normal case.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *text = cJSON_CreateObject();
-        cJSON_AddStringToObject(text, "type", "STRING");
-        cJSON_AddStringToObject(text, "description",
-                                "One short spoken sentence, at most 20 words. Plain text only — "
-                                "no markdown, no emoji.");
-        cJSON_AddItemToObject(props, "text", text);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
+        gates |= GEMINI_TOOL_GATE_SPEAK;
     }
-
-    /* ---- sound ----
-     * A prebuilt clip from flash (sound_clips_core.h). Offered only beside
-     * `speak`, so the same on-device gates that decide whether the robot may
-     * make a noise this cycle govern it — an instruction to honk "sparingly"
-     * is one the stateless model cannot check (stateless-model-gating.md).
-     * The parser turns the call into a `[name]` tag at the front of the line. */
-    // cppcheck-suppress duplicateCondition ; a separate tool, gated like speak on purpose
-    if (allow_speak) {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "sound");
-        cJSON_AddStringToObject(fn, "description",
-                                "Play a short sound effect through the speaker, in addition to a "
-                                "movement function: horn = a polite two-toot car horn, aoogah = "
-                                "a comic vintage klaxon, bell = a bicycle bell, boing = a cartoon "
-                                "spring. Use one when it fits what the frame shows, such as a "
-                                "person in your way; usually play none.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *name = cJSON_CreateObject();
-        cJSON_AddStringToObject(name, "type", "STRING");
-        cJSON_AddStringToObject(name, "format", "enum");
-        cJSON *names = cJSON_AddArrayToObject(name, "enum");
-        for (int i = 0; i < SOUND_CLIP_COUNT; i++) {
-            cJSON_AddItemToArray(names, cJSON_CreateString(SOUND_CLIP_NAMES[i]));
-        }
-        cJSON_AddItemToObject(props, "name", name);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("name"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
-    }
-
-    /* ---- note ----
-     * A note to the developers, sent to GlitchTip and never spoken (ADR-033).
-     * Declared only on a request where note_gate offered it, for the same
-     * reason `speak` is withheld: the model cannot know what happened since its
-     * last note, so the firmware decides and the prompt says why. The parser
-     * keeps a `note` call out of the motion goal. */
     if (allow_note) {
-        cJSON *fn = cJSON_CreateObject();
-        cJSON_AddStringToObject(fn, "name", "note");
-        cJSON_AddStringToObject(fn, "description",
-                                "Write one short note to the robot's developers about your own "
-                                "behaviour or a difficulty you ran into. It is logged, not "
-                                "spoken. Call this IN ADDITION to a movement function, and only "
-                                "if you have something specific to report.");
-        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
-        cJSON_AddStringToObject(params, "type", "OBJECT");
-        cJSON *props = cJSON_AddObjectToObject(params, "properties");
-
-        cJSON *kind = cJSON_CreateObject();
-        cJSON_AddStringToObject(kind, "type", "STRING");
-        cJSON_AddStringToObject(kind, "format", "enum");
-        cJSON *kinds = cJSON_AddArrayToObject(kind, "enum");
-        for (int k = NOTE_KIND_NONE + 1; k < NOTE_KIND_COUNT; k++) {
-            cJSON_AddItemToArray(kinds, cJSON_CreateString(note_kind_name((note_kind_t)k)));
-        }
-        cJSON_AddStringToObject(kind, "description",
-                                "difficulty = something stopped you doing what you meant to; "
-                                "behaviour = something you notice about how you act; "
-                                "suggestion = a change that would help you.");
-        cJSON_AddItemToObject(props, "kind", kind);
-
-        cJSON *text = cJSON_CreateObject();
-        cJSON_AddStringToObject(text, "type", "STRING");
-        cJSON_AddStringToObject(text, "description",
-                                "At most 280 characters of plain English: what you saw, what you "
-                                "tried and what happened. No markdown.");
-        cJSON_AddItemToObject(props, "text", text);
-
-        cJSON *required = cJSON_CreateArray();
-        cJSON_AddItemToArray(required, cJSON_CreateString("kind"));
-        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
-        cJSON_AddItemToObject(params, "required", required);
-
-        cJSON_AddItemToArray(tools_arr, fn);
+        gates |= GEMINI_TOOL_GATE_NOTE;
     }
-
-    add_quest_tools(tools_arr, quest);
+    if (quest != NULL && quest->quest_id != 0) {
+        if (quest->offer_discovery) {
+            gates |= GEMINI_TOOL_GATE_QUEST_DISCOVERY;
+        }
+        if (quest->offer_done) {
+            gates |= GEMINI_TOOL_GATE_QUEST_DONE;
+        }
+    }
+    cJSON *tools_arr = cJSON_CreateArray();
+    gemini_tools_build(tools_arr, gates);
     return tools_arr;
 }
 
