@@ -675,12 +675,17 @@ line = [64.5, 99.5, 64.5, 0.5]
 offset_mm = 0.0
 tabs = [49.5]
 
-# Where carrier-fab writes the commit on F.SilkS: `<sha7> <pcb8>`, the git
+# Where carrier-fab writes the commit on F.SilkS: `r<N> <sha7> <pcb8>`, the git
 # commit and the first 8 hex digits of the check stamp's board_sha256, so the
 # Gerber viewer and the delivered board both say which upload was built
 # (kicad.provenance). On a plotting copy only; the committed board and stamp
 # stay as they are. Under "PROVISIONAL" in the title block, above C19's
-# reference; carrier-fab fails if DRC finds it on a pad or a line.
+# reference; carrier-fab fails if DRC finds it on a pad or a line. At x 32.5
+# the revision prefix (r<N>) reached C2's reference; 34.0-35.0 pass DRC.
+# [fab] revision (kicad.revision): carrier-fab writes it as `r<N>` ahead of
+# the commit, and in every output name. Bump it when the board changes after
+# an order in orders.toml; the kicad-carrier hook fails until it is.
 [fab]
-provenance_at = [32.5, 46.8]
+revision = 1
+provenance_at = [34.5, 46.8]
 provenance_size = 1.0

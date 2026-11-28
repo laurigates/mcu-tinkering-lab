@@ -521,20 +521,20 @@ paying for the order.
    `hardware/carrier/`.
 2. **Generate the files:** `just robocar::carrier-fab`. It stops if any
    carrier gate fails or anything that feeds the board has uncommitted
-   changes, and writes `<sha7> <pcb8>` (the commit and the stamp's
+   changes, and writes `r<N> <sha7> <pcb8>` (the commit and the stamp's
    board-hash prefix) on the silkscreen under the title, on a plotting copy
    of the board (`board.toml` `[fab] provenance_at`). A
-   `CARRIER_FAB_ALLOW_DIRTY=1` run writes `<sha7>*<pcb8>`, the same width,
+   `CARRIER_FAB_ALLOW_DIRTY=1` run writes `r<N> <sha7>*<pcb8>`, the same width,
    and `-dirty` in the file names; never order from it. Outputs, under
    `robocar-carrier/output/`, named for the commit's first 7 hex
    digits:
 
    | File | For |
    |---|---|
-   | `robocar-carrier-fab-<sha7>.zip` | The board: Gerbers and drill files |
-   | `assembly/robocar-carrier-bom-jlc-<sha7>.csv` | Assembly only: the SMD parts with LCSC numbers |
-   | `assembly/robocar-carrier-cpl-jlc-<sha7>.csv` | Assembly only: their positions and rotations |
-   | `robocar-carrier-fab-<sha7>.csv` | The hand-off row: the commit and the zip's sha256 |
+   | `robocar-carrier-r<N>-fab-<sha7>.zip` | The board: Gerbers and drill files |
+   | `assembly/robocar-carrier-r<N>-bom-jlc-<sha7>.csv` | Assembly only: the SMD parts with LCSC numbers |
+   | `assembly/robocar-carrier-r<N>-cpl-jlc-<sha7>.csv` | Assembly only: their positions and rotations |
+   | `robocar-carrier-r<N>-fab-<sha7>.csv` | The hand-off row: the commit and the zip's sha256 |
 
 3. **Upload the zip** at jlcpcb.com. It should detect 2 layers and
    100 × 100 mm. FR-4, 1.6 mm, 1 oz copper (the track widths assume it), HASL.
@@ -542,7 +542,7 @@ paying for the order.
    exposed pad takes five vias that overlap its paste windows, and open ones
    wick solder from the thermal pad. If it is not offered, order plain vias
    (`jlcpcb-order` skill § 3, #1308).
-   In the Gerber preview check the outline and the `<sha7> <pcb8>` text under
+   In the Gerber preview check the outline and the `r<N> <sha7> <pcb8>` text under
    the title (it must match the zip's name).
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
    CSVs. Fourteen LCSC numbers are Extended, so fourteen feeder fees: C1–C3
