@@ -42,6 +42,10 @@ What the tests hold:
   release PR body after the action writes it, so merging the release PR does
   not close issues its commits only referenced (issue #1200). The step runs
   here with a stub ``gh``.
+- Every ``gh release`` call in build-firmware.yml names
+  ``--repo "$GITHUB_REPOSITORY"``: attach-pico-release has no checkout at
+  the workspace root, and gh without it reads the repository from git
+  (issues #1310, #1321).
 - build.yml's discovery step, run here against the repo's own
   project-matrix.json, does not select the robocar firmware for a change
   inside one of the four projects nested in its directory (bringup,
@@ -550,6 +554,19 @@ class BuildFirmwareTest(unittest.TestCase):
             if s.get("name") == "Download the Pico SDK build artifacts"
         ]
         self.assertEqual(step["with"].get("merge-multiple"), True)
+
+    def test_every_gh_release_call_names_the_repo(self):
+        # Without --repo, gh reads the repository from the git checkout in
+        # the working directory. attach-pico-release checks out only into
+        # workflow-tools/, so its upload failed with "not a git repository"
+        # (runs 45795629006 and 46022977999, issues #1310 and #1321).
+        unnamed = [
+            f"{job_id} / {step.get('name', '?')}"
+            for job_id, _, step in steps_of({"jobs": self.jobs})
+            if re.search(r"\bgh release\b", str(step.get("run", "")))
+            and '--repo "$GITHUB_REPOSITORY"' not in step["run"]
+        ]
+        self.assertEqual(unnamed, [], 'add --repo "$GITHUB_REPOSITORY"')
 
 
 @unittest.skipUnless(shutil.which("jq"), "the report step needs jq")
