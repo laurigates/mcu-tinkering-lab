@@ -1,0 +1,13 @@
+# Fabrication orders of this carrier (kicad.revision). One [[order]] per
+# order, appended by `python3 -m kicad.revision record` from carrier-fab's
+# hand-off row. Once a revision is here, a board with another pcb_sha256
+# needs a higher [fab] revision in board.toml. Do not edit past entries.
+
+[[order]]
+revision = 1
+date = "2026-10-23"
+vendor = "JLCPCB"
+order = "W2026102320533303"
+git_sha = "8d18cd8d5edfb3363eb064db7e034e028e65fb47"
+pcb_sha256 = "92a94bc01d4f5233412af663a1c2f5cf3c1c78012c920d38c9b20f7b52c35448"
+note = "Bare PCB, line Y5-13829495A (balancebot-carrier-fab_Y5), a stale cart upload: see hardware/carrier/README.md, Revision. Revision 1 assigned retrospectively; rev3 is the current layout."
