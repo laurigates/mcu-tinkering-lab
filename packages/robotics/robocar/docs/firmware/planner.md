@@ -27,6 +27,8 @@ speed constants are estimates until timed on the bench.
 - `note(kind, text)` — a note to the developers, sent to GlitchTip and never spoken, offered only after a trigger (see [Planner notes](#planner-notes))
 - `log_discovery(text)` and `quest_done(achieved, outcome)` — write to the active quest, offered only while one is active and only on evidence (see [Quest log](#quest-log))
 
+The declarations are one table, `k_tools` in `gemini_tools_core.c`: each row names its tool, the gate that offers it and its parameters, and `gemini_tools_build()` declares the rows a request's gate mask allows (`test_gemini_tools_core.c`). A new tool is a row there, plus its gate in `build_tools()` and its handling in `gemini_parse.c`.
+
 Each request carries the frame and, beside it, what the front and rear rangefinders measured and whether the obstacle reflex is holding (`planner_range.c`). The model is told to judge distance from those numbers rather than from the image: the camera sits low, so anything near fills the frame, and without them the planner took obstacles for closer than they were. A sensor that has stopped answering is stated as unavailable, never as a reading, because the executor then holds its last good reading.
 
 The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.

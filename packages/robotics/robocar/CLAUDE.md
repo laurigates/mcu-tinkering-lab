@@ -139,6 +139,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - Per-cycle decision logic goes in `planner_cycle_core.c`, not `planner_task.c`, so the behaviour twin (`packages/robotics/robocar/twin`, ADR-030) runs it.
 - The quest log's records, caps and file format live in `quest_log_core.c`; `quest_store.c` rewrites the file whole through `log.new` and a rename (ADR-039).
 - `log_discovery` and `quest_done` are declared only when `quest_prompt_build()` offers them, and `quest_prompt_apply()` takes a reply only for the quest that is still active (ADR-039 §3).
+- Planner tool declarations are rows of `k_tools` in `gemini_tools_core.c`, each with its gate; `build_tools()` maps the request's offers to the gate mask.
 - The `note` tool is declared only when `note_gate` offers a trigger (`planner_cycle_note_offer()`); the gate's per-boot count stays spent until `plan resume` or a reboot (ADR-033).
 
 **Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))

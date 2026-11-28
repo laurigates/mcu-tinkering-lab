@@ -491,6 +491,19 @@ if(CJSON_FOUND)
     )
     add_test(NAME gemini_parse COMMAND test_gemini_parse)
 
+    # The planner's tool table: which function declarations each gate mask
+    # offers (stateless-model-gating.md section 1) and the schema of each row.
+    add_executable(test_gemini_tools_core
+        "${MAIN_SRC_DIR}/gemini_tools_core.c"
+        "${MAIN_SRC_DIR}/note_gate.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_tools_core.c"
+    )
+    target_include_directories(test_gemini_tools_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_gemini_tools_core PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_gemini_tools_core PRIVATE ${CJSON_LIBRARIES} m)
+    add_test(NAME gemini_tools_core COMMAND test_gemini_tools_core)
+
     # GlitchTip event JSON and the RTC breadcrumb ring (ADR-033): the shape
     # tools/glitchtip/bridge parses, garbage RTC memory after power-on, and a
     # line torn by a reset.
