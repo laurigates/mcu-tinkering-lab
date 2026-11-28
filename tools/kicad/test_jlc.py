@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from kicad import fab, jlc, lcsc, provenance
+from kicad import fab, jlc, lcsc, provenance, revision
 from kicad.errors import KicadError
 
 R0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
@@ -261,7 +261,7 @@ class FabTests(unittest.TestCase):
         (self.project / "hardware/carrier/board.toml").write_text(
             '[project]\nname = "demo-carrier"\n'
             "[outline]\norigin = [100.0, 100.0]\nsize = [50.0, 40.0]\n"
-            "[fab]\nprovenance_at = [10.0, 30.0]\n"
+            "[fab]\nrevision = 2\nprovenance_at = [10.0, 30.0]\n"
         )
         (self.kicad_dir / "demo-carrier.kicad_pcb").write_bytes(FAB_BOARD)
         (self.kicad_dir / "demo-carrier.kicad_sch").touch()
@@ -305,8 +305,8 @@ class FabTests(unittest.TestCase):
     def test_writes_the_jlc_files(self):
         code, out = self.fab(BOM)
         self.assertEqual(code, 0, out)
-        bom = self.asm / "demo-carrier-bom-jlc-0123456.csv"
-        cpl = self.asm / "demo-carrier-cpl-jlc-0123456.csv"
+        bom = self.asm / "demo-carrier-r2-bom-jlc-0123456.csv"
+        cpl = self.asm / "demo-carrier-r2-cpl-jlc-0123456.csv"
         self.assertEqual(bom.read_bytes(), BOM_JLC.encode())
         self.assertEqual(cpl.read_bytes(), CPL_JLC.encode())
 
@@ -318,7 +318,7 @@ class FabTests(unittest.TestCase):
         (self.out / "demo-carrier-fab-fffffff.zip").write_text("stale")
         code, out = self.fab(BOM)
         self.assertEqual(code, 0, out)
-        text = f"0123456 {self.board_sha[:8]}"
+        text = f"r2 0123456 {self.board_sha[:8]}"
         self.assertEqual(len(self.plotted), 3)  # gerbers, drill, pos
         for board in self.plotted:
             self.assertIn(f'(gr_text "{text}"\n\t\t(at 110 130 0)', board)
@@ -327,15 +327,15 @@ class FabTests(unittest.TestCase):
         )
         self.assertEqual(stamp.read_bytes(), before)
         zips = sorted(p.name for p in self.out.glob("*.zip"))
-        self.assertEqual(zips, ["demo-carrier-fab-0123456.zip"])
-        with open(self.out / "demo-carrier-fab-0123456.csv", newline="") as f:
+        self.assertEqual(zips, ["demo-carrier-r2-fab-0123456.zip"])
+        with open(self.out / "demo-carrier-r2-fab-0123456.csv", newline="") as f:
             (row,) = list(csv.DictReader(f))
         self.assertEqual(row["git_sha"], FAB_SHA)
         self.assertEqual(row["silk_text"], text)
         self.assertEqual(
             row["zip_sha256"],
             hashlib.sha256(
-                (self.out / "demo-carrier-fab-0123456.zip").read_bytes()
+                (self.out / "demo-carrier-r2-fab-0123456.zip").read_bytes()
             ).hexdigest(),
         )
 
@@ -355,14 +355,14 @@ class FabTests(unittest.TestCase):
         self.assertEqual(
             names,
             [
-                "demo-carrier-fab-0123456-dirty.csv",
-                "demo-carrier-fab-0123456-dirty.zip",
+                "demo-carrier-r2-fab-0123456-dirty.csv",
+                "demo-carrier-r2-fab-0123456-dirty.zip",
             ],
         )
-        text = f"0123456*{self.board_sha[:8]}"
+        text = f"r2 0123456*{self.board_sha[:8]}"
         self.assertIn(f'(gr_text "{text}"\n', self.plotted[0])
         self.assertNotIn("-dirty", self.plotted[0])
-        with open(self.out / "demo-carrier-fab-0123456-dirty.csv", newline="") as f:
+        with open(self.out / "demo-carrier-r2-fab-0123456-dirty.csv", newline="") as f:
             (row,) = list(csv.DictReader(f))
         self.assertEqual(row["dirty"], "yes")
         self.assertEqual(row["silk_text"], text)
@@ -374,6 +374,33 @@ class FabTests(unittest.TestCase):
         code, out = self.fab(BOM)
         self.assertEqual(code, 1, out)
         self.assertIn("[fab] provenance_at", out)
+
+    def test_missing_revision_fails(self):
+        (self.project / "hardware/carrier/board.toml").write_text(
+            '[project]\nname = "demo-carrier"\n'
+            "[outline]\norigin = [100.0, 100.0]\nsize = [50.0, 40.0]\n"
+            "[fab]\nprovenance_at = [10.0, 30.0]\n"
+        )
+        code, out = self.fab(BOM)
+        self.assertEqual(code, 1, out)
+        self.assertIn("[fab] revision", out)
+
+    def test_changed_board_under_an_ordered_revision_is_refused(self):
+        revision.append_order(
+            self.project / "hardware/carrier" / revision.LEDGER,
+            {
+                "revision": 2,
+                "date": "2026-11-01",
+                "vendor": "JLCPCB",
+                "order": "W1",
+                "git_sha": FAB_SHA,
+                "pcb_sha256": "ab" * 32,
+            },
+        )
+        code, out = self.fab(BOM)
+        self.assertEqual(code, 1, out)
+        self.assertIn("revision = 3", out)
+        self.assertFalse(self.out.exists())
 
     def test_missing_column_fails(self):
         code, out = self.fab(BOM.replace('"LCSC"', '"Part"', 1))

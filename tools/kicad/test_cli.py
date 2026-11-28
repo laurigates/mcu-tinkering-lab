@@ -25,6 +25,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import gitenv
 
@@ -44,6 +45,7 @@ PROJECT_CLIS: tuple[str, ...] = (
     "netlist",
     "parity",
     "perfboard",
+    "revision",
     "schematic",
     "sourcing",
     "stamp",
@@ -66,6 +68,9 @@ REPO_CLI_ARGS = {
 # `lcsc_rotation` takes an LCSC number and a footprint, or --check. `measure`
 # takes pcb/dump.py's JSON; carrier-measure writes it per project.)
 FILE_CLIS = ("jlc", "lcsc_rotation", "measure")
+# Claude Code hooks: main() reads the hook event on stdin and must exit 0
+# whatever it reads, so a broken repo never stops a tool call.
+HOOK_CLIS = ("cartcheck",)
 
 BOARD_TOML = '[project]\nname = "demo-carrier"\n'
 
@@ -132,7 +137,9 @@ class EmptyRepoTests(unittest.TestCase):
 
     def test_every_cli_is_listed(self):
         found = cli_modules(kicad.__path__, "kicad.")
-        self.assertEqual(found, set(PROJECT_CLIS) | set(REPO_CLIS) | set(FILE_CLIS))
+        self.assertEqual(
+            found, set(PROJECT_CLIS) | set(REPO_CLIS) | set(FILE_CLIS) | set(HOOK_CLIS)
+        )
 
     def test_cli_scan_descends_into_subpackages(self):
         # Control for the scan above: a CLI in a subpackage (like perfboard/),
@@ -191,6 +198,20 @@ class EmptyRepoTests(unittest.TestCase):
                     code = main([])
                 self.assertEqual(code, 1)
                 self.assertIn("FAIL:", out.getvalue())
+
+    def test_hook_clis_exit_0_on_an_empty_repo(self):
+        event = '{"tool_input": {"url": "https://cart.jlcpcb.com/shopcart"}}'
+        for name in HOOK_CLIS:
+            main = cli_main(name)
+            for stdin in (event, "", "not json"):
+                with self.subTest(cli=name, stdin=stdin):
+                    out = io.StringIO()
+                    with (
+                        mock.patch("sys.stdin", io.StringIO(stdin)),
+                        contextlib.redirect_stdout(out),
+                    ):
+                        code = main([], repo_root=self.root)
+                    self.assertEqual((code, out.getvalue()), (0, ""))
 
     def test_not_a_git_work_tree(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(KicadError):

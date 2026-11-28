@@ -34,7 +34,10 @@ class StaleOutputs(unittest.TestCase):
                 "demo-fab-0123456.zip",
                 "demo-fab-0123456.csv",
                 "demo-fab-abcdef0-dirty.zip",
+                "demo-r3-fab-0123456.zip",
+                "demo-r12-fab-abcdef0-dirty.csv",
                 "other-fab-0123456.zip",
+                "other-r3-fab-0123456.zip",
                 "demo-fab-notes.txt",
             ]
             for n in names:
@@ -48,6 +51,8 @@ class StaleOutputs(unittest.TestCase):
                 "demo-fab-0123456.zip",
                 "demo-fab-abcdef0-dirty.zip",
                 "demo-fab.zip",
+                "demo-r12-fab-abcdef0-dirty.csv",
+                "demo-r3-fab-0123456.zip",
             ],
         )
 

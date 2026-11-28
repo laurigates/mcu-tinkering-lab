@@ -125,6 +125,13 @@ jobs:
             exit 1
           fi
 
+      - name: Each board revision fits its order ledger
+        run: |
+          if ! python3 -m kicad.revision; then
+            echo "::error::A board changed after its revision was ordered, or a silkscreen revision text disagrees with board.toml. Set a higher [fab] revision in hardware/carrier/board.toml (kicad.revision)."
+            exit 1
+          fi
+
       - name: Every carrier part has a source
         run: |
           if ! python3 -m kicad.sourcing; then

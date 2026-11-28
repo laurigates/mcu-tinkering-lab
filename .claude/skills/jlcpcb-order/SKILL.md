@@ -36,7 +36,8 @@ are a calibration, not a quote: JLCPCB changes them.
   `balancebot-carrier-fab_Y5`, uploaded 13–14 October; JLCPCB built that
   older layout (8d18cd8d, no F1/Q1), while the hand-off CSV named the commit of
   the zip on disk. `carrier-fab` now names its outputs for the commit
-  (`<name>-fab-<sha7>.zip`) and writes `<sha7> <pcb8>` on the silkscreen, so
+  (`<name>-r<N>-fab-<sha7>.zip`, `[fab] revision` and the commit) and writes
+  `r<N> <sha7> <pcb8>` on the silkscreen, so
   every PCB line can be checked against the hand-off CSV before checkout
   (§ 3 step 8). Delete PCB lines that are not part of this order. To find out
   afterwards what was built, use the order history
@@ -50,7 +51,7 @@ are a calibration, not a quote: JLCPCB changes them.
   `tools/kicad`, the parts registry and the rotation table;
   `kicad.provenance.feeds`). Commit first. `CARRIER_FAB_ALLOW_DIRTY=1`
   exports anyway with `-dirty` in every file name and `dirty` = `yes` in
-  the hand-off row; the silkscreen text becomes `<sha7>*<pcb8>`, a `*` in
+  the hand-off row; the silkscreen text becomes `r<N> <sha7>*<pcb8>`, a `*` in
   place of the space, so it keeps the clean text's width and its DRC
   result. Never upload a `-dirty` zip for an order. Read the size and layer
   count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the upload
@@ -71,9 +72,9 @@ are a calibration, not a quote: JLCPCB changes them.
   quoted with Different Design 2 added €3.56 engineering + €3.61 panel, and
   with 4 designs €10.83 panel, over the single-design €3.56. A `saw` board is
   one outline and one design.
-- Copy the zip, `assembly/<name>-bom-jlc-<sha7>.csv`,
-  `assembly/<name>-cpl-jlc-<sha7>.csv` and the hand-off row
-  `<name>-fab-<sha7>.csv` to a short path (and keep a copy in the repo's
+- Copy the zip, `assembly/<name>-r<N>-bom-jlc-<sha7>.csv`,
+  `assembly/<name>-r<N>-cpl-jlc-<sha7>.csv` and the hand-off row
+  `<name>-r<N>-fab-<sha7>.csv` to a short path (and keep a copy in the repo's
   git-ignored `tmp/quotes/`: `/tmp` is cleared). Keep the names: the cart
   line takes its file name from the zip's.
 
@@ -173,7 +174,7 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    (tented) vias and note it in the README; the pad still wets outside the
    via corners (#1308, decided 2026-11-27).
 3. Open the Gerber viewer and check what the README lists (outline, holes,
-   cut lines, polarity marks), and that the silkscreen's `<sha7> <pcb8>`
+   cut lines, polarity marks), and that the silkscreen's `r<N> <sha7> <pcb8>`
    text matches the zip's name.
 4. PCB Assembly on → Economic → Top Side → PCBA Qty 5 or 2 (2-of-5 assembles
    two and ships five). Tooling holes: "Added by JLCPCB" unless the README
@@ -197,17 +198,39 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    CSV** (§ 6), not only the line uploaded in this session. For each line:
    - read the file name on the cart line (`cart.js`, or the cart page). It is
      the zip's stem plus JLCPCB's `_Y<n>`, such as
-     `balancebot-carrier-fab-95131fa_Y7`; the `<sha7>` in it must equal the
-     first 7 characters of the CSV row's `git_sha`;
+     `balancebot-carrier-r3-fab-95131fa_Y7`; the `r<N>` in it must equal the
+     CSV row's `revision` and the `<sha7>` the first 7 characters of its
+     `git_sha` (lines uploaded before 2026-11-28 have no `r<N>`);
    - open the line's Gerber viewer and read the silkscreen text: it must
      equal the CSV row's `silk_text` character for character. A clean export
-     reads `<sha7> <pcb8>`; a `*` between the two parts (`<sha7>*<pcb8>`)
-     means a dirty export;
+     reads `r<N> <sha7> <pcb8>`; a `*` between the commit and the board hash
+     (`r<N> <sha7>*<pcb8>`) means a dirty export;
    - a line whose name has no `<sha7>`, or whose name or silkscreen disagrees
      with the CSV, or whose name says `-dirty`, or whose silkscreen has the
      dirty `*`, is stale or wrong: delete it, or tell Lauri before he pays.
 
    Record each line's Y number in the CSV.
+
+   The `fab-cart-check.sh` PreToolUse hook (`tools/kicad/cartcheck.py`,
+   `.claude/settings.json`) puts the expected zip stem and silkscreen text
+   for every export in `output/` into context when a Bash, Chrome or
+   built-in-browser call touches JLCPCB or JLCONE and the cart, an upload, a
+   quote or checkout, and lists what makes an export unfit to order (dirty,
+   board or revision changed since the export, a revision the ledger says
+   needs a bump). It is advisory: the check above is still the gate. It does
+   not see computer-use clicks in JLCONE, which carry no URL.
+9. **After payment, record the order** in the carrier's ledger, from the
+   hand-off row of the export that was ordered, and commit it:
+
+   ```sh
+   PYTHONPATH=tools python3 -m kicad.revision record packages/robotics/balancebot \
+       --vendor JLCPCB --order W2026...
+   git add packages/robotics/balancebot/hardware/carrier/orders.toml
+   ```
+
+   From then on the `kicad-carrier` pre-commit hook, `carrier-check.yml` and
+   `carrier-fab` refuse a changed board under the same `[fab] revision`
+   (`kicad.revision`), so two different boards never share a revision.
 
 ## 4. Where the money goes
 
@@ -353,8 +376,8 @@ the separate wait.
 There is no cart export; `cart.js` gives the lines. Write
 `tmp/quotes/jlcpcb-cart-<date>.csv`: one row per cart line (JLC reference;
 the cart line's file name and Y number; quantity; build time; EUR price;
-and, for a PCB line, `git_sha`, `silk_text`, `zip_sha256`, `bom` and `cpl`
-copied from the `<name>-fab-<sha7>.csv` row `carrier-fab` wrote beside the
+and, for a PCB line, `revision`, `git_sha`, `silk_text`, `zip_sha256`, `bom` and `cpl`
+copied from the `<name>-r<N>-fab-<sha7>.csv` row `carrier-fab` wrote beside the
 zip that was uploaded, not recomputed from whatever zip is on disk later),
 plus summary rows for merchandise,
 shipping, coupon and subtotal, and a row for the checkout's VAT once it has

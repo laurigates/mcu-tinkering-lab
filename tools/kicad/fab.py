@@ -11,22 +11,24 @@ Every output names the commit it came from (`kicad.provenance`): the run
 refuses a tree with uncommitted changes to anything that feeds the board
 (`$CARRIER_FAB_ALLOW_DIRTY=1` or `--allow-dirty` exports anyway and marks
 every file name `-dirty`), and the gerbers, drill files and CPL are plotted
-from a temporary copy of the board that carries `<sha7> <pcb8>` on F.SilkS at
-board.toml's `[fab] provenance_at`. The committed `.kicad_pcb` and its check
+from a temporary copy of the board that carries `r<N> <sha7> <pcb8>` on
+F.SilkS at board.toml's `[fab] provenance_at`; `<N>` is `[fab] revision`, and
+the run refuses a board that `kicad.revision`'s order ledger says needs a
+higher one. The committed `.kicad_pcb` and its check
 stamp are only read. `<sha7>` is the commit; `<pcb8>` the first 8 hex digits of
-the stamp's `board_sha256`. A dirty run's text is `<sha7>*<pcb8>`, the same
+the stamp's `board_sha256`. A dirty run's text is `r<N> <sha7>*<pcb8>`, the same
 width as a clean one's, so the DRC check below passes or fails alike. Per
 project, into the KiCad project's `output/` (git-ignored):
 
 - `fab/`: gerbers for the copper, paste, silkscreen, mask and Edge.Cuts layers
   (`--check-zones`), and Excellon drill files with gerber X2 drill maps;
-- `<name>-fab-<sha7>.zip`: `fab/`'s files, the upload for JLCPCB's PCB order;
+- `<name>-r<N>-fab-<sha7>.zip`: `fab/`'s files, the upload for JLCPCB's PCB order;
 - `assembly/bom.csv` (`sch export bom`, grouped by value, footprint and LCSC)
   and `assembly/pos.csv` (front-side SMD placements);
-- `assembly/<name>-bom-jlc-<sha7>.csv` and `assembly/<name>-cpl-jlc-<sha7>.csv`
+- `assembly/<name>-r<N>-bom-jlc-<sha7>.csv` and `assembly/<name>-r<N>-cpl-jlc-<sha7>.csv`
   (`kicad.jlc`): only the parts with an LCSC number, for JLCPCB assembly; skip
   them to hand-solder;
-- `<name>-fab-<sha7>.csv`: the hand-off row (commit, silk text, board hash, the
+- `<name>-r<N>-fab-<sha7>.csv`: the hand-off row (revision, commit, silk text, board hash, the
   zip's sha256, the BOM and CPL), which the `jlcpcb-order` skill's hand-off CSV
   copies.
 
@@ -46,7 +48,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from . import jlc, paths, provenance, vendor
+from . import jlc, paths, provenance, revision, vendor
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -104,8 +106,11 @@ def order_notes(cfg: paths.BoardConfig) -> list[str]:
 
 
 def stale_outputs(out: Path, name: str) -> list[Path]:
-    """A previous run's zip and hand-off row: `<name>-fab.zip`, `<name>-fab-*.zip|csv`."""
-    pattern = re.compile(rf"{re.escape(name)}-fab(-[0-9a-f]+(-dirty)?)?\.(zip|csv)")
+    """A previous run's zip and hand-off row: `<name>-fab.zip`,
+    `<name>[-r<N>]-fab-*.zip|csv`."""
+    pattern = re.compile(
+        rf"{re.escape(name)}(-r[0-9]+)?-fab(-[0-9a-f]+(-dirty)?)?\.(zip|csv)"
+    )
     if not out.is_dir():
         return []
     return sorted(p for p in out.iterdir() if pattern.fullmatch(p.name))
@@ -163,9 +168,10 @@ def fab(
     at, size = provenance.spec(cfg)
     pcb_bytes = pcb.read_bytes()
     board_sha = provenance.stamped_board_sha256(stamp, pcb_bytes)
+    rev = revision.require_orderable(project, board_sha)
     run_tag = provenance.tag(state.sha, dirty)
-    text = provenance.silk_text(state.sha, dirty, board_sha)
-    names = provenance.names(cfg.name, run_tag)
+    text = provenance.silk_text(state.sha, dirty, board_sha, rev)
+    names = provenance.names(cfg.name, rev, run_tag)
     if dirty:
         print(
             f"WARNING: dirty tree, every file name is marked {provenance.DIRTY} "
@@ -272,6 +278,7 @@ def fab(
         ) from None
     row = provenance.handoff_row(
         cfg.name,
+        rev,
         state,
         dirty,
         text,

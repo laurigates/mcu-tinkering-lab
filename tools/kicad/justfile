@@ -33,8 +33,8 @@ setup *args:
 test:
     cd ../.. && python3 -m unittest discover -s tools/kicad -t tools
 
-# Vendored bytes, derived XIAO parts, breakout sockets, schematic, board pads, the check stamp
-# and the perfboard drawing and wire list: what a machine without KiCad can verify.
+# Vendored bytes, derived XIAO parts, breakout sockets, schematic, board pads, the check stamp,
+# the perfboard drawing and wire list, and each board revision against its order ledger: what a machine without KiCad can verify.
 #
 # Every KiCad-free carrier gate, for every tracked project
 [group: "test"]
@@ -46,6 +46,7 @@ check: test
     cd ../.. && PYTHONPATH=tools python3 -m kicad.boardcheck
     cd ../.. && PYTHONPATH=tools python3 -m kicad.stamp
     cd ../.. && PYTHONPATH=tools python3 -m kicad.perfboard --check
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.revision
     cd ../.. && PYTHONPATH=tools python3 -m kicad.sourcing
 
 # Fails on a BOM part with neither an LCSC number nor a `buy` source, and lists
