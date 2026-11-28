@@ -20,6 +20,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import hardware.board
 import hardware.header
 import hardware.layout
 from hardware import (
@@ -37,6 +38,7 @@ BALANCEBOT = REPO_ROOT / "packages/robotics/balancebot"
 XIAO_RP2350 = REPO_ROOT / "docs/reference/boards/xiao-rp2350.md"
 WAVESHARE_S3_ZERO = REPO_ROOT / "docs/reference/boards/waveshare-esp32-s3-zero.md"
 GENERATOR = REPO_ROOT / "tools/typst/generate-pin-defs.py"
+BOARDS_DIR = REPO_ROOT / "docs/reference/boards"
 
 
 def write(path: Path, text: str) -> Path:
@@ -233,6 +235,40 @@ class BoardTableTest(unittest.TestCase):
                 | D0 | GPIO1 |
                 | D1 | GPIO1 |
                 """)
+
+
+class EveryBoardPageParsesTest(unittest.TestCase):
+    """Each board page with a pin-mapping table parses, named or not (#1195).
+
+    The join reads a page only when a hardware.toml names it, so a page nobody
+    has adopted yet was read by nothing: a second pin-first table with a GPIO
+    column stayed green until the day a project added `board = "..."`. Which
+    GPIO and which pins strap is content no parser can judge; that is the
+    per-board reference tests' job.
+    """
+
+    boards_dir = BOARDS_DIR
+
+    def test_every_page_with_a_pin_first_gpio_table_parses(self):
+        pages = [
+            page
+            for page in sorted(self.boards_dir.glob("*.md"))
+            if any(
+                hardware.board._is_mapping(table[0])
+                for table in hardware.board._tables(page.read_text(encoding="utf-8"))
+            )
+        ]
+        # Nine pages had one when this test landed; a header drifting out of
+        # the _is_mapping shape would otherwise drop its page silently.
+        self.assertGreaterEqual(
+            len(pages),
+            9,
+            f"fewer board pages with a pin-mapping table in {self.boards_dir}: "
+            f"{[page.name for page in pages]}",
+        )
+        for page in pages:
+            with self.subTest(page=page.name):
+                parse_board_table(page)
 
 
 class XiaoEsp32s3ReferenceTest(unittest.TestCase):
