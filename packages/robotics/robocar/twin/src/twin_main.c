@@ -972,8 +972,8 @@ static void build_descriptor(char *out, size_t cap, const char *gate, bool speak
 }
 
 /**
- * gemini_backend_plan() on the twin. The guard order is gemini_backend.c:610-632
- * (fuse, then WiFi, then key); the result handling is gemini_backend.c:668-704,
+ * gemini_backend_plan() on the twin. The guard order is that function's
+ * (fuse, then WiFi, then key), and so is the result handling,
  * with gemini_http.c:95 turning any status other than 200 into an error:
  * a non-200 status is a failed request, counted against the request ceiling
  * and charged no tokens (plan_budget_note(-1, false)); a 200 is parsed, and the
@@ -1001,7 +1001,7 @@ static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, s
     }
 
     /* build_request_json() decides whether to offer `speak` from the gates as
-     * they stand before the request (gemini_backend.c:414-418); the verdict
+     * they stand before the request (its may_speak); the verdict
      * string encodes the same budget && (scene || audio). */
     const char *gate = planner_cycle_gate_verdict((uint32_t)request_ms);
     const bool speak_allowed = (gate[0] == 'V' || gate[0] == 'A');
@@ -1028,8 +1028,8 @@ static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, s
         gemini_usage_t usage;
         gemini_parse_last_usage(&usage);
         plan_budget_note(usage.present ? usage.total : -1, true);
-        /* build_tools(may_speak) declares `speak` only when it was offered
-         * (gemini_backend.c:535), so the model cannot call it otherwise. A
+        /* gemini_tools_build() declares `speak` only under the speak gate
+         * (gemini_tools_core.c), so the model cannot call it otherwise. A
          * scripted or recorded reply that does is one the robot could never
          * receive: flag it and drop the line, so no scenario passes on speech
          * the firmware did not offer. */
