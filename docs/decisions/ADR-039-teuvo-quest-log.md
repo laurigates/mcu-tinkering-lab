@@ -122,8 +122,10 @@ planner sees one clause.
 ### 3. The planner pursues the active quest
 
 When a quest is active, the planner's request carries a reserved clause of at
-most `QUEST_CLAUSE_MAX` bytes (initially 384): the quest's kind, title and why,
-and its last two notes. Two tools are offered only then:
+most `QUEST_CLAUSE_MAX` bytes (1024, counted in `GEMINI_SYSTEM_PROMPT_MAX` and
+the planner stack): the quest's kind, title and why, and its last two notes,
+dropped whole, oldest first, to fit. An `ask` quest gets no clause. Two tools
+are offered only then:
 
 - `log_discovery(text)`: what he found and what is near it. The firmware adds
   the time, the dwell pose and the quest id. Offered on a cycle that had view
@@ -131,8 +133,10 @@ and its last two notes. Two tools are offered only then:
   frame cannot be noted over and over. A note whose text is a near-repeat of
   one of the quest's notes (the Sørensen–Dice check `dialogue_style` uses) is
   dropped.
-- `quest_done(outcome)`: closes the active quest. Offered once the quest has
-  at least one note or has used half its ration.
+- `quest_done(achieved, outcome)`: closes the active quest, as done when
+  `achieved` is true and as dropped when it is false. Offered with
+  `log_discovery`, once the quest has at least one note, or once it has used
+  half its ration (`QUEST_DONE_AFTER_REQUESTS`, 24 requests).
 
 Motion stays the existing tools: `track` (often at speed 0, to look), `rotate`,
 `drive`, `stop`, and `set_idle` once ADR-029 §5 lands. No new goal kind, no
@@ -273,16 +277,13 @@ Three changes from §1 and §7, made in the step-1 PR:
 
 ## Step 2 as built (2026-11-27)
 
-Changes from §3, made in the step-2 PR:
+§3 now carries the step-2 figures. What changed from the first draft, and why:
 
-- **`QUEST_CLAUSE_MAX` is 1024, not 384.** With the title (60) and why (120)
-  at their caps, the head and both tool sentences come to about 840 bytes, so
-  one 160-byte note still fits; with ordinary titles both notes do. The clause
-  keeps the head and tool sentences whole and drops notes, oldest first. `GEMINI_SYSTEM_PROMPT_MAX` and the planner
-  stack grow by the same 1024.
-- **`quest_done(achieved, outcome)`.** `achieved=false` closes the quest as
-  dropped, so the model can give up on a quest it cannot do from where it is
-  without claiming success.
+- **`QUEST_CLAUSE_MAX` went from 384 to 1024.** With the title (60) and why
+  (120) at their caps, the head and both tool sentences come to about
+  840 bytes, so one 160-byte note still fits; with ordinary titles both do.
+- **`quest_done` gained `achieved`.** `achieved=false` lets the model give up
+  on a quest it cannot do from where it is without claiming success.
 - **`quest_done` is also offered with `log_discovery`.** The cycle that puts
   the thing in view is the one where the quest can be seen to be done; under
   "≥1 note" alone, the first discovery could never close it in the same reply.
