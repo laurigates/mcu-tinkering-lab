@@ -1,0 +1,13 @@
+# Fabrication orders of this carrier (kicad.revision). One [[order]] per
+# order, appended by `python3 -m kicad.revision record` from carrier-fab's
+# hand-off row. Once a revision is here, a board with another pcb_sha256
+# needs a higher [fab] revision in board.toml. Do not edit past entries.
+
+[[order]]
+revision = 1
+date = "2026-10-23"
+vendor = "JLCPCB"
+order = "W2026102320533303"
+git_sha = "9735477d27699487567f9ae5000655530041262a"
+pcb_sha256 = "5e6c27fe32d3b40b1ad7eb4275fd2a62e82d865aa2a94a3e2f18cfee20f73435"
+note = "Economic PCBA, as robocar-unified-carrier (packages/robocar/unified). Ordered before carrier-fab stamped the commit; identified 2026-11-28 from the delivered board's silkscreen (MUX_RST, SC7, LM2596 TO 5.0V FIRST, no TCA9548A-clone RST/VIN), which only 9735477d has among the commits before the order. The 2026-10-23 hand-off CSV also named 9735477d. Revision 1 assigned retrospectively."

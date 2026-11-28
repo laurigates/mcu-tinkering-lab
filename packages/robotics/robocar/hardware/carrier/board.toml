@@ -1110,6 +1110,6 @@ in_pad_vias = { "U5:25" = { via_um = [500, 300], at = [[0, 0], [1.0, 0], [-1.0, 
 # the commit, and in every output name. Bump it when the board changes after
 # an order in orders.toml; the kicad-carrier hook fails until it is.
 [fab]
-revision = 1
+revision = 2
 provenance_at = [22.0, 49.4]
 provenance_size = 1.0
