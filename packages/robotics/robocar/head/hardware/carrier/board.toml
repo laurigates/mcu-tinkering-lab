@@ -180,9 +180,13 @@ spoke_mm = 0.35
 # one (pcb/stitch.py): joins the F.Cu and B.Cu pours on the heads' outer rings.
 stitch = { pitch_mm = 5.0, via_um = [600, 300] }
 
-# Where carrier-fab writes `<sha7> <pcb8>` on F.SilkS (kicad.provenance): in
+# Where carrier-fab writes `r<N> <sha7> <pcb8>` on F.SilkS (kicad.provenance): in
 # the waste strip between heads 1 and 2, so it is on the delivered panel and
 # goes with the sawdust.
+# [fab] revision (kicad.revision): carrier-fab writes it as `r<N>` ahead of
+# the commit, and in every output name. Bump it when the board changes after
+# an order in orders.toml; the kicad-carrier hook fails until it is.
 [fab]
+revision = 1
 provenance_at = [14.75, 32.4]
 provenance_size = 1.0
