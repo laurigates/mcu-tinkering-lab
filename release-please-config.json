@@ -206,6 +206,54 @@
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/brainbox": {
+      "release-type": "simple",
+      "component": "thinkpack-brainbox",
+      "package-name": "thinkpack-brainbox",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/audio/melody-detector": {
+      "release-type": "simple",
+      "component": "melody-detector",
+      "package-name": "melody-detector",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "exclude-paths": [
+        "packages/audio/melody-detector/training"
+      ]
+    },
+    "packages/camera-vision/gemini-vision": {
+      "release-type": "simple",
+      "component": "gemini-vision",
+      "package-name": "gemini-vision",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/home/ceiling-fan-ir": {
+      "release-type": "simple",
+      "component": "ceiling-fan-ir",
+      "package-name": "ceiling-fan-ir",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/sensors/presence-detector": {
+      "release-type": "simple",
+      "component": "presence-detector",
+      "package-name": "presence-detector",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   },
   "release-type": "simple",
