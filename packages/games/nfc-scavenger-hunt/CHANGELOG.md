@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.8...nfc-scavenger-hunt-v0.1.9) (2026-11-28)
+
+
+### Documentation
+
+* **nfc-scavenger-hunt:** say the project has no test suite yet ([d8d48b8](https://github.com/laurigates/mcu-tinkering-lab/commit/d8d48b8544fc46bfa1212a24baf6ee15ba70a67b)), closes [#1183](https://github.com/laurigates/mcu-tinkering-lab/issues/1183)
+
 ## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.7...nfc-scavenger-hunt-v0.1.8) (2026-11-14)
 
 

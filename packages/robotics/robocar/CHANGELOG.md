@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.29](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.28...robocar-v0.2.29) (2026-11-28)
+
+
+### Features
+
+* **robocar:** pursue the active quest in the planner prompt ([00b0455](https://github.com/laurigates/mcu-tinkering-lab/commit/00b045586798992cd42a34878afb09b048062e18))
+
+
+### Bug Fixes
+
+* **robocar:** park for an OTA only on a real front reading ([32b7ca1](https://github.com/laurigates/mcu-tinkering-lab/commit/32b7ca124683e3ac6454390c0690fc9388e6f92b)), closes [#1300](https://github.com/laurigates/mcu-tinkering-lab/issues/1300)
+* **robocar:** read the servo position under the servo lock ([711d6da](https://github.com/laurigates/mcu-tinkering-lab/commit/711d6da1c9e664c351cbf36eec97f24e42c8f0bc)), closes [#1300](https://github.com/laurigates/mcu-tinkering-lab/issues/1300)
+* **robocar:** register the OTA check-now subscription when MQTT comes up late ([7ef13fe](https://github.com/laurigates/mcu-tinkering-lab/commit/7ef13fe8605eb7312bc99e51fed386184b3772de)), closes [#1300](https://github.com/laurigates/mcu-tinkering-lab/issues/1300)
+* **robocar:** use software AES so TLS records need no internal DMA memory ([#1325](https://github.com/laurigates/mcu-tinkering-lab/issues/1325)) ([a4a19b3](https://github.com/laurigates/mcu-tinkering-lab/commit/a4a19b326c0272eb9e21edbdfcd4150ed8ddf8a0)), closes [#1312](https://github.com/laurigates/mcu-tinkering-lab/issues/1312)
+
 ## [0.2.28](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-v0.2.27...robocar-v0.2.28) (2026-11-27)
 
 
