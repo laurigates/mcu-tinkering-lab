@@ -19,5 +19,10 @@
   "packages/usb-tools/facedancer-espdancer-fw": "0.1.1",
   "packages/thinkpack/boombox": "0.1.1",
   "packages/thinkpack/glowbug": "0.1.1",
-  "packages/thinkpack/mesh-demo": "0.1.1"
+  "packages/thinkpack/mesh-demo": "0.1.1",
+  "packages/thinkpack/brainbox": "0.1.0",
+  "packages/audio/melody-detector": "0.1.0",
+  "packages/camera-vision/gemini-vision": "0.1.0",
+  "packages/home/ceiling-fan-ir": "0.1.0",
+  "packages/sensors/presence-detector": "0.1.0"
 }
