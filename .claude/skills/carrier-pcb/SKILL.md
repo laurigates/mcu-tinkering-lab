@@ -102,19 +102,22 @@ several traps below are version-specific: after a KiCad upgrade, re-run
      via after walling off F.Cu, a neck shared by the servo and head feeds,
      and a split top-half GND after widening +5V.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
-   and CPL, named for the commit (`<name>-fab-<sha7>.zip`,
-   `<name>-bom-jlc-<sha7>.csv`, `<name>-cpl-jlc-<sha7>.csv`) beside a
-   hand-off row (`<name>-fab-<sha7>.csv`: the commit and the zip's sha256).
+   and CPL, named for the commit (`<name>-r<N>-fab-<sha7>.zip`,
+   `<name>-r<N>-bom-jlc-<sha7>.csv`, `<name>-r<N>-cpl-jlc-<sha7>.csv`) beside a
+   hand-off row (`<name>-r<N>-fab-<sha7>.csv`: the commit and the zip's sha256).
    It refuses uncommitted changes to anything that feeds the board
    (`CARRIER_FAB_ALLOW_DIRTY=1` exports anyway, with `-dirty` in the file
    names), and plots from a temporary copy of the board that carries
-   `<sha7> <pcb8>` (the commit and the stamp's `board_sha256` prefix) on
+   `r<N> <sha7> <pcb8>` (`[fab] revision`, the commit and the stamp's `board_sha256` prefix) on
    F.SilkS at `board.toml`'s `[fab] provenance_at`; KiCad's DRC on that copy
    fails the run if the text lands on a pad, other silkscreen or the edge. A
-   dirty run writes `<sha7>*<pcb8>`: KiCad's stroke font gives `*` a space's
+   dirty run writes `r<N> <sha7>*<pcb8>`: KiCad's stroke font gives `*` a space's
    advance, so the text is as wide as the clean one and passes DRC alike. The committed board and stamp
-   are only read (`kicad.provenance`). A new carrier needs `[fab]
-   provenance_at` before its first fab run. `just kicad::check` runs what CI
+   are only read (`kicad.provenance`). A new carrier needs `[fab] revision`
+   and `provenance_at` before its first fab run. Once a revision is in
+   `hardware/carrier/orders.toml` (`kicad.revision record`, after payment),
+   a changed board needs a higher `[fab] revision`; the `kicad-carrier`
+   hook, CI and `carrier-fab` refuse it until then. `just kicad::check` runs what CI
    runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
    in `docs/reference/jlcpcb-rotations.toml` first. `carrier-fab` first runs

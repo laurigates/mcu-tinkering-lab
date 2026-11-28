@@ -101,6 +101,18 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__claude-in-chrome__.*|mcp__Claude_Browser__.*|mcp__remote-devices__Claude_Browser__.*|mcp__remote-devices__Control_Chrome__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/fab-cart-check.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",

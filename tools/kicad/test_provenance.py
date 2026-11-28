@@ -47,40 +47,46 @@ class Naming(unittest.TestCase):
         with self.assertRaises(KicadError):
             provenance.tag("abc", False)
 
-    def test_silk_text_is_commit_then_board_hash_prefix(self):
-        self.assertEqual(provenance.silk_text(SHA, False, PCB_SHA), "0123456 fedcba98")
+    def test_silk_text_is_revision_commit_then_board_hash_prefix(self):
+        self.assertEqual(
+            provenance.silk_text(SHA, False, PCB_SHA, 3), "r3 0123456 fedcba98"
+        )
 
     def test_dirty_silk_text_marks_the_separator(self):
-        self.assertEqual(provenance.silk_text(SHA, True, PCB_SHA), "0123456*fedcba98")
+        self.assertEqual(
+            provenance.silk_text(SHA, True, PCB_SHA, 3), "r3 0123456*fedcba98"
+        )
 
     def test_silk_text_width_does_not_depend_on_dirty(self):
         # A dirty fab must fit wherever the clean one passed DRC: '-dirty' grew
         # the balancebot text into J3's INT label. '*' takes the space's place,
         # and KiCad's stroke font gives both the same advance.
-        clean = provenance.silk_text(SHA, False, PCB_SHA)
-        dirty = provenance.silk_text(SHA, True, PCB_SHA)
-        self.assertEqual(len(clean), provenance.SILK_LEN)
-        self.assertEqual(len(dirty), provenance.SILK_LEN)
+        clean = provenance.silk_text(SHA, False, PCB_SHA, 3)
+        dirty = provenance.silk_text(SHA, True, PCB_SHA, 3)
+        self.assertEqual(len(clean), len(dirty))
+        self.assertEqual(len(clean), 3 + provenance.SILK_LEN)
         self.assertEqual(provenance.SILK_LEN, 16)
         self.assertEqual(
             [i for i, (a, b) in enumerate(zip(clean, dirty, strict=True)) if a != b],
-            [provenance.SHA_LEN],
+            [3 + provenance.SHA_LEN],
         )
 
     def test_silk_text_refuses_short_inputs(self):
         with self.assertRaises(KicadError):
-            provenance.silk_text("abc", False, PCB_SHA)
+            provenance.silk_text("abc", False, PCB_SHA, 1)
         with self.assertRaises(KicadError):
-            provenance.silk_text(SHA, False, "fedc")
+            provenance.silk_text(SHA, False, "fedc", 1)
 
     def test_every_output_name_carries_the_tag(self):
-        n = provenance.names("balancebot-carrier", "0123456")
-        self.assertEqual(n.zip, "balancebot-carrier-fab-0123456.zip")
-        self.assertEqual(n.bom, "balancebot-carrier-bom-jlc-0123456.csv")
-        self.assertEqual(n.cpl, "balancebot-carrier-cpl-jlc-0123456.csv")
-        self.assertEqual(n.handoff, "balancebot-carrier-fab-0123456.csv")
-        dirty = provenance.names("x", "0123456-dirty")
+        # The cart line takes its name from the zip: revision and commit both.
+        n = provenance.names("balancebot-carrier", 3, "0123456")
+        self.assertEqual(n.zip, "balancebot-carrier-r3-fab-0123456.zip")
+        self.assertEqual(n.bom, "balancebot-carrier-r3-bom-jlc-0123456.csv")
+        self.assertEqual(n.cpl, "balancebot-carrier-r3-cpl-jlc-0123456.csv")
+        self.assertEqual(n.handoff, "balancebot-carrier-r3-fab-0123456.csv")
+        dirty = provenance.names("x", 1, "0123456-dirty")
         for name in (dirty.zip, dirty.bom, dirty.cpl, dirty.handoff):
+            self.assertIn("r1-", name)
             self.assertIn("0123456-dirty", name)
 
 
@@ -269,8 +275,18 @@ class StampAndHandoff(unittest.TestCase):
         bom, cpl = self.dir / "b.csv", self.dir / "c.csv"
         state = provenance.GitState(SHA, ())
         row = provenance.handoff_row(
-            "demo", state, False, "0123456 fedcba98", PCB_SHA, z, bom, cpl, self.dir
+            "demo",
+            3,
+            state,
+            False,
+            "r3 0123456 fedcba98",
+            PCB_SHA,
+            z,
+            bom,
+            cpl,
+            self.dir,
         )
+        self.assertEqual(row["revision"], "3")
         self.assertEqual(row["git_sha"], SHA)
         self.assertEqual(row["dirty"], "no")
         self.assertEqual(row["zip"], "demo-fab-0123456.zip")

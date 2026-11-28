@@ -9,16 +9,18 @@ the zip on disk, not of the file in the cart. `kicad.fab` therefore:
   the board (`FEEDS`), unless `$CARRIER_FAB_ALLOW_DIRTY=1` or `--allow-dirty`
   says otherwise, and then marks every file name `-dirty` and the silk text
   with `*` in place of its space;
-- writes `<sha7> <pcb8>` (the commit, and the first 8 hex digits of the check
-  stamp's `board_sha256`) on F.SilkS at board.toml's `[fab] provenance_at`, on
+- writes `r<N> <sha7> <pcb8>` (board.toml's `[fab] revision`, `kicad.revision`;
+  the commit; and the first 8 hex digits of the check stamp's `board_sha256`)
+  on F.SilkS at board.toml's `[fab] provenance_at`, on
   a copy of the board used only for plotting: the committed `.kicad_pcb` and
-  its stamp are never written. A dirty run writes `<sha7>*<pcb8>`: the same 16
-  characters, and the same width, since KiCad's stroke font gives `*` the
+  its stamp are never written. A dirty run writes `r<N> <sha7>*<pcb8>`: the
+  same characters, and the same width, since KiCad's stroke font gives `*` the
   advance of a space, so a position that clears its neighbours clean clears
   them dirty (`-dirty` there grew the text into J3's pin labels);
-- names the zip, BOM, CPL and hand-off row after that commit
-  (`<name>-fab-<sha7>.zip`), so the cart line's file name says it too;
-- writes the hand-off row: the commit and the zip's full sha256, which the
+- names the zip, BOM, CPL and hand-off row after the revision and the commit
+  (`<name>-r<N>-fab-<sha7>.zip`), so the cart line's file name says both;
+- writes the hand-off row: the revision, the commit and the zip's full sha256,
+  which the
   `jlcpcb-order` skill's hand-off CSV copies.
 
 Stdlib only; `kicad.fab` does the kicad-cli half.
@@ -47,7 +49,7 @@ SILK_DIRTY = "*"  # replaces SILK_SEP: same advance in KiCad's stroke font
 SILK_LEN = SHA_LEN + 1 + PCB_HASH_LEN
 ALLOW_DIRTY_ENV = "CARRIER_FAB_ALLOW_DIRTY"
 DEFAULT_SIZE_MM = 1.0
-FAB_KEYS = frozenset({"provenance_at", "provenance_size"})
+FAB_KEYS = frozenset({"revision", "provenance_at", "provenance_size"})
 # Repo-relative paths every carrier's files are generated or checked from,
 # besides the project's own hardware.toml and hardware/ directory.
 SHARED_FEEDS = (
@@ -61,6 +63,7 @@ SHARED_FEEDS = (
 )
 HANDOFF_FIELDS = (
     "board",
+    "revision",
     "git_sha",
     "dirty",
     "silk_text",
@@ -162,25 +165,26 @@ def tag(sha: str, dirty: bool) -> str:
     return sha[:SHA_LEN] + (DIRTY if dirty else "")
 
 
-def silk_text(sha: str, dirty: bool, board_sha256: str) -> str:
-    """The provenance text: the commit, then the stamp's board hash prefix,
-    joined by a space, or by `*` when the tree is dirty. Always `SILK_LEN`
-    characters, so a dirty run takes no more silkscreen than a clean one."""
+def silk_text(sha: str, dirty: bool, board_sha256: str, revision: int) -> str:
+    """The provenance text: `r<N>`, the commit, then the stamp's board hash
+    prefix; the last two joined by a space, or by `*` when the tree is dirty, so
+    a dirty run takes no more silkscreen than a clean one."""
     if len(sha) < SHA_LEN or len(board_sha256) < PCB_HASH_LEN:
         raise KicadError(
             f"provenance text needs {SHA_LEN} hex digits of commit and "
             f"{PCB_HASH_LEN} of board hash, got {sha!r} and {board_sha256!r}"
         )
     sep = SILK_DIRTY if dirty else SILK_SEP
-    return f"{sha[:SHA_LEN]}{sep}{board_sha256[:PCB_HASH_LEN]}"
+    return f"r{revision}{SILK_SEP}{sha[:SHA_LEN]}{sep}{board_sha256[:PCB_HASH_LEN]}"
 
 
-def names(name: str, run_tag: str) -> Names:
+def names(name: str, revision: int, run_tag: str) -> Names:
+    stem = f"{name}-r{revision}"
     return Names(
-        zip=f"{name}-fab-{run_tag}.zip",
-        bom=f"{name}-bom-jlc-{run_tag}.csv",
-        cpl=f"{name}-cpl-jlc-{run_tag}.csv",
-        handoff=f"{name}-fab-{run_tag}.csv",
+        zip=f"{stem}-fab-{run_tag}.zip",
+        bom=f"{stem}-bom-jlc-{run_tag}.csv",
+        cpl=f"{stem}-cpl-jlc-{run_tag}.csv",
+        handoff=f"{stem}-fab-{run_tag}.csv",
     )
 
 
@@ -281,6 +285,7 @@ def stamped_board_sha256(stamp_path: Path, pcb: bytes) -> str:
 
 def handoff_row(
     board: str,
+    revision: int,
     state: GitState,
     dirty: bool,
     text: str,
@@ -290,9 +295,10 @@ def handoff_row(
     cpl: Path,
     repo_root: Path = paths.REPO_ROOT,
 ) -> dict[str, str]:
-    """One hand-off CSV row: the commit and the zip's full sha256."""
+    """One hand-off CSV row: the revision, the commit and the zip's full sha256."""
     return {
         "board": board,
+        "revision": str(revision),
         "git_sha": state.sha,
         "dirty": "yes" if dirty else "no",
         "silk_text": text,
