@@ -88,11 +88,16 @@ esp_err_t gemini_http_post(activity_endpoint_t endpoint, const char *url, const 
          * + voice turn) ran internal RAM down to 259 bytes and failed with
          * *_ALLOC_FAILED. Internal RAM is still logged at the failure point, so a
          * regression to the internal allocator shows here rather than being
-         * inferred. */
-        ESP_LOGW(TAG, "connect failed: internal free=%u largest=%u min_ever=%u",
+         * inferred. The DMA-capable figures are the pool camera, I2S and WiFi
+         * DMA share, which hardware AES drew on per record until #1312. */
+        ESP_LOGW(TAG,
+                 "connect failed: internal free=%u largest=%u min_ever=%u, dma free=%u "
+                 "largest=%u",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                 (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+                 (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
     }
 
     if (err == ESP_OK && status != 200) {
