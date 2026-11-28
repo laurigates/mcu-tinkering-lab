@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.11...it-troubleshooter-v0.1.12) (2026-11-28)
+
+
+### Documentation
+
+* **troubleshooter:** flash and monitor over USB-Serial-JTAG, Phase 3 current ([8791ecd](https://github.com/laurigates/mcu-tinkering-lab/commit/8791ecdc4b63fe05b8a7092cc92fbf990c3a2135)), closes [#1183](https://github.com/laurigates/mcu-tinkering-lab/issues/1183)
+
 ## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.10...it-troubleshooter-v0.1.11) (2026-11-14)
 
 
